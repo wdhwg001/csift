@@ -168,10 +168,7 @@ fn every_address_form_pages_forward_to_the_whole_fetch_exactly_once() {
     for form in FORMS {
         for cap in ["1", "2", "3", "5"] {
             chain(&h, form, cap, false);
-            // A record merged from the sidecar has no line for `--raw` to print.
-            if !form.iter().any(|a| a.contains("u-toolu_AQ1")) {
-                chain(&h, form, cap, true);
-            }
+            chain(&h, form, cap, true);
         }
     }
 }
@@ -306,4 +303,61 @@ fn skip_past_the_end_is_an_empty_answer_and_is_not_an_address() {
     );
     let forks = h.run(&["show", t, "--branch-points", "--skip", "3"]);
     assert_eq!(forks.code, Some(2), "{}", forks.stderr);
+}
+
+/// A uuid names the same records raw and rendered: both lines a replay copy shares with its
+/// survivor, lowest first, and a record merged from the elicitation sidecar is omitted by the
+/// raw fetch with a note - it has no line to print - rather than refused as a miss.
+#[test]
+fn a_raw_uuid_fetch_names_the_records_the_rendered_one_does() {
+    let h = Home::new();
+    fixture(&h);
+    let t = at(SESS);
+    let t = t.as_str();
+    let rendered = h.run(&["show", t, "--uuid", "u3", "--format", "json"]);
+    let lines: Vec<u64> = json_rows(&rendered.stdout, "record")
+        .iter()
+        .filter_map(|r| r["line"].as_u64())
+        .collect();
+    assert_eq!(lines, vec![12, 14], "{}", rendered.stdout);
+    let raw = h.run(&["show", t, "--uuid", "u3", "--raw"]);
+    assert!(raw.success, "{}", raw.stderr);
+    let stamps: Vec<&str> = raw
+        .stdout
+        .lines()
+        .map(|l| {
+            l.split("\"timestamp\":\"")
+                .nth(1)
+                .unwrap_or("")
+                .get(..19)
+                .unwrap_or("")
+        })
+        .collect();
+    assert_eq!(
+        stamps,
+        ["2026-06-07T05:00:12", "2026-06-07T05:00:14"],
+        "{}",
+        raw.stdout
+    );
+    let side = h.run(&["show", t, "--uuid", "u-toolu_AQ1,u1", "--raw"]);
+    assert!(side.success, "{}", side.stderr);
+    assert_eq!(side.stdout.lines().count(), 1, "{}", side.stdout);
+    assert!(
+        side.stderr.contains(
+            "csift: note: uuid u-toolu_AQ1 names a sidecar-merged record, which has no \
+             physical transcript line"
+        ),
+        "{}",
+        side.stderr
+    );
+    let alone = h.run(&["show", t, "--uuid", "u-toolu_AQ1", "--raw"]);
+    assert!(alone.success, "{}", alone.stderr);
+    assert!(alone.stdout.is_empty(), "{}", alone.stdout);
+    let miss = h.run(&["show", t, "--uuid", "nosuch", "--raw"]);
+    assert!(!miss.success);
+    assert!(
+        miss.stderr.contains("no such record(s): uuid nosuch"),
+        "{}",
+        miss.stderr
+    );
 }

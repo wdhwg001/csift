@@ -93,10 +93,12 @@ pub(crate) fn run_raw(
     };
     let bytes: &[u8] = &mmap;
 
-    // uuid -> line resolution: parse only the lines whose raw bytes contain a wanted
-    // uuid (cheap memmem prefilter), then confirm against the parsed record's own uuid.
-    let mut uuid_line: std::collections::BTreeMap<&String, Option<usize>> =
-        uuids.iter().map(|u| (u, None)).collect();
+    // uuid -> lines resolution: parse only the lines whose raw bytes contain a wanted uuid
+    // (cheap memmem prefilter), then confirm against the parsed record's own uuid. EVERY line
+    // carrying the uuid is kept - a replay copy and the line that survives it share one - so
+    // the raw fetch names the records the rendered one does.
+    let mut uuid_lines: std::collections::BTreeMap<&str, Vec<usize>> =
+        uuids.iter().map(|u| (u.as_str(), Vec::new())).collect();
     let mut wanted_lines = specs.all();
     // `--turn --raw`: resolve the turn range to its records' physical lines (via the shared
     // grouping, so the turn numbering matches `search`), then emit those lines verbatim. The
@@ -127,12 +129,12 @@ pub(crate) fn run_raw(
     let mut total_lines = 0usize;
     let mut keep: std::collections::BTreeMap<usize, Vec<u8>> = std::collections::BTreeMap::new();
 
-    // One owned finder per addressed uuid, built ONCE before the line walk (the
-    // stateless per-line `memmem::find` rebuilt its searcher on every call). The
-    // zip below is order-safe: `uuid_line` is a BTreeMap, so `keys()` here and
-    // `iter_mut()` below walk the SAME sorted order.
-    let uuid_finders: Vec<memchr::memmem::Finder<'static>> = uuid_line
-        .keys()
+    // One owned finder per addressed uuid, built ONCE before the line walk (the stateless
+    // per-line `memmem::find` rebuilt its searcher on every call). A line any of them finds
+    // is parsed ONCE and kept when its record's own uuid is one addressed - a body merely
+    // quoting a uuid, a child naming it as its parent, does not satisfy the address.
+    let uuid_finders: Vec<memchr::memmem::Finder<'static>> = uuids
+        .iter()
         .map(|u| memchr::memmem::Finder::new(u.as_bytes()).into_owned())
         .collect();
     let mut line_no = 0usize;
@@ -140,17 +142,11 @@ pub(crate) fn run_raw(
         line_no += 1;
         total_lines = line_no;
         let mut want = wanted_lines.contains(&line_no);
-        if !want && !uuids.is_empty() {
-            for ((u, slot), finder) in uuid_line.iter_mut().zip(&uuid_finders) {
-                if slot.is_none() && finder.find(line).is_some() {
-                    // Confirm structurally: the record's OWN uuid must equal it (a body
-                    // merely quoting the uuid must not satisfy the address).
-                    if let Ok(Some(rec)) = crate::parse::parse_line(line) {
-                        if rec.uuid.as_deref() == Some(u.as_str()) {
-                            *slot = Some(line_no);
-                            want = true;
-                        }
-                    }
+        if uuid_finders.iter().any(|f| f.find(line).is_some()) {
+            if let Ok(Some(rec)) = crate::parse::parse_line(line) {
+                if let Some(slot) = rec.uuid.as_deref().and_then(|u| uuid_lines.get_mut(u)) {
+                    slot.push(line_no);
+                    want = true;
                 }
             }
         }
@@ -168,8 +164,17 @@ pub(crate) fn run_raw(
         .filter(|&&n| n > total_lines)
         .map(|&n| miss_label(format!("L{n}"), n, total_lines))
         .collect();
-    for (u, slot) in &uuid_line {
-        if slot.is_none() {
+    // A uuid no line carries may name a record merged from the elicitation sidecar: the
+    // rendered fetch shows it, and it has no line for `--raw` to print, so it is omitted
+    // with a note (as `search --raw` omits it) rather than refused as a miss.
+    let unlined: Vec<&str> = uuid_lines
+        .iter()
+        .filter(|(_, lines)| lines.is_empty())
+        .map(|(u, _)| *u)
+        .collect();
+    let sidecar = sidecar_uuids(file, &unlined)?;
+    for u in &unlined {
+        if !sidecar.contains(u) {
             misses.push(format!("uuid {u}"));
         }
     }
@@ -186,9 +191,9 @@ pub(crate) fn run_raw(
         None => Addressed::Records { specs, uuids },
     };
     let capped = {
-        let uuid_of: std::collections::BTreeMap<usize, &str> = uuid_line
+        let uuid_of: std::collections::BTreeMap<usize, &str> = uuid_lines
             .iter()
-            .filter_map(|(u, slot)| slot.map(|l| (l, u.as_str())))
+            .flat_map(|(u, lines)| lines.iter().map(move |&l| (l, *u)))
             .collect();
         let units: Vec<Unit> = keep
             .keys()
@@ -224,6 +229,12 @@ pub(crate) fn run_raw(
                 past_end_note(specs.past_end, specs.total_lines)
             );
         }
+        for u in &sidecar {
+            eprintln!(
+                "csift: note: uuid {u} names a sidecar-merged record, which has no physical \
+                 transcript line — omitted under --raw (the rendered fetch shows it)"
+            );
+        }
         if let Some(note) = skip_note(page.skip, addressed_units, "line") {
             eprintln!("csift: note: {note}");
         }
@@ -252,6 +263,21 @@ pub(crate) fn run_raw(
         }
     }
     Ok(())
+}
+
+/// The addressed uuids, of those no transcript line carries, that name a record merged from
+/// the elicitation sidecar. Only a top-level session has one (it is keyed by that session),
+/// and the sidecar is read only when some uuid is otherwise a miss.
+fn sidecar_uuids<'a>(file: &std::path::Path, unlined: &[&'a str]) -> Result<Vec<&'a str>> {
+    if unlined.is_empty() || crate::subagent::is_subagent_path(file) {
+        return Ok(Vec::new());
+    }
+    let (pending, _) = crate::commands::elicitation::unresolved_pending(file)?;
+    Ok(unlined
+        .iter()
+        .copied()
+        .filter(|u| pending.iter().any(|r| r.uuid.as_deref() == Some(*u)))
+        .collect())
 }
 
 /// Rendered mode: fetch through search's per-record pipeline (pure matcher - every

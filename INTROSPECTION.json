@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2566",
+          "lines": "2567",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -44725,7 +44725,7 @@
         },
         {
           "path": "src/cli/show_stats_args.rs",
-          "lines": "175-179",
+          "lines": "178-182",
           "snippet": "    /// `42..` = turn 42 \u2192 the end). Fetches every user and assistant record of the named\n    /// turns (reads a turn's whole back-and-forth); the gated non-record lines a turn\n    /// carries (turn-duration, stop-hooks, away-summary, queue, snapshot, system) belong\n    /// to no turn fetch: address them by `--line`/`--uuid`, or name their leaf -\n    /// `search -t 'harness.bookkeeping.*' -t 'harness.turn.*' -t 'harness.system.*'`."
         }
       ],
@@ -45687,7 +45687,7 @@
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "312-315",
+          "lines": "338-341",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"{}\",\n            crate::commands::search::address_miss(&misses.join(\", \"))"
         },
         {
@@ -59435,8 +59435,8 @@
       "code": [
         {
           "path": "src/commands/show/run.rs",
-          "lines": "144-152",
-          "snippet": "            for ((u, slot), finder) in uuid_line.iter_mut().zip(&uuid_finders) {\n                if slot.is_none() && finder.find(line).is_some() {\n                    // Confirm structurally: the record's OWN uuid must equal it (a body\n                    // merely quoting the uuid must not satisfy the address).\n                    if let Ok(Some(rec)) = crate::parse::parse_line(line) {\n                        if rec.uuid.as_deref() == Some(u.as_str()) {\n                            *slot = Some(line_no);\n                            want = true;\n                        }"
+          "lines": "145-152",
+          "snippet": "        if uuid_finders.iter().any(|f| f.find(line).is_some()) {\n            if let Ok(Some(rec)) = crate::parse::parse_line(line) {\n                if let Some(slot) = rec.uuid.as_deref().and_then(|u| uuid_lines.get_mut(u)) {\n                    slot.push(line_no);\n                    want = true;\n                }\n            }\n        }"
         },
         {
           "path": "src/commands/search/matcher.rs",
@@ -59450,8 +59450,8 @@
           "from_basis": "verified",
           "to": null,
           "behavior": "Within ONE transcript a uuid can occupy more than one physical line, and the copies are not interchangeable. The re-emission happens at a compaction: the REPL boundary reducer (181618380) takes the boundary's `compactMetadata.preservedMessages` uuid list, looks each uuid up in the transcript snapshot and maps the hits through `ude` (163630561), which returns a non-assistant record unchanged and, for an assistant record, spreads it with the four FLAT `message.usage` fields (input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens) set to 0 while every other usage field survives the spread; the preserved set is then re-inserted. The uuid dedup that normally prevents a second copy is one arm of a three-way policy switch in appendEntry (`switch(vbr[e.type])` at 166107441: `always` enqueues unconditionally, `route-by-agent` routes by agent id, `dedup-transcript` gates on `F=!v.has(e.uuid)` and additionally admits a sidechain record with an agentId), so a re-emitted record can reach the file even though its uuid is already on disk. Measured over the 39 top-level transcripts sized 200 KB to 40 MB, one observation per duplicated uuid: 5 transcripts carry intra-file repeats, 2199 uuids are duplicated, 14 of those are assistant records on EVERY copy, and 3 of the 14 carry a LATER copy whose four flat usage fields are all zero while the earliest copy carries the real numbers. One such pair read: flat (2, 4849, 16024, 951431) on the earlier copy against (0, 0, 0, 0) on the later one, with the nested `cache_creation.ephemeral_1h_input_tokens` = 16024 surviving on BOTH - the zeroing template's fingerprint, since it names only the four flat fields.",
-          "depends": "A uuid is therefore NOT a unique record address after a compaction, and csift's two `show` paths resolve such an address differently - this half is csift's own behavior, established by running csift, not by anything in the binary. The RENDERED path (the default) treats `--uuid` as a membership test and emits EVERY copy; the `--raw` path binds each requested uuid to the FIRST line whose OWN `uuid` field equals it, confirming structurally so that a body merely quoting the uuid does not satisfy the address (src/commands/show/run.rs:129-137), and therefore emits the earliest copy only. Re-run with csift against the specimen pair above: 2 rendered record rows (lines 2508 and 2601) against 1 raw line, and the raw line is the earlier copy carrying the real usage numbers. A consumer that treats a uuid as a primary key gets a different record depending on the flag, and a token total summed over rendered rows would double-count the zeroed twin.",
-          "instrument": "Find a duplicated uuid with the Python census, then run BOTH `csift show @<id> --uuid <uuid> --format json` (expect one row per copy) and `csift show @<id> --uuid <uuid> --raw` (expect exactly one line, the earliest copy). Counting rule: rows with kind==\"record\" in the rendered jsonl stream; non-blank stdout lines for `--raw`.",
+          "depends": "A uuid is therefore NOT a unique record address after a compaction, and csift's two `show` paths resolve such an address alike - this half is csift's own behavior, established by running csift, not by anything in the binary. The RENDERED path (the default) treats `--uuid` as a membership test and emits EVERY copy; the `--raw` path keeps every line whose OWN `uuid` field equals a requested uuid, confirming structurally so that a body merely quoting the uuid does not satisfy the address, and emits every copy too, lowest line first (src/commands/show/run.rs). Re-run with csift against the specimen pair above: 2 rendered record rows (lines 2508 and 2601) and 2 raw lines, the earlier copy carrying the real usage numbers first. A consumer that treats a uuid as a primary key gets two records under either flag, and a token total summed over them would double-count the zeroed twin.",
+          "instrument": "Find a duplicated uuid with the Python census, then run BOTH `csift show @<id> --uuid <uuid> --format json` (expect one row per copy) and `csift show @<id> --uuid <uuid> --raw` (expect one line per copy, lowest line first). Counting rule: rows with kind==\"record\" in the rendered jsonl stream; non-blank stdout lines for `--raw`.",
           "probe": {
             "kind": "csift",
             "command": "csift show @<id> --uuid <uuid> --format json",
@@ -59520,12 +59520,12 @@
       "code": [
         {
           "path": "src/commands/show/run.rs",
-          "lines": "176-178",
+          "lines": "181-183",
           "snippet": "    if !misses.is_empty() {\n        bail!(\"no such record(s): {}\", misses.join(\", \"));\n    }"
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "312-315",
+          "lines": "338-341",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"{}\",\n            crate::commands::search::address_miss(&misses.join(\", \"))"
         }
       ],
@@ -89512,7 +89512,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3620"
+          "lines": "3626"
         }
       ],
       "states": [

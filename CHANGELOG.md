@@ -1559,6 +1559,13 @@ surface change bumps the PATCH.
   addressed prints an empty page and a stderr note, exit 0. `show --raw`'s stderr
   continuation follows the same rule. `show --help` says so under `--max-count` and
   `--skip`.
+- **`show --raw` by uuid fetches the records the rendered fetch does.** A uuid a replay
+  copy shares with the line that survives it fetched both rendered and only the copy raw;
+  it now prints both lines, lowest first. The uuid of a record merged from the elicitation
+  sidecar exited 1 with `no such record(s)` under `--raw` while the rendered fetch showed
+  it; it now prints nothing for that record and a stderr note saying it has no transcript
+  line, exit 0, as `search --raw` does. A uuid that names no record stays a miss.
+  `show --help` says so under RAW MODE.
 - **A quoted relay framing no longer emits an inbox unit.** An assistant text opening with
   `Another Claude session sent a message:` and a quoted `<agent-message>`, and a compaction
   summary carrying a peer section, each emitted an `agent.communication.inbox` unit whose

@@ -64,7 +64,10 @@ const SHOW_AFTER_HELP_HEAD: &str = "EXAMPLES\n  \
         RAW MODE\n  \
           `--raw` prints the exact bytes of each addressed jsonl line (even a malformed / \
         torn line: that is the point). It is mutually exclusive with `--format json` (raw \
-        IS the file's own JSON) and reads the transcript file only (no sidecar merge).\n\n\
+        IS the file's own JSON) and reads the transcript file only (no sidecar merge). A \
+        `--uuid` names the records it names rendered: both lines a replay copy shares with \
+        its survivor, lowest first; a record merged from the elicitation sidecar has no line, \
+        so it prints nothing and a stderr note says so (exit 0).\n\n\
         JSON SCHEMA (per --format json)\n  \
           Envelope: {kind:\"header\", command:\"show\", session_id, is_subagent, \
         parent_session_id, path} → one {kind:\"record\", …} row per fetched record → \
