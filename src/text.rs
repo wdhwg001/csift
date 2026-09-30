@@ -15,11 +15,14 @@
 //! A PAIRED ROOT: the excerpt/banner/envelope/range helpers live here, and `out` carries
 //! the shared buffered stdout plus the ordered-parallel row pipeline every row-dumping
 //! surface writes through - the same "one implementation" reason, applied to HOW output
-//! reaches the terminal rather than to what it says.
+//! reaches the terminal rather than to what it says. `stderr` carries the one stderr line
+//! a closed pipe cannot turn into a panic.
 
 mod out;
+mod stderr;
 
 pub(crate) use out::*;
+pub(crate) use stderr::*;
 
 /// A count and its noun, the noun agreeing with the count: `1 char`, `2 chars`. The ONE
 /// rule every count csift prints beside a noun of this kind goes through, so no marker

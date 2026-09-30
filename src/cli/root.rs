@@ -110,10 +110,12 @@ use super::*;
         explaining what was searched and, under a label filter, where the pattern DOES\n               \
         occur. A write that cannot LAND is an ordinary error too: pipe csift into a reader\n               \
         that goes away (`| head`) and every surface whose rows go through the shared output\n               \
-        buffer reports `csift: error: Broken pipe` and exits 1, while the ones that still\n               \
-        print row by row abort with 101 and a std panic message; a backtrace only under\n               \
+        buffer reports `csift: error: Broken pipe` and exits 1, and still 1 under `2>&1`,\n               \
+        where that line shares the closed pipe and is lost; the ones that still print row\n               \
+        by row abort with 101 and a std panic message, a backtrace only under\n               \
         `RUST_BACKTRACE=1`. The rule follows the WRITER that makes the failing write, never\n               \
-        the subcommand.\n  \
+        the subcommand. On a buffered surface a stderr note that cannot land is dropped\n               \
+        rather than aborting the run.\n  \
           Ranges       Every range flag shares one grammar: N | A..B | N.. | ..N | .. | -k,\n               \
         endpoints inclusive; `-k` counts from the end, so `-3..` means \"the last 3\". Turns\n               \
         are 0-based logical indices (the `tN` search prints); lines are 1-based physical\n               \

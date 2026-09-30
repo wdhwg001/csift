@@ -398,7 +398,7 @@ fn line_count(bytes: &[u8]) -> usize {
 /// quietly returning one file where the disk holds two. Stdout stays pure.
 pub fn emit_duplicate_notes(groups: &[DuplicateGroup]) {
     for g in groups {
-        eprintln!("csift: note: {}", duplicate_note(g));
+        crate::text::stderr_line(format_args!("csift: note: {}", duplicate_note(g)));
     }
 }
 

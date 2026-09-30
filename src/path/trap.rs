@@ -54,12 +54,12 @@ pub(crate) fn resolve_trap(marker: &str) -> Result<TrapSelf> {
             // writes that up as doctrine. Name the lane on stderr: stdout bytes unchanged,
             // exit 0, and the signal is the RESOLUTION itself, so it holds regardless of
             // flush timing.
-            eprintln!(
+            crate::text::stderr_line(format_args!(
                 "csift: note: @trap:{marker} resolved to the TOP-LEVEL session {session_id} - \
                  the marker was carried by the MAIN transcript, so you are NOT a subagent in \
                  this lane. `@main` answers this directly with no race; @trap is for \
                  subagents, which cannot name themselves."
-            );
+            ));
             Ok(TrapSelf::Session(session_id))
         }
         0 => bail!(

@@ -103,10 +103,12 @@ pub(crate) fn apply_line_range(
 /// + their JSON twins + turns.
 pub(crate) fn write_out_guarded(p: &Path, blob: &str) -> Result<bool> {
     if blob.is_empty() {
-        eprintln!(
+        // `verbatim` calls this after its buffered stream, so the note cannot be one that
+        // turns a closed pipe into a panic (`text::stderr_line`).
+        crate::text::stderr_line(format_args!(
             "note: nothing reconstructed in range; --out file {} left untouched",
             p.display()
-        );
+        ));
         return Ok(false);
     }
     std::fs::write(p, blob).with_context(|| format!("cannot write --out file {}", p.display()))?;

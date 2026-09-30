@@ -224,19 +224,19 @@ pub(crate) fn run_raw(
     #[allow(clippy::print_stderr)]
     {
         if specs.past_end > 0 {
-            eprintln!(
+            crate::text::stderr_line(format_args!(
                 "csift: note: {}",
                 past_end_note(specs.past_end, specs.total_lines)
-            );
+            ));
         }
         for u in &sidecar {
-            eprintln!(
+            crate::text::stderr_line(format_args!(
                 "csift: note: uuid {u} names a sidecar-merged record, which has no physical \
                  transcript line — omitted under --raw (the rendered fetch shows it)"
-            );
+            ));
         }
         if let Some(note) = skip_note(page.skip, addressed_units, "line") {
-            eprintln!("csift: note: {note}");
+            crate::text::stderr_line(format_args!("csift: note: {note}"));
         }
         if dropped > 0 {
             let sid = crate::subagent::session_id_from_path(file);
@@ -244,10 +244,10 @@ pub(crate) fn run_raw(
                 Some(c) => format!(" · continue: csift show @{sid} {} --raw", c.args),
                 None => String::new(),
             };
-            eprintln!(
+            crate::text::stderr_line(format_args!(
                 "csift: note: +{dropped} more line(s) beyond the {cap}-unit cap{cont}, or pass \
                  --max-count 0 (uncapped)"
-            );
+            ));
         }
         // A `--turn` window is resolved through the chain, so which lines these ARE moves with
         // the crossing budget, and it says what the walk crossed. A `--line`/`--uuid` address
@@ -259,7 +259,7 @@ pub(crate) fn run_raw(
         // `--line 1 --raw` on live transcripts of 124 to 721 MB (SPEC 4.11 carries the
         // reading). Stderr either way: stdout here is the file's own bytes and nothing else.
         for line in crossing.lines() {
-            eprintln!("{line}");
+            crate::text::stderr_line(format_args!("{line}"));
         }
     }
     Ok(())
@@ -427,7 +427,7 @@ pub(crate) fn run_rendered(
     // the address selects, which the address resolving makes an answer, not a miss.
     #[allow(clippy::print_stderr)]
     if let Some(note) = skip_note(page.skip, addressed_units, "record unit") {
-        eprintln!("csift: note: {note}");
+        crate::text::stderr_line(format_args!("csift: note: {note}"));
     }
     Ok(())
 }

@@ -139,12 +139,12 @@ pub fn run_verbatim(args: &VerbatimArgs, cross: CrossingBudget) -> Result<()> {
     if args.slice.is_none() {
         for sr in &sessions {
             if sr.summaries.is_empty() {
-                eprintln!(
+                crate::text::stderr_line(format_args!(
                     "csift: note: @{} has no compaction — nothing was clipped; for plain \
                      reading use `csift show @{} --turn <N|A..B|-k..>` (full records, no \
                      budget)",
                     sr.session_id, sr.session_id
-                );
+                ));
             }
         }
     }

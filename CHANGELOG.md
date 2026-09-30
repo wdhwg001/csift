@@ -1608,6 +1608,15 @@ surface change bumps the PATCH.
   count of the person's words. Line 1's type decides now, read as the quoted value
   `"fork-context-ref"` the candidate gate already uses, which a quote-escaping JSON string
   cannot carry.
+- **A closed pipe shared by stdout and stderr no longer aborts a reporting surface.** Under
+  `csift ... 2>&1 | head -c 1` the failed stdout write reached the error arm, whose
+  `eprintln!` failed on the same pipe and panicked: every surface that reports a closed
+  stdout exited 1 with stderr open and 101 under `2>&1`. The error arm and every stderr
+  line those surfaces print go through one helper that drops a write it cannot make, so
+  they exit 1 either way; a `println!` surface still exits 101 on its own stdout. The
+  same helper keeps a note that cannot land after a stream that did - a `--raw` cap drop,
+  a zero-match diagnosis, `verbatim`'s no-compaction note - from turning the run into an
+  abort: it exits 0 with its whole stream. The root `--help`'s exit-code paragraph says so.
 
 ### Performance
 

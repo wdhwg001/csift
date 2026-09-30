@@ -48,8 +48,10 @@ fn main() -> ExitCode {
     match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            // No silent failure: surface the full error chain on stderr.
-            eprintln!("csift: error: {err:#}");
+            // No silent failure: surface the full error chain on stderr. Through the
+            // helper that cannot panic, because the error being reported is often a write
+            // to a closed stdout, and with `2>&1` stderr is that same closed pipe.
+            crate::text::stderr_line(format_args!("csift: error: {err:#}"));
             ExitCode::FAILURE
         }
     }

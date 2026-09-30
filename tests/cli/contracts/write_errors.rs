@@ -129,6 +129,125 @@ fn a_closed_stdout_is_reported_as_an_error_on_every_buffered_stream() {
     }
 }
 
+/// Run csift with stdout AND stderr wired to ONE pipe whose read end is already closed -
+/// the deterministic form of `csift ... 2>&1 | head -c 1`, where the reader leaves after a
+/// byte. Returns the exit code alone: nothing written can be read back.
+fn both_into_one_closed_pipe(h: &Home, args: &[&str]) -> Option<i32> {
+    let (reader, writer) = std::io::pipe().expect("an anonymous pipe");
+    drop(reader);
+    let err = writer.try_clone().expect("a second handle on the pipe");
+    let mut child = h
+        .cmd(args)
+        .stdout(std::process::Stdio::from(writer))
+        .stderr(std::process::Stdio::from(err))
+        .spawn()
+        .expect("spawn csift");
+    child.wait().expect("wait csift").code()
+}
+
+/// Run csift with an ordinary stdout and a stderr whose read end is already closed, returning
+/// the exit code and stdout: a note written after the stream has nowhere to land.
+fn stderr_into_closed_pipe(h: &Home, args: &[&str]) -> (Option<i32>, String) {
+    let (reader, writer) = std::io::pipe().expect("an anonymous pipe");
+    drop(reader);
+    let out = h
+        .cmd(args)
+        .stderr(std::process::Stdio::from(writer))
+        .output()
+        .expect("run csift");
+    (
+        out.status.code(),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+    )
+}
+
+#[test]
+fn a_closed_pipe_shared_by_both_streams_reports_the_same_error() {
+    let (h, t) = buffered_only_home();
+    // A reporting surface reports its failed write through `main`'s error arm, and with
+    // `2>&1` that report goes to the same closed pipe. It must fail as an error, exit 1,
+    // not abort inside the report: the exit code a caller branches on cannot depend on
+    // where stderr points. The zero-match search writes its diagnosis on stderr BEFORE any
+    // stdout byte, so it is the one whose first failing write is a stderr line.
+    let reporting: [(&str, Vec<&str>); 6] = [
+        ("search text", vec!["search", "needle", t.as_str()]),
+        (
+            "search json",
+            vec!["search", "needle", t.as_str(), "--format", "json"],
+        ),
+        (
+            "search --raw",
+            vec!["search", "needle", t.as_str(), "--raw"],
+        ),
+        ("search zero-match", vec!["search", "zzabsent", t.as_str()]),
+        (
+            "show --raw",
+            vec!["show", t.as_str(), "--line", "1..16", "--raw"],
+        ),
+        ("verbatim text", vec!["verbatim", t.as_str()]),
+    ];
+    for (what, args) in reporting {
+        assert_eq!(
+            both_into_one_closed_pipe(&h, &args),
+            Some(1),
+            "{what}: the error arm writes to stderr through a helper that cannot panic"
+        );
+    }
+    // A `println!` surface aborts on its own stdout write before any report is made, so it
+    // keeps 101 whichever way stderr points - the rule is the writer that makes the failing
+    // write, and this pins that the helper did not change it.
+    for (what, args) in [
+        ("list", vec!["list", t.as_str()]),
+        ("search -c", vec!["search", "needle", t.as_str(), "-c"]),
+    ] {
+        assert_eq!(
+            both_into_one_closed_pipe(&h, &args),
+            Some(101),
+            "{what}: a `println!` surface still aborts on its stdout"
+        );
+    }
+}
+
+#[test]
+fn a_note_after_the_stream_cannot_abort_a_run_whose_output_landed() {
+    let (h, t) = buffered_only_home();
+    // Each of these prints its stream and a stderr note (a cap drop, the zero-match
+    // diagnosis, verbatim's no-compaction note). With stderr closed the note cannot land;
+    // the run still exits 0 with its whole stdout, because the stream the reader kept is
+    // the one that decides the exit code.
+    let modes: [(&str, Vec<&str>); 4] = [
+        (
+            "search --raw with a cap drop",
+            vec!["search", "needle", t.as_str(), "--raw", "--max-count", "1"],
+        ),
+        (
+            "show --raw with a cap drop",
+            vec![
+                "show",
+                t.as_str(),
+                "--line",
+                "1..16",
+                "--raw",
+                "--max-count",
+                "2",
+            ],
+        ),
+        ("search zero-match", vec!["search", "zzabsent", t.as_str()]),
+        ("verbatim text", vec!["verbatim", t.as_str()]),
+    ];
+    for (what, args) in modes {
+        let ok = h.run(&args);
+        assert!(ok.success, "{what}: control run failed: {}", ok.stderr);
+        assert!(
+            !ok.stderr.is_empty(),
+            "{what}: the control run wrote no stderr note, so the run below proves nothing"
+        );
+        let (code, out) = stderr_into_closed_pipe(&h, &args);
+        assert_eq!(code, Some(0), "{what}: a lost note is not a failed run");
+        assert_eq!(out, ok.stdout, "{what}: the whole stream still lands");
+    }
+}
+
 /// One session whose scope carries a SUBAGENT (the `scope` banner) and whose transcript
 /// also sits under a second project directory (the `copies` banner). Both banners precede
 /// every row their surface prints, and both were `println!` sites outside the buffer - so

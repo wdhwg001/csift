@@ -21,11 +21,11 @@ fn emit_advisory_notes(
     has_session_filter: bool,
 ) {
     if path::is_uuid(&args.pattern) && !has_session_filter {
-        eprintln!(
+        crate::text::stderr_line(format_args!(
             "csift: note: searching for this uuid as TEXT across the scope; to scope the \
              search TO that session, pass it as a target: `csift search <PATTERN> @{}`",
             args.pattern
-        );
+        ));
     }
     // `--for` is a FILTER and the narrowest one there is - it names ONE record and returns
     // what is for it - so an empty pattern beside it is the documented way to ask for the
@@ -39,10 +39,10 @@ fn emit_advisory_notes(
         && !has_session_filter
         && args.for_addr.is_none()
     {
-        eprintln!(
+        crate::text::stderr_line(format_args!(
             "csift: warning: empty pattern with no category/time/turn/session filter \
              matches every exchange in scope — this may emit a lot."
-        );
+        ));
     }
 }
 
@@ -59,10 +59,10 @@ fn emit_advisory_notes(
 #[allow(clippy::print_stderr)]
 pub(crate) fn note_malformed(outcome: &SearchOutcome, diagnosed: bool) {
     if outcome.skipped_lines > 0 && !diagnosed {
-        eprintln!(
+        crate::text::stderr_line(format_args!(
             "csift: note: {}",
             crate::text::malformed_note(outcome.skipped_lines)
-        );
+        ));
     }
 }
 
@@ -123,11 +123,11 @@ fn emit_sessions_with_matches(
         println!("{id}");
     }
     if outcome.dropped_by_cap > 0 {
-        eprintln!(
+        crate::text::stderr_line(format_args!(
             "csift: note: {} exchange(s) dropped by --max-count — this session listing \
              may be incomplete; raise --max-count",
             outcome.dropped_by_cap
-        );
+        ));
     }
     note_malformed(outcome, diagnosed);
     Ok(())
@@ -394,17 +394,17 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
                 } else {
                     String::new()
                 };
-                eprintln!(
+                crate::text::stderr_line(format_args!(
                     "csift: {records} matched record(s) across {} {slug} key(s){excl}{drop}",
                     rows.len()
-                );
+                ));
                 note_malformed(&outcome, diagnosis.is_some());
                 // A census MOVES with the budget - crossing a cut resolves records above it,
                 // which changes what every axis counts - so it discloses the crossing too.
                 // On stderr, beside the census's own accounting note and for the same
                 // reason: stdout in a terminal mode is the table a consumer parses.
                 for line in outcome.chain.crossing.lines() {
-                    eprintln!("{line}");
+                    crate::text::stderr_line(format_args!("{line}"));
                 }
             }
             OutputFormat::Json => {
@@ -478,17 +478,17 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
         #[allow(clippy::print_stderr)]
         {
             if skipped_sidecar > 0 {
-                eprintln!(
+                crate::text::stderr_line(format_args!(
                     "csift: note: {skipped_sidecar} sidecar-merged record(s) have no physical \
                      transcript line — omitted under --raw"
-                );
+                ));
             }
             if outcome.dropped_by_cap > 0 {
-                eprintln!(
+                crate::text::stderr_line(format_args!(
                     "csift: note: {} {} exchange(s) dropped by --max-count",
                     outcome.dropped_by_cap,
                     dropped_side(args)
-                );
+                ));
             }
             note_malformed(&outcome, diagnosis.is_some());
         }

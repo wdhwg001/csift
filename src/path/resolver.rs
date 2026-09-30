@@ -241,12 +241,12 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
                     // variable is read FIRST: an unset or malformed one resolved nothing, and a
                     // note saying it did would stand above the refusal that says it did not.
                     let sid = resolve_env_session()?;
-                    eprintln!(
+                    crate::text::stderr_line(format_args!(
                         "csift: note: @main resolved the TOP-LEVEL session via env. If you \
                          are a subagent this is NOT your transcript (a subagent's env \
                          carries the parent's id); a first-try `@trap:<marker>` hit names \
                          yours."
-                    );
+                    ));
                     session_ids.push(sid);
                     session_target = true;
                 }

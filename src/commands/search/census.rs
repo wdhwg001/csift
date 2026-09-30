@@ -299,18 +299,18 @@ fn label_rows(rows: &[(String, usize)]) -> String {
 
 /// Emit the zero-match diagnosis to stderr (stdout stays pure for the caller's pipe).
 pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {
-    eprintln!(
+    crate::text::stderr_line(format_args!(
         "csift: 0 matches — a DEFINITIVE absence (exit 0), NOT an error. \
          Scope: {} session(s). Active filters: {}.",
         diag.sessions_in_scope, diag.active_filters
-    );
+    ));
     if diag.skipped_lines > 0 {
         // Integrity caveat: skipped lines were never matched, so the absence claim spans
         // only the parseable corpus - an honest zero must say so.
-        eprintln!(
+        crate::text::stderr_line(format_args!(
             "csift: caveat: {} — the absence is definitive for parseable lines only.",
             crate::text::malformed_note(diag.skipped_lines)
-        );
+        ));
     }
     let quoted = if pattern.is_empty() {
         "the filter".to_string()
@@ -319,39 +319,41 @@ pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {
     };
     // First, because its remedy keeps the reader's label filter.
     if let Some(Some((rows, recs))) = &diag.outside_turns {
-        eprintln!(
+        crate::text::stderr_line(format_args!(
             "csift: ⚠ but {quoted} matches {recs} record(s) OUTSIDE turn numbering ({}) - a \
              recalled draft, a rewound turn or a record on an abandoned branch, which a --turn \
              window leaves out; drop --turn, or window by time with --since/--until.",
             label_rows(rows)
-        );
+        ));
     }
     match &diag.excluded_by_label {
         Some((rows, recs)) => {
-            eprintln!(
+            crate::text::stderr_line(format_args!(
                 "csift: ⚠ but {quoted} DOES occur — {recs} record(s) under: {}. \
                  Your -t/-T excluded them; drop -t/-T or select one of those labels.",
                 label_rows(rows)
-            );
+            ));
         }
         None if diag.label_filtered => {
-            eprintln!(
+            crate::text::stderr_line(format_args!(
                 "csift: (even without the -t/-T filter, {quoted} has 0 matches here — \
                  genuinely absent in this scope, not a label mistake.)"
-            );
+            ));
         }
         None => {
-            eprintln!(
+            crate::text::stderr_line(format_args!(
                 "csift: to see what a scope holds before guessing a filter, run \
                  `csift search \"\" <target> --count-by label`."
-            );
+            ));
         }
     }
     for sel in &diag.empty_visible_face {
         // A bare role or category selects the LLM-VISIBLE face, and this one has none:
         // the query is well formed and its answer is empty by the law, which is a
         // different fact from "nothing matched" and has a different remedy.
-        eprintln!("csift: -t {sel} selects no LLM-visible leaf; use {sel}.* or a leaf");
+        crate::text::stderr_line(format_args!(
+            "csift: -t {sel} selects no LLM-visible leaf; use {sel}.* or a leaf"
+        ));
     }
     if diag.gated_unreached {
         // The gated leaves are parsed only under a selector that reaches them; this run
@@ -360,19 +362,19 @@ pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {
         // leave a stale name in the note - the drift this hard-coded list already grew.
         let gated = crate::cli::gated_leaves();
         let leaves: Vec<&str> = gated.iter().map(|c| c.path()).collect();
-        eprintln!(
+        crate::text::stderr_line(format_args!(
             "csift: note: the gated leaves ({}) are scanned only under a -t that reaches \
              them - this absence does not cover those lines.",
             leaves.join(", ")
-        );
+        ));
     }
     if !diag.attachment_unread.is_empty() {
         // The attachment lines a flagless scan skips: the set is the inventory's, derived by
         // `attachment_leaves`, and the remedy is the flag or a selector naming the leaf.
-        eprintln!(
+        crate::text::stderr_line(format_args!(
             "csift: note: the attachment leaves ({}) are read only under --attachments or a \
              -t that reaches them - this absence does not cover the attachment lines.",
             diag.attachment_unread.join(", ")
-        );
+        ));
     }
 }

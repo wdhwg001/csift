@@ -157,7 +157,10 @@ pub(crate) fn resolve_named_agent(
         .filter(|p| !same_file(p, file) && !named.iter().any(|n| same_file(p, n)))
         .collect();
     if !others.is_empty() {
-        eprintln!("csift: note: {}", named_copy_note(file, &others));
+        crate::text::stderr_line(format_args!(
+            "csift: note: {}",
+            named_copy_note(file, &others)
+        ));
     }
     let mut out = vec![file.to_path_buf()];
     out.extend(rest);
