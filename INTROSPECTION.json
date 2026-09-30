@@ -45687,7 +45687,7 @@
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "319-322",
+          "lines": "312-315",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"{}\",\n            crate::commands::search::address_miss(&misses.join(\", \"))"
         },
         {
@@ -59435,7 +59435,7 @@
       "code": [
         {
           "path": "src/commands/show/run.rs",
-          "lines": "151-159",
+          "lines": "144-152",
           "snippet": "            for ((u, slot), finder) in uuid_line.iter_mut().zip(&uuid_finders) {\n                if slot.is_none() && finder.find(line).is_some() {\n                    // Confirm structurally: the record's OWN uuid must equal it (a body\n                    // merely quoting the uuid must not satisfy the address).\n                    if let Ok(Some(rec)) = crate::parse::parse_line(line) {\n                        if rec.uuid.as_deref() == Some(u.as_str()) {\n                            *slot = Some(line_no);\n                            want = true;\n                        }"
         },
         {
@@ -59520,12 +59520,12 @@
       "code": [
         {
           "path": "src/commands/show/run.rs",
-          "lines": "183-185",
+          "lines": "176-178",
           "snippet": "    if !misses.is_empty() {\n        bail!(\"no such record(s): {}\", misses.join(\", \"));\n    }"
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "319-322",
+          "lines": "312-315",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"{}\",\n            crate::commands::search::address_miss(&misses.join(\", \"))"
         }
       ],
@@ -89512,7 +89512,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3615"
+          "lines": "3620"
         }
       ],
       "states": [

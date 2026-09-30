@@ -7,7 +7,9 @@
 //! list every record between the first and the last uuid, and under a turn window the records
 //! the window leaves out (an abandoned draft, an attachment line). So a line address continues
 //! as its own ranges clipped at the first dropped line, a uuid address as the dropped uuids,
-//! and a turn window as a turn window.
+//! and a turn window as a turn window. A window cannot start mid-turn, so it continues from
+//! the turn the cap cut inside and passes over that turn's units already shown with `--skip`:
+//! without the skip, a turn wider than the cap continued as the command just run.
 
 use super::*;
 
@@ -37,17 +39,22 @@ pub(crate) enum Addressed<'a> {
     Turns { last: usize },
 }
 
-/// The continuation of a capped fetch.
+/// The continuation of a capped fetch: the address arguments that fetch what the cap dropped
+/// and nothing that was shown - `--line 3..4,9..14`, `--uuid u1,u2`, both, or a turn window
+/// `--turn 2..5 --skip 3`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Continuation {
-    /// The address arguments: `--line 3..4,9..14`, `--uuid u1,u2`, both, or `--turn 2..5`.
     pub(crate) args: String,
-    /// Units the continuation fetches that were already shown: a turn window cannot start
-    /// mid-turn, so when the cap cut inside a turn the continuation repeats that turn's kept
-    /// units. 0 for a line or uuid address, and for a turn window cut on a turn boundary.
-    pub(crate) overlap: usize,
-    /// The turn the repeated units belong to, set only when `overlap` is non-zero.
-    pub(crate) overlap_turn: Option<usize>,
+}
+
+/// What became of one unit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Fate {
+    /// `--skip` passed over it.
+    Skipped,
+    Kept,
+    /// The cap dropped it.
+    Dropped,
 }
 
 /// The cap's verdict over a unit list.
@@ -55,6 +62,8 @@ pub(crate) struct Continuation {
 pub(crate) struct Capped {
     /// One flag per unit, in the order given: true keeps it.
     pub(crate) keep: Vec<bool>,
+    /// Units `--skip` passed over, ahead of the cap.
+    pub(crate) skipped: usize,
     /// Units the cap dropped.
     pub(crate) dropped: usize,
     /// How to fetch them, when something was dropped and the domain can say it.
@@ -70,83 +79,97 @@ fn line_key(u: &Unit) -> usize {
     }
 }
 
-/// Keep the units that sort lowest, whole records - a record's units share its key, and a cut
-/// through one would leave the continuation re-fetching its kept half - as many as fit in `cap`
-/// and always at least one. Records sort by line; a turn window sorts by turn, then line, so
-/// what it keeps is a prefix of the turns its continuation re-enters.
-pub(crate) fn cap_units(units: &[Unit], cap: usize, addressed: &Addressed) -> Capped {
+/// Pass over the first `skip` units and keep the next ones that sort lowest, whole records - a
+/// record's units share its key, and a cut through one would leave the continuation
+/// re-fetching its kept half - as many as fit in `cap` and always at least one. Records sort
+/// by line; a turn window sorts by turn, then line, so what it keeps is a prefix of the turns
+/// its continuation re-enters. `skip` counts in that same order, units of one record in the
+/// order they render, so a continuation that names the units already shown moves forward.
+pub(crate) fn cap_units(units: &[Unit], skip: usize, cap: usize, addressed: &Addressed) -> Capped {
     let key = |u: &Unit| match addressed {
         Addressed::Records { .. } => (0, line_key(u)),
         Addressed::Turns { .. } => (u.turn.unwrap_or(usize::MAX), line_key(u)),
     };
-    let everything = Capped {
-        keep: vec![true; units.len()],
-        dropped: 0,
-        continuation: None,
-    };
-    if units.len() <= cap {
-        return everything;
+    let mut order: Vec<usize> = (0..units.len()).collect();
+    // Stable: the units of one record keep the order they render in.
+    order.sort_by_key(|&i| key(&units[i]));
+    let skipped = skip.min(units.len());
+    let mut fate = vec![Fate::Kept; units.len()];
+    for &i in &order[..skipped] {
+        fate[i] = Fate::Skipped;
     }
-    let mut keys: Vec<(usize, usize)> = units.iter().map(key).collect();
-    keys.sort_unstable();
-    // The first key past the cap; a first record holding more than `cap` units is kept whole.
-    let cutoff = if keys[cap] == keys[0] {
-        match keys.iter().copied().find(|&k| k > keys[0]) {
-            Some(k) => k,
-            None => return everything,
-        }
-    } else {
-        keys[cap]
+    let rest = &order[skipped..];
+    let verdict = |fate: Vec<Fate>, continuation| Capped {
+        keep: fate.iter().map(|&f| f == Fate::Kept).collect(),
+        skipped,
+        dropped: fate.iter().filter(|&&f| f == Fate::Dropped).count(),
+        continuation,
     };
-    let keep: Vec<bool> = units.iter().map(|u| key(u) < cutoff).collect();
-    let dropped = keep.iter().filter(|&&k| !k).count();
+    if rest.len() <= cap {
+        return verdict(fate, None);
+    }
+    let first = key(&units[rest[0]]);
+    // The first key past the cap; a first record holding more than `cap` units is kept whole.
+    let cutoff = match key(&units[rest[cap]]) {
+        k if k != first => k,
+        _ => match rest.iter().map(|&i| key(&units[i])).find(|&k| k > first) {
+            Some(k) => k,
+            None => return verdict(fate, None),
+        },
+    };
+    for &i in rest {
+        if key(&units[i]) >= cutoff {
+            fate[i] = Fate::Dropped;
+        }
+    }
     let continuation = match addressed {
         Addressed::Records { specs, uuids } => {
-            records_continuation(units, &keep, cutoff.1, specs, uuids)
+            records_continuation(units, &fate, cutoff.1, specs, uuids)
         }
-        Addressed::Turns { last } => turns_continuation(units, &keep, cutoff.0, *last),
+        Addressed::Turns { last } => turns_continuation(units, &fate, cutoff.0, *last),
     };
-    Capped {
-        keep,
-        dropped,
-        continuation,
-    }
+    verdict(fate, continuation)
 }
 
-/// A turn window continues from the turn of the first dropped unit to the window's own end.
+/// A turn window continues from the turn of the first dropped unit to the window's own end,
+/// passing over the units of that turn already shown - by an earlier `--skip` or on this
+/// page. A window cannot start mid-turn, so without the skip a cut inside a turn wider than
+/// the cap would continue as the command just run.
 fn turns_continuation(
     units: &[Unit],
-    keep: &[bool],
+    fate: &[Fate],
     first: usize,
     last: usize,
 ) -> Option<Continuation> {
     if first == usize::MAX {
         return None;
     }
-    let overlap = units
+    let shown = units
         .iter()
-        .zip(keep)
-        .filter(|(u, &k)| k && u.turn == Some(first))
+        .zip(fate)
+        .filter(|(u, &f)| f != Fate::Dropped && u.turn == Some(first))
         .count();
-    let args = if first == last {
+    let window = if first == last {
         format!("--turn {first}")
     } else {
         format!("--turn {first}..{last}")
     };
-    Some(Continuation {
-        args,
-        overlap,
-        overlap_turn: (overlap > 0).then_some(first),
-    })
+    let args = if shown == 0 {
+        window
+    } else {
+        format!("{window} --skip {shown}")
+    };
+    Some(Continuation { args })
 }
 
 /// A line and uuid address continues in its own terms: the addressed line ranges clipped at the
 /// first dropped line, and the uuids every record of which was dropped. A uuid whose records
 /// fall on both sides of the cut (a replay copy on an earlier line carries its survivor's uuid)
-/// names its dropped records by line instead, because `--uuid` would fetch the kept one again.
+/// names its dropped records by line instead, because `--uuid` would fetch the kept one - or
+/// the one `--skip` passed over - again. No `--skip` rides along: nothing it names was shown.
 fn records_continuation(
     units: &[Unit],
-    keep: &[bool],
+    fate: &[Fate],
     cutoff: usize,
     specs: &LineSpecs,
     uuids: &[String],
@@ -173,20 +196,20 @@ fn records_continuation(
     let mut by_line: Vec<(usize, usize)> = Vec::new();
     let mut named: Vec<&str> = Vec::new();
     for u in uuids {
-        let carrying: Vec<(&Unit, bool)> = units
+        let carrying: Vec<(&Unit, Fate)> = units
             .iter()
-            .zip(keep.iter().copied())
+            .zip(fate.iter().copied())
             .filter(|(x, _)| x.uuid == Some(u.as_str()))
             .collect();
         let lost: Vec<&Unit> = carrying
             .iter()
-            .filter(|(_, k)| !k)
+            .filter(|(_, f)| *f == Fate::Dropped)
             .map(|(x, _)| *x)
             .collect();
         if lost.is_empty() {
             continue;
         }
-        if carrying.iter().any(|(_, k)| *k) {
+        if carrying.iter().any(|(_, f)| *f != Fate::Dropped) {
             by_line.extend(lost.iter().map(|x| (x.line, x.line)));
         } else if !lost.iter().all(|x| covered(x.line)) {
             named.push(u.as_str());
@@ -202,8 +225,6 @@ fn records_continuation(
     }
     (!parts.is_empty()).then(|| Continuation {
         args: parts.join(" "),
-        overlap: 0,
-        overlap_turn: None,
     })
 }
 

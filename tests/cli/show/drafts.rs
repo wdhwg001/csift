@@ -343,8 +343,9 @@ fn a_capped_fetch_continues_with_exactly_the_records_it_dropped() {
 /// Two edges of the cap. A first record holding more units than the cap is kept WHOLE - a
 /// record's units share its line, and a cut through it would leave the continuation
 /// re-fetching its kept half - and the continuation starts at the next line. A `--turn`
-/// window continues as a window: cut inside its one turn, it re-enters that turn and says
-/// how many of its units were already shown.
+/// window continues as a window: cut inside its one turn, it re-enters that turn and passes
+/// over the units already shown with `--skip`, so following the continuations reaches every
+/// unit of the turn once.
 #[test]
 fn a_capped_fetch_keeps_a_wide_first_record_and_a_turn_window_continues_as_a_window() {
     let h = Home::new();
@@ -377,15 +378,19 @@ fn a_capped_fetch_keeps_a_wide_first_record_and_a_turn_window_continues_as_a_win
             .is_some_and(|c| c.ends_with("--line 3..4")),
         "{summary}"
     );
-    assert_eq!(summary["refetch_overlap"], 0, "{summary}");
-    let (kept, summary) = capped(&["--turn", ".."]);
-    assert_eq!(kept, vec![1], "{summary}");
-    assert_eq!(summary["dropped_by_cap"], 4, "{summary}");
-    assert!(
-        summary["refetch_remainder"]
-            .as_str()
-            .is_some_and(|c| c.ends_with("--turn 0")),
-        "{summary}"
-    );
-    assert_eq!(summary["refetch_overlap"], 1, "{summary}");
+    // The one turn, a page at a time: each continuation passes over what the pages before it
+    // showed, and the last page prints none.
+    let mut address = vec!["--turn".to_string(), "..".to_string()];
+    let mut pages = Vec::new();
+    loop {
+        let args: Vec<&str> = address.iter().map(String::as_str).collect();
+        let (kept, summary) = capped(&args);
+        pages.push(kept);
+        let Some(cmd) = summary["refetch_remainder"].as_str() else {
+            break;
+        };
+        address = cmd.split_whitespace().skip(3).map(String::from).collect();
+        assert!(pages.len() < 6, "{pages:?}");
+    }
+    assert_eq!(pages, vec![vec![1], vec![2, 2], vec![3], vec![4]]);
 }

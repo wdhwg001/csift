@@ -1548,10 +1548,17 @@ surface change bumps the PATCH.
   its own ranges clipped at the first dropped line (`--line 1..4,9..14` cut at L3 continues
   `--line 3..4,9..14`, where one range from L3 also fetched L5-L8), a uuid address as the
   dropped uuids, and a mixed one as both; each fetches exactly the dropped records. A
-  `--turn` window continues as a window, `--turn K..<its end>`, exact from a turn boundary;
-  when the cap cut inside a turn the pointer says how many of that turn's units it repeats,
-  and the JSON summary carries them as the new `refetch_overlap`. `show --raw`'s stderr
-  continuation follows the same rule. `show --help` says so under `--max-count`.
+  `--turn` window continues as a window, `--turn K..<its end>`, and when the cap cut inside
+  turn K it passes over that turn's units already shown with the new `--skip M`, which
+  drops the first M record units of what an address selects, in the order the cap keeps
+  them, before the cap applies (lines under `--raw`; the JSON summary counts them as
+  `dropped_by_skip`). A window starts at a turn's first record, so without it a turn wider
+  than the cap continued as the command just run and its later units were never reached.
+  Every form now moves forward: following the continuations at one cap until none is
+  printed yields every unit of the uncapped fetch exactly once. A `--skip` past everything
+  addressed prints an empty page and a stderr note, exit 0. `show --raw`'s stderr
+  continuation follows the same rule. `show --help` says so under `--max-count` and
+  `--skip`.
 - **A quoted relay framing no longer emits an inbox unit.** An assistant text opening with
   `Another Claude session sent a message:` and a quoted `<agent-message>`, and a compaction
   summary carrying a peer section, each emitted an `agent.communication.inbox` unit whose

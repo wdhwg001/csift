@@ -23,27 +23,6 @@ pub(crate) struct Uncovered {
     pub(crate) last_line: usize,
 }
 
-/// The continuation a capped fetch prints: the command, and how many of the units it fetches
-/// were already shown (a turn window re-enters the turn the cap cut inside).
-#[derive(Debug, Clone)]
-pub(crate) struct Remainder {
-    pub(crate) cmd: String,
-    pub(crate) overlap: usize,
-    pub(crate) overlap_turn: Option<usize>,
-}
-
-/// The clause after a continuation that re-fetches units already shown: `noun` is what the
-/// fetch counts (`unit` rendered, `line` raw). Empty when nothing repeats.
-pub(crate) fn overlap_note(overlap: usize, turn: Option<usize>, noun: &str) -> String {
-    match turn {
-        Some(t) if overlap > 0 => format!(
-            " (repeats the {overlap} {noun}(s) of t{t} shown above: a turn window starts at a \
-             turn's first record)"
-        ),
-        _ => String::new(),
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_text(
     exchanges: &[Exchange],
@@ -51,9 +30,10 @@ pub(crate) fn render_text(
     is_subagent: bool,
     parent_session_id: &str,
     skipped: usize,
+    passed: usize,
     dropped: usize,
     cap: usize,
-    remainder: Option<&Remainder>,
+    remainder: Option<&str>,
     uncovered: Uncovered,
     crossing: &crate::model::CrossingReport,
 ) -> Result<()> {
@@ -106,14 +86,18 @@ pub(crate) fn render_text(
     }
     writeln!(out)?;
     writeln!(out, "fetched {units} record unit(s)")?;
+    if passed > 0 {
+        writeln!(
+            out,
+            "--skip passed over the first {passed} record unit(s) the address selects"
+        )?;
+    }
     if dropped > 0 {
         match remainder {
-            Some(r) => writeln!(
+            Some(cmd) => writeln!(
                 out,
-                "+{dropped} more record unit(s) beyond the {cap}-unit cap · continue: {}{}  \
-                 (or --max-count 0 = uncapped)",
-                r.cmd,
-                overlap_note(r.overlap, r.overlap_turn, "unit")
+                "+{dropped} more record unit(s) beyond the {cap}-unit cap · continue: {cmd}  \
+                 (or --max-count 0 = uncapped)"
             )?,
             None => writeln!(
                 out,
@@ -161,8 +145,9 @@ pub(crate) fn render_json(
     is_subagent: bool,
     parent_session_id: &str,
     skipped: usize,
+    passed: usize,
     dropped: usize,
-    remainder: Option<&Remainder>,
+    remainder: Option<&str>,
     uncovered: Uncovered,
     crossing: &crate::model::CrossingReport,
 ) -> Result<()> {
@@ -236,11 +221,9 @@ pub(crate) fn render_json(
     let mut summary = json!({
         "kind": "summary",
         "records": units,
+        "dropped_by_skip": passed,
         "dropped_by_cap": dropped,
-        "refetch_remainder": remainder.map(|r| r.cmd.as_str()),
-        // How many units of `refetch_remainder` are already above: a turn window cut inside
-        // a turn re-enters it from its first record. Null when there is no continuation.
-        "refetch_overlap": remainder.map(|r| r.overlap),
+        "refetch_remainder": remainder,
         "non_record_lines": uncovered.non_record,
         "lines_past_end": uncovered.past_end,
         "skipped_lines": skipped,

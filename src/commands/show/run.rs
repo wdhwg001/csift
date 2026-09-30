@@ -71,18 +71,11 @@ pub fn run_show(args: &ShowArgs, cross: CrossingBudget) -> Result<()> {
         bail!("no such record(s): {}", empty.join(", "));
     }
 
+    let page = Page::new(args.skip, args.max_count);
     if args.raw {
-        return run_raw(&file, &specs, &uuids, turn_spec, args.max_count, cross);
+        return run_raw(&file, &specs, &uuids, turn_spec, page, cross);
     }
-    run_rendered(
-        &file,
-        &specs,
-        &uuids,
-        turn_spec,
-        args.format,
-        args.max_count,
-        cross,
-    )
+    run_rendered(&file, &specs, &uuids, turn_spec, args.format, page, cross)
 }
 
 /// `--raw`: emit the verbatim bytes of each addressed jsonl line, ascending, exactly
@@ -92,7 +85,7 @@ pub(crate) fn run_raw(
     specs: &LineSpecs,
     uuids: &[String],
     turn_range: Option<crate::text::RangeSpec>,
-    max_count: Option<usize>,
+    page: Page,
     cross: CrossingBudget,
 ) -> Result<()> {
     let Some(mmap) = mmap_bytes(file)? else {
@@ -184,10 +177,10 @@ pub(crate) fn run_raw(
         bail!("no such record(s): {}", misses.join(", "));
     }
 
-    // Context-flood guard: keep the FIRST `cap` lines, report the drop on stderr (stdout
-    // stays a pure jsonl stream) with the continuation command, in the address domain the
-    // reader used - the rule the rendered fetch follows, one line a unit.
-    let cap = effective_cap(max_count);
+    // Context-flood guard: pass over `--skip` lines, keep the next `cap`, report the drop on
+    // stderr (stdout stays a pure jsonl stream) with the continuation command, in the address
+    // domain the reader used - the rule the rendered fetch follows, one line a unit.
+    let cap = page.cap;
     let domain = match window_last {
         Some(last) => Addressed::Turns { last },
         None => Addressed::Records { specs, uuids },
@@ -205,9 +198,10 @@ pub(crate) fn run_raw(
                 turn: line_turn.get(&line).copied(),
             })
             .collect();
-        cap_units(&units, cap, &domain)
+        cap_units(&units, page.skip, cap, &domain)
     };
     let dropped = capped.dropped;
+    let addressed_units = keep.len();
     let mut flags = capped.keep.iter().copied();
     keep.retain(|_, _| flags.next().unwrap_or(true));
 
@@ -230,14 +224,13 @@ pub(crate) fn run_raw(
                 past_end_note(specs.past_end, specs.total_lines)
             );
         }
+        if let Some(note) = skip_note(page.skip, addressed_units, "line") {
+            eprintln!("csift: note: {note}");
+        }
         if dropped > 0 {
             let sid = crate::subagent::session_id_from_path(file);
             let cont = match &capped.continuation {
-                Some(c) => format!(
-                    " · continue: csift show @{sid} {} --raw{}",
-                    c.args,
-                    overlap_note(c.overlap, c.overlap_turn, "line")
-                ),
+                Some(c) => format!(" · continue: csift show @{sid} {} --raw", c.args),
                 None => String::new(),
             };
             eprintln!(
@@ -269,7 +262,7 @@ pub(crate) fn run_rendered(
     uuids: &[String],
     turn_range: Option<crate::text::RangeSpec>,
     format: OutputFormat,
-    max_count: Option<usize>,
+    page: Page,
     cross: CrossingBudget,
 ) -> Result<()> {
     let (mut exchanges, skipped, turn_count, crossing) = fetch_records(
@@ -340,10 +333,10 @@ pub(crate) fn run_rendered(
     };
 
     // Context-flood guard (law 4's last hole): an open range (`--line ..` / `--turn ..`)
-    // addresses the WHOLE transcript, so uncapped it would dump the lot. Keep the FIRST
-    // `cap` record units and report the drop with the continuation command, in the address
-    // domain the reader used; `--max-count 0` lifts the cap.
-    let cap = effective_cap(max_count);
+    // addresses the WHOLE transcript, so uncapped it would dump the lot. Pass over `--skip`
+    // units, keep the next `cap` and report the drop with the continuation command, in the
+    // address domain the reader used; `--max-count 0` lifts the cap.
+    let cap = page.cap;
     let domain = match turn_range {
         Some(spec) => Addressed::Turns {
             last: spec.resolve(turn_count, false).1,
@@ -361,19 +354,18 @@ pub(crate) fn run_rendered(
                 })
             })
             .collect();
-        cap_units(&units, cap, &domain)
+        cap_units(&units, page.skip, cap, &domain)
     };
+    let addressed_units = capped.keep.len();
     let mut flags = capped.keep.iter().copied();
     for ex in &mut exchanges {
         ex.hits.retain(|_| flags.next().unwrap_or(true));
     }
     exchanges.retain(|e| !e.hits.is_empty());
     let dropped = capped.dropped;
-    let remainder = capped.continuation.map(|c| Remainder {
-        cmd: format!("csift show @{session_id} {}", c.args),
-        overlap: c.overlap,
-        overlap_turn: c.overlap_turn,
-    });
+    let remainder = capped
+        .continuation
+        .map(|c| format!("csift show @{session_id} {}", c.args));
 
     match format {
         OutputFormat::Text => {
@@ -383,9 +375,10 @@ pub(crate) fn run_rendered(
                 is_subagent,
                 &parent_session_id,
                 skipped,
+                capped.skipped,
                 dropped,
                 cap,
-                remainder.as_ref(),
+                remainder.as_deref(),
                 uncovered,
                 &crossing,
             )?;
@@ -397,11 +390,29 @@ pub(crate) fn run_rendered(
             is_subagent,
             &parent_session_id,
             skipped,
+            capped.skipped,
             dropped,
-            remainder.as_ref(),
+            remainder.as_deref(),
             uncovered,
             &crossing,
         )?,
     }
+    // After the render flushed: the page is empty because `--skip` reached past everything
+    // the address selects, which the address resolving makes an answer, not a miss.
+    #[allow(clippy::print_stderr)]
+    if let Some(note) = skip_note(page.skip, addressed_units, "record unit") {
+        eprintln!("csift: note: {note}");
+    }
     Ok(())
+}
+
+/// The note for a `--skip` that reaches past every unit the address selects: the address
+/// resolved, so the empty page is an answer (exit 0) rather than a miss. `None` otherwise.
+pub(crate) fn skip_note(skip: usize, addressed: usize, noun: &str) -> Option<String> {
+    (skip > 0 && skip >= addressed).then(|| {
+        format!(
+            "--skip {skip} passes over all {addressed} {noun}(s) the address selects - \
+             nothing is left to show"
+        )
+    })
 }
