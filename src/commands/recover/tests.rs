@@ -39,3 +39,4 @@ mod replay;
 mod signals;
 mod snapshots;
 mod string_edits;
+mod targets;
