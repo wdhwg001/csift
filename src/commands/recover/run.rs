@@ -82,7 +82,7 @@ pub fn run_recover(args: &RecoverArgs, cross: CrossingBudget) -> Result<()> {
     if names.len() > 1 {
         bail!(
             "{}",
-            ambiguous_target(target_file.unwrap_or_default(), &names)
+            ambiguous_target("--file", target_file.unwrap_or_default(), &names)
         );
     }
 
@@ -209,14 +209,39 @@ pub(crate) fn distinct_matched<'a>(
         .collect()
 }
 
-/// The refusal for a `--file` target that names more than one file: every candidate and the
-/// count, and what names exactly one.
-pub(crate) fn ambiguous_target(target: &str, names: &std::collections::BTreeSet<&str>) -> String {
-    let list: Vec<String> = names.iter().map(|p| format!("  {p}")).collect();
+/// How many candidates a refusal lists before it counts the rest.
+const AMBIGUOUS_SHOWN: usize = 10;
+
+/// The refusal for a target that names more than one file: the count, the first
+/// [`AMBIGUOUS_SHOWN`] candidates and how many more there are, and what names exactly one.
+/// `origin` says where the target came from - `--file`, or `manifest line` for a
+/// `--files-from` line - so a batch note names the line it is about.
+///
+/// It says what replaying one such target as ONE file would do, and there are two outcomes:
+/// candidates in one transcript stitch their edits into one buffer, while candidates in
+/// different transcripts replay one file's history and drop the others'. An unscoped
+/// `--file README.md` can name hundreds of files, so the list is cut and the rest COUNTED -
+/// the count is the whole answer and a longer suffix narrows the list.
+pub(crate) fn ambiguous_target(
+    origin: &str,
+    target: &str,
+    names: &std::collections::BTreeSet<&str>,
+) -> String {
+    let mut list: Vec<String> = names
+        .iter()
+        .take(AMBIGUOUS_SHOWN)
+        .map(|p| format!("  {p}"))
+        .collect();
+    if names.len() > AMBIGUOUS_SHOWN {
+        list.push(format!(
+            "  ... +{} more (a longer suffix narrows the list)",
+            names.len() - AMBIGUOUS_SHOWN
+        ));
+    }
     format!(
-        "--file `{target}` names {} distinct files in scope, and replaying them together would \
-         stitch their edits into one buffer:\n{}\npass one of these paths, or a longer \
-         suffix that names exactly one",
+        "{origin} `{target}` names {} distinct files in scope - replayed as one file it would \
+         stitch their edits into one buffer, or keep one file's history and drop the others':\n\
+         {}\npass one of these paths, or a longer suffix that names exactly one",
         names.len(),
         list.join("\n")
     )
@@ -334,7 +359,10 @@ pub(crate) fn run_recover_batch(args: &RecoverArgs, cross: CrossingBudget) -> Re
         // replayed, and the report says so rather than writing a stitched buffer.
         let names = distinct_matched(scans.iter());
         if names.len() > 1 {
-            eprintln!("note: not replayed: {}", ambiguous_target(&target, &names));
+            eprintln!(
+                "note: not replayed: {}",
+                ambiguous_target("manifest line", &target, &names)
+            );
             outcomes.push(BatchOutcome {
                 target,
                 status: "ambiguous",

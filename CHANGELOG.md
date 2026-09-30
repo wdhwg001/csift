@@ -1489,6 +1489,14 @@ surface change bumps the PATCH.
   that budget, so N moved with its digits and its plural - on one fixture `--budget 1` said
   392 and `--budget 100` said 399, the budget that renders. N is now the least budget that
   fits the header rendered at N itself, the same at every skipped budget.
+- **`recover`'s several-files refusal says where it came from and what it prevents.** A
+  `--files-from` line's note named it `--file`; the batch summary counted an unreplayed
+  ambiguous line among the recovered files; the refusal named only the stitching outcome,
+  though candidates in different transcripts would replay one file's history and drop the
+  others'; and it listed every candidate, one line each however many there were. The note now
+  names the manifest line, the summary counts it beside the recovered files, the refusal
+  names both outcomes and lists the first ten candidates with a count of the rest, and
+  `recover --help` states that two spellings of one file are refused as two.
 
 ### Performance
 

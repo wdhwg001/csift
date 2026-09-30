@@ -192,10 +192,12 @@ pub(crate) fn write_batch_report(out_dir: &Path, outcomes: &[BatchOutcome]) -> R
     } else {
         String::new()
     };
+    // An ambiguous line was never replayed, so it is counted beside the recovered files
+    // rather than among them.
     println!(
         "recovered {} file(s): {complete} complete · {partial} partial · {none} no-history · \
          {skipped} skipped (already present){ambiguous_note}",
-        outcomes.len()
+        outcomes.len() - ambiguous
     );
     if flagged > 0 {
         println!(

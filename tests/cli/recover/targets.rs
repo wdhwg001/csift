@@ -112,13 +112,20 @@ fn a_manifest_line_naming_several_files_is_reported_ambiguous_and_not_written() 
         out_dir.to_str().unwrap(),
     ]);
     assert!(out.success, "stderr: {}", out.stderr);
+    // The note names the MANIFEST line it is about, and the summary counts the unreplayed
+    // line beside the recovered files rather than among them.
     assert!(
         out.stderr
-            .contains("not replayed: --file `lib.rs` names 3 distinct files"),
+            .contains("not replayed: manifest line `lib.rs` names 3 distinct files"),
         "{}",
         out.stderr
     );
-    assert!(out.stdout.contains("1 ambiguous"), "{}", out.stdout);
+    assert!(
+        out.stdout.contains("recovered 1 file(s): 1 complete")
+            && out.stdout.contains("· 1 ambiguous"),
+        "{}",
+        out.stdout
+    );
     let report = std::fs::read_to_string(out_dir.join("recovery-report.tsv")).unwrap();
     assert!(
         report.contains("ambiguous\t0\t0\t0\t0\t0\tlib.rs\t\n"),
@@ -307,4 +314,52 @@ fn a_suffix_naming_a_relative_record_path_beside_another_file_is_refused() {
         one(both_relative, "/Users/dev/Projects/da4/b/lib.rs"),
         "RB2\n"
     );
+}
+
+/// A target naming many files lists the first ten candidates and COUNTS the rest - an
+/// unscoped `--file README.md` can name hundreds - and says both things replaying them as
+/// one file could do: stitch them in one transcript, or keep one file's history and drop
+/// the others' across several.
+#[test]
+fn a_refusal_lists_ten_candidates_and_counts_the_rest() {
+    let h = Home::new();
+    let files: Vec<(String, String, String)> = (0..13)
+        .map(|i| {
+            (
+                format!("/p/d{i:02}/README.md"),
+                format!("r{i}"),
+                format!("R{i}"),
+            )
+        })
+        .collect();
+    let borrowed: Vec<(&str, &str, &str)> = files
+        .iter()
+        .map(|(p, a, b)| (p.as_str(), a.as_str(), b.as_str()))
+        .collect();
+    let sess = "7b7c7d7e-1111-4222-8333-944455566611";
+    cwd_session(&h, sess, &borrowed);
+    let out = h.run(&["recover", at(sess).as_str(), "--file", "README.md"]);
+    assert!(!out.success, "{}", out.stdout);
+    assert!(
+        out.stderr.contains(
+            "--file `README.md` names 13 distinct files in scope - replayed as one file it \
+             would stitch their edits into one buffer, or keep one file's history and drop the \
+             others':"
+        ),
+        "{}",
+        out.stderr
+    );
+    let listed = out
+        .stderr
+        .lines()
+        .filter(|l| l.starts_with("  /p/"))
+        .count();
+    assert_eq!(listed, 10, "{}", out.stderr);
+    assert!(
+        out.stderr
+            .contains("  ... +3 more (a longer suffix narrows the list)\n"),
+        "{}",
+        out.stderr
+    );
+    assert!(!out.stderr.contains("/p/d12/"), "{}", out.stderr);
 }

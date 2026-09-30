@@ -237,9 +237,14 @@ pub struct RecoverArgs {
     /// exactly as written in the transcript and against a relative one resolved through its
     /// record's shell cwd (with a basename-suffix fallback). A suffix that names MORE THAN
     /// ONE distinct file in scope - a relative record path counts, as the file its cwd
-    /// resolves it to - is refused before anything is replayed, naming every candidate and
-    /// the count - replaying them together would stitch several files' edits into one
-    /// buffer; pass one of the candidates, or a longer suffix that names exactly one. REQUIRED
+    /// resolves it to - is refused before anything is replayed, with the count and the first
+    /// ten candidates (the rest counted) - replayed as one file it would stitch their edits
+    /// into one buffer, or keep one file's history and drop the others'; pass one of the
+    /// candidates, or a longer suffix that names exactly one. Paths
+    /// are compared as strings, so two spellings of ONE file (`/tmp/x` beside the
+    /// `/private/tmp/x` a symlink resolves to, or a path carrying `//`) are refused as two
+    /// files, and passing one spelling exactly replays that spelling's events alone - the
+    /// safe side of the rule: it never stitches, it can only read one spelling. REQUIRED
     /// for every mode (`--patches` / `--at` / `--coverage`). The MAGIC value `@plan`
     /// (bash-safe, no escaping) instead reconstructs the session-BOUND plan file: the
     /// path from the session's `plan_mode` attachment, so a deleted plan is recoverable
@@ -363,7 +368,8 @@ pub struct RecoverArgs {
     /// = the file's final reconstructed state). Each file is written under `--out-dir` mirroring
     /// its absolute path; a `recovery-report.tsv` summarizes per-file status. A line takes
     /// `--file`'s rule: one that names several files is not replayed, its report row reads
-    /// `ambiguous`, and stderr names the candidates.
+    /// `ambiguous`, stderr names the manifest line and its candidates, and the summary counts
+    /// it beside the recovered files rather than among them.
     #[arg(long, value_name = "MANIFEST")]
     pub files_from: Option<PathBuf>,
 

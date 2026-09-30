@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2555",
+          "lines": "2556",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -21142,7 +21142,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "357-363",
+          "lines": "359-365",
           "snippet": "/// Collect the SCOPE-ACCOUNTING commands of one transcript: every mutating-CLASS\n/// marker a Bash command yields (`fmt:cargo`, `interp:python`, `pkg:npm`,\n/// `extract:tar`, `git:<sub>` - commands that mutate files they never name), plus\n/// every `PowerShell` tool call (its command text is never lexically parsed, so any\n/// file it touched is invisible; see AGENTS 3.9). Target-independent by nature: these\n/// commands CANNOT be joined to a `--file`, which is exactly why they are counted and\n/// disclosed per window instead of silently ignored."
         }
       ],
@@ -22099,7 +22099,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "357-363",
+          "lines": "359-365",
           "snippet": "/// Collect the SCOPE-ACCOUNTING commands of one transcript: every mutating-CLASS\n/// marker a Bash command yields (`fmt:cargo`, `interp:python`, `pkg:npm`,\n/// `extract:tar`, `git:<sub>` - commands that mutate files they never name), plus\n/// every `PowerShell` tool call (its command text is never lexically parsed, so any\n/// file it touched is invisible; see AGENTS 3.9). Target-independent by nature: these\n/// commands CANNOT be joined to a `--file`, which is exactly why they are counted and\n/// disclosed per window instead of silently ignored."
         }
       ],
@@ -34981,7 +34981,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "327",
+          "lines": "329",
           "snippet": "    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 11]> ="
         }
       ],
@@ -35732,12 +35732,12 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "323-327",
+          "lines": "325-329",
           "snippet": "pub(crate) fn line_is_recover_candidate(line: &[u8]) -> bool {\n    // The needle law: the genuine-user hook is serialization-tolerant (user-only, like files').\n    // Finders built ONCE (per-line hot path - the stateless form rebuilt its searcher\n    // every call).\n    static NEEDLES: std::sync::LazyLock<[memmem::Finder<'static>; 11]> ="
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "330-339",
+          "lines": "332-341",
           "snippet": "                memmem::Finder::new(b\"toolUseResult\"),\n                memmem::Finder::new(b\"Edit\"),\n                memmem::Finder::new(b\"Write\"),\n                memmem::Finder::new(b\"Read\"),\n                memmem::Finder::new(b\"Bash\"),\n                // The opaque accounting counts PowerShell tool calls; an assistant\n                // record carrying one matches no other needle, so without this the\n                // P count silently missed the assistant-side records.\n                memmem::Finder::new(b\"PowerShell\"),\n                memmem::Finder::new(b\"filePath\"),"
         }
       ],
@@ -55954,12 +55954,12 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "467",
+          "lines": "469",
           "snippet": "            let has_structured_result = rec.tool_use_result.is_some();"
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "476-481",
+          "lines": "478-483",
           "snippet": "                        if has_structured_result {\n                            ids_with_result.insert(id.clone());\n                        }\n                        if *is_error == Some(true) {\n                            failed_ids.insert(id.clone());\n                        }"
         }
       ],
@@ -56867,7 +56867,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "447-449",
+          "lines": "449-451",
           "snippet": "    for (stamp, idxs) in view.groups() {\n        // tool_use_id -> file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.\n        let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();"
         },
         {
@@ -63871,7 +63871,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "450-456",
+          "lines": "452-458",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully...\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content.\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
         }
       ],
@@ -64021,7 +64021,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "450-454",
+          "lines": "452-456",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully...\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content."
         }
       ],
@@ -64207,7 +64207,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "450-456",
+          "lines": "452-458",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully...\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content.\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
         }
       ],
@@ -64313,7 +64313,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "467-474",
+          "lines": "469-476",
           "snippet": "            let has_structured_result = rec.tool_use_result.is_some();\n            if let Some(blocks) = rec.blocks() {\n                for b in blocks {\n                    if let Block::ToolResult {\n                        tool_use_id: Some(id),\n                        is_error,\n                        ..\n                    } = b"
         }
       ],
@@ -69292,7 +69292,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "403-411",
+          "lines": "405-413",
           "snippet": "                } else if name == \"PowerShell\" && cmd.is_some() {\n                    out.push(OpaqueCommand {\n                        session_id: session_id.to_string(),\n                        line_no,\n                        turn_index,\n                        timestamp_utc: rec.timestamp.clone(),\n                        marker: \"powershell\".to_string(),\n                    });\n                }"
         }
       ],
@@ -70945,7 +70945,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "403-411",
+          "lines": "405-413",
           "snippet": "                } else if name == \"PowerShell\" && cmd.is_some() {\n                    out.push(OpaqueCommand {\n                        session_id: session_id.to_string(),\n                        line_no,\n                        turn_index,\n                        timestamp_utc: rec.timestamp.clone(),\n                        marker: \"powershell\".to_string(),\n                    });\n                }"
         }
       ],
@@ -89494,7 +89494,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3586"
+          "lines": "3587"
         }
       ],
       "states": [
