@@ -1480,7 +1480,9 @@ surface change bumps the PATCH.
   never matched, so a count, an id list or a census over a scope holding one covers the
   parseable lines only - and those three modes said nothing about it. Each now prints
   `csift: note: N malformed line(s) skipped` on stderr, as `--raw` does, and
-  `-c --format json`'s summary carries `skipped_lines`.
+  `-c --format json`'s summary carries `skipped_lines`. On a zero match the note stands
+  down in every terminal mode, because the zero-match caveat already names the line and
+  what it means for the absence: one mention, never two.
 - **`deliver --recipe` says where its block goes.** The block's top level is
   `{"hooks": {...}}`, and the note said to paste it into the `hooks` object of a
   settings.json, which nests `hooks.hooks`. The note now says to merge it at the file's

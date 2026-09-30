@@ -50,11 +50,15 @@ fn emit_advisory_notes(
 /// `--raw` form, one sentence. A skipped line was never matched, so a count, an id list or
 /// a census taken over a scope holding one is a claim about the parseable lines only, and
 /// the rule that a skipped line is counted and never hidden binds every mode that reads the
-/// scan, the ones whose stdout is a bare datum included.
+/// scan, the ones whose stdout is a bare datum included. A ZERO match is the one case it
+/// stands down for: the zero-match diagnosis, which runs before every terminal mode, has
+/// already named the skipped lines in its caveat together with what they mean for the
+/// absence, so `diagnosed` says the note would name them twice - the plain text render of a
+/// zero match reads the same way.
 // A terminal mode's stderr accounting line; the modes that call it build no `Out`.
 #[allow(clippy::print_stderr)]
-pub(crate) fn note_malformed(outcome: &SearchOutcome) {
-    if outcome.skipped_lines > 0 {
+pub(crate) fn note_malformed(outcome: &SearchOutcome, diagnosed: bool) {
+    if outcome.skipped_lines > 0 && !diagnosed {
         eprintln!(
             "csift: note: {}",
             crate::text::malformed_note(outcome.skipped_lines)
@@ -67,12 +71,12 @@ pub(crate) fn note_malformed(outcome: &SearchOutcome) {
 // A TERMINAL mode: one integer, or the two envelope lines. It builds no `Out` and returns
 // before the render exists, so there is no buffer to jump.
 #[allow(clippy::print_stdout)]
-fn emit_count_only(outcome: &SearchOutcome, format: OutputFormat) -> Result<()> {
+fn emit_count_only(outcome: &SearchOutcome, format: OutputFormat, diagnosed: bool) -> Result<()> {
     let total = outcome.exchanges.len() + outcome.dropped_by_cap;
     match format {
         OutputFormat::Text => {
             println!("{total}");
-            note_malformed(outcome);
+            note_malformed(outcome, diagnosed);
         }
         OutputFormat::Json => {
             // envelope v2 even here: header + summary (no rows) - one reading idiom.
@@ -100,7 +104,11 @@ fn emit_count_only(outcome: &SearchOutcome, format: OutputFormat) -> Result<()> 
 // A TERMINAL mode: one id per matched session (a few hundred at most) and one stderr note,
 // with no `Out` in the picture.
 #[allow(clippy::print_stdout, clippy::print_stderr)]
-fn emit_sessions_with_matches(outcome: &SearchOutcome, format: OutputFormat) -> Result<()> {
+fn emit_sessions_with_matches(
+    outcome: &SearchOutcome,
+    format: OutputFormat,
+    diagnosed: bool,
+) -> Result<()> {
     if format == OutputFormat::Json {
         bail!("-l prints a plain id stream; with --format json read the summary's `transcript_ids` instead");
     }
@@ -121,7 +129,7 @@ fn emit_sessions_with_matches(outcome: &SearchOutcome, format: OutputFormat) -> 
             outcome.dropped_by_cap
         );
     }
-    note_malformed(outcome);
+    note_malformed(outcome, diagnosed);
     Ok(())
 }
 
@@ -335,7 +343,7 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
     // `--count-only`: emit only the TRUE total of matching exchanges (add back any capped by
     // `--max-count`), the ripgrep `-c` idiom - no per-exchange output.
     if args.count_only {
-        return emit_count_only(&outcome, args.format);
+        return emit_count_only(&outcome, args.format, diagnosis.is_some());
     }
 
     // `-l`: only WHICH sessions matched, one id per line - sorted, deduped, UNCAPPED (the
@@ -346,7 +354,7 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
     // sessions, so it is disclosed on stderr (stdout stays a pure id stream) - no silent
     // truncation.
     if args.sessions_with_matches {
-        return emit_sessions_with_matches(&outcome, args.format);
+        return emit_sessions_with_matches(&outcome, args.format, diagnosis.is_some());
     }
 
     // `--count-by <axis>`: a per-KEY census of the matched records along ONE closed axis
@@ -390,7 +398,7 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
                     "csift: {records} matched record(s) across {} {slug} key(s){excl}{drop}",
                     rows.len()
                 );
-                note_malformed(&outcome);
+                note_malformed(&outcome, diagnosis.is_some());
                 // A census MOVES with the budget - crossing a cut resolves records above it,
                 // which changes what every axis counts - so it discloses the crossing too.
                 // On stderr, beside the census's own accounting note and for the same
@@ -482,7 +490,7 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
                     dropped_side(args)
                 );
             }
-            note_malformed(&outcome);
+            note_malformed(&outcome, diagnosis.is_some());
         }
         return Ok(());
     }

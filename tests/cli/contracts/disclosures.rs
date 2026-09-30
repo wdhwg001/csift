@@ -242,7 +242,9 @@ fn verbatim_names_automation_in_scope_that_its_budget_did_not_select() {
 /// count, an id list or a census; a torn line was never matched, so the datum is a claim
 /// about the parseable lines only and each mode names the skipped line on stderr, in the
 /// `--raw` form. `-c --format json` carries it in the summary's `skipped_lines`, as the
-/// census's JSON summary always has. Silent on a clean transcript, both ways.
+/// census's JSON summary always has. Silent on a clean transcript, both ways. On a ZERO match
+/// the diagnosis's caveat already names the line and what it means for the absence, so every
+/// mode names it exactly once.
 #[test]
 fn every_count_mode_names_a_torn_line_and_stays_silent_on_a_clean_scope() {
     let (h, t) = raw_notes_home();
@@ -274,6 +276,30 @@ fn every_count_mode_names_a_torn_line_and_stays_silent_on_a_clean_scope() {
         assert!(
             !out.stderr.contains(MALFORMED_NOTE),
             "{mode:?} claims a torn line on a clean transcript: {}",
+            out.stderr
+        );
+    }
+    for mode in [
+        vec!["-c"],
+        vec!["-l"],
+        vec!["--count-by", "label"],
+        vec!["--raw"],
+        vec![],
+    ] {
+        let mut args = vec!["search", "zzabsentqq", t.as_str()];
+        args.extend(mode.iter().copied());
+        let out = h.run(&args);
+        assert!(out.success, "{mode:?} stderr: {}", out.stderr);
+        assert_eq!(
+            out.stderr.matches(MALFORMED_NOTE).count(),
+            1,
+            "{mode:?} names the torn line once on a zero match: {}",
+            out.stderr
+        );
+        assert!(
+            out.stderr
+                .contains("the absence is definitive for parseable lines only"),
+            "{mode:?}: {}",
             out.stderr
         );
     }
