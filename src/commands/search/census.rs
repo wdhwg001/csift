@@ -206,16 +206,16 @@ pub(crate) fn axis_census(
     (rows, records, excluded)
 }
 
+/// A probe's label census as the diagnosis reports it: per-leaf rows, richest first, and the
+/// record total.
+pub(crate) type LabelRows = (Vec<(String, usize)>, usize);
+
 /// A zero-match search's self-diagnosis (the anti-slippage keystone). A bare "no matching
 /// exchanges" reads to a model as a syntax failure and drives it back to hand-parsing jsonl;
 /// this makes the empty result SAY it is a definitive, honest, exit-0 absence, echoes the
 /// filters that constrained it, and - when a `-t`/`-T` filter was active - names the label(s)
 /// the pattern DOES occur under (the exact L74681 trap: a tool-name searched under
 /// `-t user.message`). Emitted to stderr so stdout stays a pure stream.
-/// A probe's label census as the diagnosis reports it: per-leaf rows, richest first, and the
-/// record total.
-pub(crate) type LabelRows = (Vec<(String, usize)>, usize);
-
 #[derive(Debug)]
 pub(crate) struct EmptyDiagnosis {
     pub(crate) sessions_in_scope: usize,

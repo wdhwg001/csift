@@ -6,10 +6,15 @@ use super::*;
 /// Empty-result self-diagnosis (anti-slippage keystone, section T0.1). A zero-match result is a
 /// DEFINITIVE absence, not a syntax error - but a bare "no matching exchanges" reads as
 /// failure and drives a model back to hand-parsing. On zero hits we emit (to stderr;
-/// stdout stays pure) what was searched + that this is exit-0-honest, and - the killer -
-/// when a `-t`/`-T` filter is active, a re-scan WITHOUT it that names the label(s) the
-/// pattern DOES occur under. The re-scan is paid ONLY on a zero-hit + label-filtered
-/// query, so the happy path is untouched.
+/// stdout stays pure) what was searched + that this is exit-0-honest, and up to two probes,
+/// each a re-scan of the same query with one filter dropped:
+/// - the LABEL probe, run on a zero hit under a `-t`/`-T` filter: the filter dropped, it
+///   names the label(s) the pattern DOES occur under;
+/// - the TURN probe, run second on a zero hit under `--turn` (its line prints first, because
+///   its remedy keeps the reader's label filter): the window dropped, it counts the records
+///   the pattern and the label filter match outside turn numbering.
+///
+/// A query with neither filter pays for no re-scan, so the happy path is untouched.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn diagnose_zero_match(
     args: &SearchArgs,

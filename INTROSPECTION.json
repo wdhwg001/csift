@@ -80617,7 +80617,7 @@
       "code": [
         {
           "path": "src/commands/search/census.rs",
-          "lines": "209-212",
+          "lines": "213-216",
           "snippet": "/// A zero-match search's self-diagnosis (the anti-slippage keystone). A bare \"no matching\n/// exchanges\" reads to a model as a syntax failure and drives it back to hand-parsing jsonl;\n/// this makes the empty result SAY it is a definitive, honest, exit-0 absence, echoes the\n/// filters that constrained it, and - when a `-t`/`-T` filter was active - names the label(s)"
         },
         {
