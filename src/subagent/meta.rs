@@ -157,10 +157,12 @@ pub(crate) struct JournalData {
     /// agent of the run whatever a lane's tail shows: a lane the harness stopped after its
     /// structured answer keeps an unreturned call at its tail for good.
     pub(crate) ended: Option<String>,
-    /// The instant that manifest says its run ended: its own `timestamp` (every manifest on
-    /// the live root carries one, within 70 ms of `startTime + durationMs`), else the file's
-    /// modification time. A run resumed under its id keeps writing its lanes after this
-    /// instant, which is what makes the manifest stale for them.
+    /// The instant that manifest says its run ended: its own `timestamp`, else the file's
+    /// modification time. On one reading of a live projects root all 261 manifests carry a
+    /// `timestamp`, 260 of them within 70 ms of `startTime + durationMs` and the worst
+    /// 131 ms from it, which is what the minute of [`MANIFEST_SLACK_MS`] rests on. A run
+    /// resumed under its id keeps writing its lanes after this instant, which is what makes
+    /// the manifest stale for them.
     pub(crate) ended_at_ms: Option<i64>,
 }
 
@@ -311,7 +313,8 @@ impl JournalCache {
             if newest > end.saturating_add(MANIFEST_SLACK_MS) {
                 return RunReading::StaleManifest(format!(
                     "its run's manifest (status {status}) ended before this lane's newest \
-                     record, so the run was resumed under its id: read from the lane's tail"
+                     record: the lane wrote after its run's end, most likely a run resumed \
+                     under its id, so it is read from the lane's tail"
                 ));
             }
         }

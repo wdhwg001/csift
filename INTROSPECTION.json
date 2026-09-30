@@ -30726,22 +30726,22 @@
         },
         {
           "path": "src/subagent/meta.rs",
-          "lines": "324-326",
+          "lines": "327-329",
           "snippet": "    /// Workflow agents a run's journal has started and not closed, across every run with no\n    /// manifest yet. An ended run contributes nothing: an agent killed with its run never\n    /// writes a closing line, so its imbalance is permanent and says nothing live."
         },
         {
           "path": "src/subagent/meta.rs",
-          "lines": "368-370",
+          "lines": "371-373",
           "snippet": "    match kind {\n        Some(\"started\") => {\n            data.started += 1;"
         },
         {
           "path": "src/subagent/meta.rs",
-          "lines": "293-297",
+          "lines": "295-299",
           "snippet": "    pub(crate) fn run_reading(\n        &self,\n        subagent: &Subagent,\n        newest_ms: impl FnOnce() -> Option<i64>,\n    ) -> RunReading {"
         },
         {
           "path": "src/subagent/meta.rs",
-          "lines": "311-312",
+          "lines": "313-314",
           "snippet": "            if newest > end.saturating_add(MANIFEST_SLACK_MS) {\n                return RunReading::StaleManifest(format!("
         }
       ],
@@ -61655,12 +61655,12 @@
       "code": [
         {
           "path": "src/subagent/meta.rs",
-          "lines": "330-332",
+          "lines": "333-335",
           "snippet": "        self.by_path\n            .values()\n            .filter(|r| r.ended.is_none())"
         },
         {
           "path": "src/subagent/meta.rs",
-          "lines": "386-397",
+          "lines": "389-400",
           "snippet": "    if kind != Some(\"result\") {\n        return;\n    }\n    let Some(agent) = agent else {\n        return;\n    };\n    let payload = match v.get(\"result\") {\n        Some(serde_json::Value::String(s)) => Some(s.clone()),\n        Some(other) => Some(other.to_string()),\n        None => None,\n    };\n    // FIRST event per agent wins - the former scans returned on first match."
         }
       ],

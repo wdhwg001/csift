@@ -258,10 +258,10 @@ fn a_manifest_older_than_its_lane_settles_nothing() {
     let resumed = row("a000000000000000d");
     assert_eq!(resumed["status"], "running", "{resumed}");
     assert!(
-        resumed["settled_by"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("manifest (status killed) ended before this lane's newest record"),
+        resumed["settled_by"].as_str().unwrap_or_default().contains(
+            "manifest (status killed) ended before this lane's newest record: the lane \
+                 wrote after its run's end, most likely a run resumed under its id"
+        ),
         "{resumed}"
     );
     assert_eq!(row("a000000000000000e")["status"], "killed");

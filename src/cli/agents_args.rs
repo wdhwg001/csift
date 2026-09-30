@@ -38,9 +38,9 @@ pub enum AgentKindFilter {
         (`result` is `completed`, `failed` is `failed`), else the manifest an ended run \
         writes (`completed`, or its status verbatim - `killed`, `failed`, an open set) - \
         unless the lane's newest record is more than a minute newer than that manifest's \
-        own end instant: a run resumed under its id runs under its predecessor's manifest \
-        until it ends, so such a lane is read from its tail and its row names the stale \
-        manifest. A lane its run ended without completing carries no completion instant, \
+        own end instant: such a lane wrote after its run's end, most likely because a run \
+        resumed under its id runs under its predecessor's manifest until it ends, so it is \
+        read from its tail and its row names the stale manifest. A lane its run ended without completing carries no completion instant, \
         and its row names why in brackets (JSON `settled_by`), in the words `status` uses. Any other \
         lane is `completed` when the transcript's NEWEST meaningful record is an \
         assistant text ending its turn, else \
