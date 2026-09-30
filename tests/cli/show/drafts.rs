@@ -339,3 +339,50 @@ fn a_capped_fetch_continues_with_exactly_the_records_it_dropped() {
         );
     }
 }
+
+/// Two edges of the cap. A first record holding more units than the cap is kept WHOLE - a
+/// record's units share its line, and a cut through it would leave the continuation
+/// re-fetching its kept half - and the continuation starts at the next line. A `--turn`
+/// window names no line, so its continuation runs to the last line it dropped.
+#[test]
+fn a_capped_fetch_keeps_a_wide_first_record_and_a_turn_window_continues_to_its_last_drop() {
+    let h = Home::new();
+    let sess = "7a6b5c4d-3e2f-4109-a876-543210fedcbc";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"one"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reading it"},{"type":"tool_use","id":"toolu_r","name":"Read","input":{"file_path":"/x"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"r1","parentUuid":"a1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_r","content":"x"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"r1","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"text","text":"read"}]}}"#, "\n",
+        ),
+    );
+    let target = at(sess);
+    let capped = |range: &[&str]| {
+        let mut args = vec!["show", target.as_str()];
+        args.extend_from_slice(range);
+        args.extend(["--max-count", "1", "--format", "json"]);
+        let out = h.run(&args);
+        assert!(out.success, "{}", out.stderr);
+        let summary = json_rows(&out.stdout, "summary")[0].clone();
+        (record_lines(&out.stdout), summary)
+    };
+    let (kept, summary) = capped(&["--line", "2..4"]);
+    assert_eq!(kept, vec![2, 2], "L2's two units, whole: {summary}");
+    assert_eq!(summary["dropped_by_cap"], 2, "{summary}");
+    assert!(
+        summary["refetch_remainder"]
+            .as_str()
+            .is_some_and(|c| c.ends_with("--line 3..4")),
+        "{summary}"
+    );
+    let (kept, summary) = capped(&["--turn", ".."]);
+    assert_eq!(kept, vec![1], "{summary}");
+    assert_eq!(summary["dropped_by_cap"], 4, "{summary}");
+    assert!(
+        summary["refetch_remainder"]
+            .as_str()
+            .is_some_and(|c| c.ends_with("--line 2..4")),
+        "{summary}"
+    );
+}
