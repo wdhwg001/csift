@@ -1520,6 +1520,14 @@ surface change bumps the PATCH.
   takes the routing id.** Its third line now states the two tools' facts apart: the routing id
   `Name@Team` is a form TaskStop takes, and SendMessage, which refuses any `to` carrying `@`,
   takes the bare name or the transcript id.
+- **`show`'s cap continuation dropped the records after an abandoned one.** The rendered
+  fetch kept its first `cap` units in render order, which puts an abandoned unit after every
+  live one, and read the continuation off that order, so a window with an abandoned record
+  printed a continuation that stopped at it or ran backwards: on one transcript
+  `--line 1..400` continued with `--line 201..393` and lost L394-L400. The cap now keeps the
+  records on the lowest lines, whole records, and the continuation runs from the first
+  dropped line to the end of what was addressed, so it fetches exactly what was dropped.
+  `show --help` says so under `--max-count`.
 
 ### Performance
 

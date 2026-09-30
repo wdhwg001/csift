@@ -313,37 +313,9 @@ pub(crate) fn run_rendered(
     // `cap` record units and report the drop with the exact continuation command;
     // `--max-count 0` lifts the cap.
     let cap = effective_cap(max_count);
-    let total_units: usize = exchanges.iter().map(|e| e.hits.len()).sum();
-    let mut dropped = 0usize;
-    let mut remainder_cmd: Option<String> = None;
-    if total_units > cap {
-        dropped = total_units - cap;
-        // The remainder's exact line-domain, computed BEFORE truncation (sidecar hits
-        // have no physical line and cannot ride a --line continuation).
-        let omitted_lines: Vec<usize> = exchanges
-            .iter()
-            .flat_map(|e| e.hits.iter())
-            .skip(cap)
-            .filter(|h| !h.from_sidecar && h.line > 0)
-            .map(|h| h.line)
-            .collect();
-        if let (Some(&a), Some(&b)) = (omitted_lines.first(), omitted_lines.last()) {
-            remainder_cmd = Some(format!("csift show @{session_id} --line {a}..{b}"));
-        }
-        let mut budget = cap;
-        exchanges.retain_mut(|ex| {
-            if budget == 0 {
-                return false;
-            }
-            if ex.hits.len() <= budget {
-                budget -= ex.hits.len();
-            } else {
-                ex.hits.truncate(budget);
-                budget = 0;
-            }
-            true
-        });
-    }
+    let (dropped, remainder) = cap_by_line(&mut exchanges, cap, addressed.last().copied());
+    let remainder_cmd: Option<String> =
+        remainder.map(|(a, b)| format!("csift show @{session_id} --line {a}..{b}"));
 
     match format {
         OutputFormat::Text => {
@@ -374,4 +346,63 @@ pub(crate) fn run_rendered(
         )?,
     }
     Ok(())
+}
+
+/// The rendered fetch's context-flood guard: keep the records on the LOWEST lines, as many as
+/// fit in `cap` units - whole records, since a record's units share its line and a cut
+/// through one would leave the continuation re-fetching its kept half, and always at least
+/// one. Returns the dropped unit count and the continuation's `--line` range: from the first
+/// dropped line to the end of what was addressed - `addressed_max`, the last line the
+/// `--line` specs name, or the last dropped unit's line when later (a `--turn` window's last
+/// turn, a uuid). The render sorts an abandoned unit after the live ones, so the order a
+/// record is SHOWN in is not the order its line comes in: keeping the first units in render
+/// order dropped live lines above a kept abandoned one, and a continuation read off that
+/// order ran backwards or stopped at the abandoned line, losing the records after it. A
+/// sidecar-merged unit has no physical line: it sorts last and rides no continuation.
+pub(crate) fn cap_by_line(
+    exchanges: &mut Vec<Exchange>,
+    cap: usize,
+    addressed_max: Option<usize>,
+) -> (usize, Option<(usize, usize)>) {
+    let key = |h: &crate::commands::search::Hit| {
+        if h.from_sidecar || h.line == 0 {
+            usize::MAX
+        } else {
+            h.line
+        }
+    };
+    let mut keys: Vec<usize> = exchanges
+        .iter()
+        .flat_map(|e| e.hits.iter())
+        .map(key)
+        .collect();
+    if keys.len() <= cap {
+        return (0, None);
+    }
+    keys.sort_unstable();
+    // The first line past the cap; a first line holding more than `cap` units is kept whole.
+    let mut cutoff = keys[cap];
+    if cutoff == keys[0] {
+        cutoff = keys
+            .iter()
+            .copied()
+            .find(|&k| k > cutoff)
+            .unwrap_or(usize::MAX);
+    }
+    let dropped = keys.iter().filter(|&&k| k >= cutoff).count();
+    if dropped == 0 {
+        return (0, None);
+    }
+    let last_dropped = keys.iter().copied().filter(|&k| k != usize::MAX).max();
+    let remainder = (cutoff != usize::MAX).then(|| {
+        let end = last_dropped
+            .unwrap_or(cutoff)
+            .max(addressed_max.unwrap_or(0));
+        (cutoff, end)
+    });
+    for ex in exchanges.iter_mut() {
+        ex.hits.retain(|h| key(h) < cutoff);
+    }
+    exchanges.retain(|e| !e.hits.is_empty());
+    (dropped, remainder)
 }

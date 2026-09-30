@@ -241,3 +241,101 @@ fn show_turn_addresses_the_live_numbering() {
     let miss = h.run(&["show", &at(RSESS), "--turn", "2"]);
     assert!(!miss.success, "only two turns survive: {}", miss.stdout);
 }
+
+/// Three turns with an abandoned draft (L3) between the first reply and its resend. The
+/// render puts an abandoned unit LAST, after every live one, so render order is not line
+/// order - which is what the cap's continuation must not be read off.
+fn capped_window_fixture(h: &Home, sess: &str) {
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"one"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reply one"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"d1","parentUuid":"a1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"a draft of two"}}"#, "\n",
+            r#"{"type":"user","uuid":"u2","parentUuid":"a1","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"user","content":"two"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-06-07T05:00:04.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reply two"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u3","parentUuid":"a2","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"user","content":"three"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a3","parentUuid":"u3","timestamp":"2026-06-07T05:00:06.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reply three"}]}}"#, "\n",
+        ),
+    );
+}
+
+fn record_lines(stdout: &str) -> Vec<u64> {
+    json_rows(stdout, "record")
+        .iter()
+        .filter_map(|r| r["line"].as_u64())
+        .collect()
+}
+
+/// A capped fetch keeps the records on the lowest lines and its continuation runs from the
+/// first dropped line to the end of the addressed range, so the continuation fetches exactly
+/// the records the cap dropped - with the abandoned draft among the dropped (cap 2) and among
+/// the kept (cap 4). Read off render order, the continuation ran backwards or stopped at the
+/// draft and lost the lines after it.
+#[test]
+fn a_capped_fetch_continues_with_exactly_the_records_it_dropped() {
+    let h = Home::new();
+    let sess = "7a6b5c4d-3e2f-4109-a876-543210fedcbb";
+    capped_window_fixture(&h, sess);
+    let whole = h.run(&[
+        "show",
+        at(sess).as_str(),
+        "--line",
+        "1..7",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(
+        record_lines(&whole.stdout),
+        vec![1, 2, 4, 5, 6, 7, 3],
+        "the draft renders last: {}",
+        whole.stdout
+    );
+    for (cap, kept, dropped) in [
+        ("2", vec![1, 2], vec![3, 4, 5, 6, 7]),
+        ("4", vec![1, 2, 4, 3], vec![5, 6, 7]),
+    ] {
+        let out = h.run(&[
+            "show",
+            at(sess).as_str(),
+            "--line",
+            "1..7",
+            "--max-count",
+            cap,
+            "--format",
+            "json",
+        ]);
+        assert!(out.success, "{}", out.stderr);
+        assert_eq!(record_lines(&out.stdout), kept, "cap {cap}: {}", out.stdout);
+        let summary = &json_rows(&out.stdout, "summary")[0];
+        assert_eq!(summary["dropped_by_cap"], dropped.len(), "{summary}");
+        let cmd = summary["refetch_remainder"]
+            .as_str()
+            .expect("a continuation");
+        let want = format!("--line {}..7", dropped[0]);
+        assert!(cmd.ends_with(&want), "cap {cap}: {cmd}");
+        let text = h.run(&[
+            "show",
+            at(sess).as_str(),
+            "--line",
+            "1..7",
+            "--max-count",
+            cap,
+        ]);
+        assert!(
+            text.stdout.contains(&format!("continue: {cmd}")),
+            "{}",
+            text.stdout
+        );
+        let args: Vec<&str> = cmd.split_whitespace().skip(1).collect();
+        let mut rest = args.clone();
+        rest.extend(["--max-count", "0", "--format", "json"]);
+        let again = h.run(&rest);
+        let mut got = record_lines(&again.stdout);
+        got.sort_unstable();
+        assert_eq!(
+            got, dropped,
+            "cap {cap}: the continuation fetches the dropped records"
+        );
+    }
+}

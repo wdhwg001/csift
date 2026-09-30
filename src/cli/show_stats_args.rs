@@ -183,9 +183,11 @@ pub struct ShowArgs {
     pub turn: Option<String>,
 
     /// Cap the emitted record units: the CONTEXT-FLOOD guard for open ranges (`--line ..`
-    /// / `--turn ..` address a whole transcript). Defaults to 200; the drop is ALWAYS
-    /// reported, with the exact continuation command for the remainder. `0` = uncapped
-    /// (the crate-wide `--max-count 0` convention).
+    /// / `--turn ..` address a whole transcript). Defaults to 200. The cap keeps the records
+    /// on the LOWEST lines, whole records (at least one), whatever order they render in; the
+    /// drop is ALWAYS reported, with the exact continuation command for the remainder, a
+    /// `--line` range from the first dropped line to the end of what was addressed. `0` =
+    /// uncapped (the crate-wide `--max-count 0` convention).
     #[arg(long, value_name = "N")]
     pub max_count: Option<usize>,
 
