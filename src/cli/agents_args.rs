@@ -179,8 +179,9 @@ pub enum AgentKindFilter {
           Its node line carries `routing: <Name>@<Team>` beside the transcript id, and its \
         JSON row carries `routing_id`. Both need a name AND a team in the meta; with either \
         missing the text line is omitted and the JSON field is null, never fabricated. The \
-        routing form is what TaskStop takes and SendMessage refuses (any `to` carrying `@`); \
-        SendMessage takes the bare name or the `a<Name>-<hex>` form, which is also what the \
+        routing form is a form TaskStop takes (beside the bare name), and SendMessage refuses \
+        it (any `to` carrying `@`); SendMessage takes the bare name or the `a<Name>-<hex>` \
+        form, which is also what the \
         hook payload and the transcript file carry. Only the routing form can collide, \
         since two same-named teammates in one team share it, so csift keys on the \
         transcript id and fails loud when a routing form matches more than one lane. Both \

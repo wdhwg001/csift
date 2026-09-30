@@ -81,8 +81,9 @@ fn a_teammate_target_prints_both_forms_its_parent_and_the_topology() {
     let h = home(false);
     let out = h.run(&["whoami", &at(TEAMMATE)]);
     assert!(out.success, "stderr: {}", out.stderr);
-    // Both id forms: the routing id is what TaskStop takes and it can collide; the transcript
-    // id names the file, is what SendMessage takes, and never collides.
+    // Both id forms: the routing id is a form TaskStop takes (beside the bare name) and it
+    // can collide; the transcript id names the file, is what SendMessage takes, and never
+    // collides.
     assert!(
         out.stdout.contains(&format!("self     {TEAMMATE}")),
         "{}",

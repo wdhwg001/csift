@@ -78841,7 +78841,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/reach/render.rs",
-          "lines": "189-204",
+          "lines": "190-205",
           "snippet": "pub(crate) fn slot_line(slots: &ReachSlots) -> String {\n    if slots.per_event.is_empty() {\n        return \"none configured on any delivery event\".to_string();\n    }\n    slots\n        .per_event\n        .iter()\n        .map(|(event, ks)| {\n            format!(\n                \"{event} {}\",\n                ks.iter().map(u32::to_string).collect::<Vec<_>>().join(\",\")\n            )\n        })\n        .collect::<Vec<_>>()\n        .join(\"  \")\n}"
         }
       ],

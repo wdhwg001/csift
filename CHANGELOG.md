@@ -1519,7 +1519,8 @@ surface change bumps the PATCH.
 - **The `agents` teammate hint no longer offers SendMessage's refusal as the reason TaskStop
   takes the routing id.** Its third line now states the two tools' facts apart: the routing id
   `Name@Team` is a form TaskStop takes, and SendMessage, which refuses any `to` carrying `@`,
-  takes the bare name or the transcript id.
+  takes the bare name or the transcript id. `agents --help`'s paragraph on a teammate's two ids
+  says the same: a form TaskStop takes, beside the bare name.
 - **`show`'s cap continuation dropped the records after an abandoned one, and fetched
   records nobody addressed.** The rendered fetch kept its first `cap` units in render order,
   which puts an abandoned unit after every live one, and read the continuation off that
