@@ -62,7 +62,11 @@ fn a_target_records_every_file_it_matched_and_nothing_else() {
     assert!(!path_matches(&abs, "src/lib.rs", Some("/p/d")));
     assert!(!path_matches(&abs, "src/lib.rs", None));
     // An empty path names nothing, even where its resolution would be a cwd the target ends.
-    assert!(!path_matches(&Target::new(Some("da4")), "", Some("/p/da4")));
+    assert!(!path_matches(
+        &Target::new(Some("w_app")),
+        "",
+        Some("/p/w_app")
+    ));
     assert_eq!(candidate("../lib.rs", Some("/p/a/b")), "/p/a/lib.rs");
     for full in ["/x", r"\\srv\x", "C:/x", r"c:\x"] {
         assert!(is_full_path(full), "{full}");

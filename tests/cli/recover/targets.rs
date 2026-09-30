@@ -208,10 +208,10 @@ fn a_read_only_match_counts_for_ambiguity_and_a_relative_path_still_replays() {
     assert!(!clean.stdout.contains("ambiguous"), "{}", clean.stdout);
 }
 
-/// One session in a project at `/Users/dev/Projects/da4`, every record carrying that shell
+/// One session in a project at `/Users/dev/Projects/w_app`, every record carrying that shell
 /// cwd, writing then editing each `(path, first, second)` file.
 fn cwd_session(h: &Home, sess: &str, files: &[(&str, &str, &str)]) {
-    const CWD: &str = "/Users/dev/Projects/da4";
+    const CWD: &str = "/Users/dev/Projects/w_app";
     let mut lines = vec![format!(
         r#"{{"type":"user","uuid":"u0","cwd":"{CWD}","timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"user","content":"write the files"}}}}"#
     )];
@@ -259,13 +259,13 @@ fn a_suffix_naming_a_relative_record_path_beside_another_file_is_refused() {
     for (sess, candidates) in [
         (
             mixed,
-            ["/Users/dev/Projects/da4/other/lib.rs", "/p/m/lib.rs"],
+            ["/Users/dev/Projects/w_app/other/lib.rs", "/p/m/lib.rs"],
         ),
         (
             both_relative,
             [
-                "/Users/dev/Projects/da4/a/lib.rs",
-                "/Users/dev/Projects/da4/b/lib.rs",
+                "/Users/dev/Projects/w_app/a/lib.rs",
+                "/Users/dev/Projects/w_app/b/lib.rs",
             ],
         ),
     ] {
@@ -305,13 +305,13 @@ fn a_suffix_naming_a_relative_record_path_beside_another_file_is_refused() {
     assert_eq!(one(mixed, "/p/m/lib.rs"), "M2\n");
     assert_eq!(one(mixed, "other/lib.rs"), "O2\n");
     assert_eq!(
-        one(mixed, "/Users/dev/Projects/da4/other/lib.rs"),
+        one(mixed, "/Users/dev/Projects/w_app/other/lib.rs"),
         "O2\n",
         "the resolved candidate passed back finds the relative record path"
     );
     assert_eq!(one(both_relative, "a/lib.rs"), "RA2\n");
     assert_eq!(
-        one(both_relative, "/Users/dev/Projects/da4/b/lib.rs"),
+        one(both_relative, "/Users/dev/Projects/w_app/b/lib.rs"),
         "RB2\n"
     );
 }
