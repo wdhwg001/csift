@@ -27,6 +27,7 @@ fn numbered(lines: &[&str]) -> Vec<(usize, Record)> {
 }
 
 mod bash_anchors;
+mod bash_targets;
 mod boundaries;
 mod coverage;
 mod diff;
