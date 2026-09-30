@@ -77522,7 +77522,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "A teammate resume reuses the SAME resumable agent id: the resume entry at 175730956 replays the prior messages, the roster rejoin at 175733002 re-adds the row, the id is reused through an override at 176260921, and the ack reports how many messages were replayed.",
-          "depends": "csift addresses a teammate resume by its transcript-form id - the id the resume entry is addressed by, and the only teammate form SendMessage's `to` accepts, since it refuses any `to` carrying `@` (SUB-035) - and never invents a new lane id for the respawned teammate. The queue written before the resume is still the queue of the same lane afterwards.",
+          "depends": "csift addresses a teammate resume by its transcript-form id - the id the resume entry is addressed by, and the teammate id form SendMessage's `to` accepts besides the bare name (it refuses any `to` carrying `@`, SUB-035) - and never invents a new lane id for the respawned teammate. The queue written before the resume is still the queue of the same lane afterwards.",
           "instrument": "Read the excerpt at the offset in the installed Claude Code binary with `tail -c +OFFSET+1 <binary> | head -c N` and confirm it byte for byte. Counting rule for any count: occurrences of the fixed byte string over the whole file.",
           "probe": {
             "kind": "bytes",
