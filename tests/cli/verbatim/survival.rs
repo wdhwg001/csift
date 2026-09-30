@@ -251,3 +251,35 @@ fn an_esc_recalled_draft_is_counted_with_the_rewound_ones() {
         out.stdout
     );
 }
+
+/// A replayed block leaves a COPY of the next turn's prompt inside the turn before it (the
+/// earlier line carries the uuid the later one owns). The copy opens no turn of its own, and
+/// it must not take the turn it sits in from the prompt that opened it.
+#[test]
+fn a_replay_copy_inside_a_turn_never_replaces_its_opener() {
+    let h = Home::new();
+    h.write(
+        &format!("{VENC}/{VSESS}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"first question"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:05.000Z","message":{"role":"assistant","id":"m1","content":[{"type":"text","text":"first answer"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u2","parentUuid":"a1","timestamp":"2026-06-07T05:01:00.000Z","message":{"role":"user","content":"second question"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-06-07T05:01:05.000Z","message":{"role":"assistant","id":"m2","content":[{"type":"text","text":"second answer"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"u2","parentUuid":"a1","timestamp":"2026-06-07T05:10:00.000Z","message":{"role":"user","content":"second question"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-06-07T05:10:05.000Z","message":{"role":"assistant","id":"m2","content":[{"type":"text","text":"second answer"}]}}"#, "\n",
+        ),
+    );
+    let j = h.run(&["verbatim", &at(VSESS), "--format", "json"]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let users: Vec<(u64, u64)> = rows(&j.stdout)
+        .iter()
+        .filter(|v| v["kind"] == "turn" && v["role"] == "user")
+        .map(|v| {
+            (
+                v["turn_index"].as_u64().unwrap(),
+                v["line"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(users, vec![(0, 1), (1, 5)], "{}", j.stdout);
+}
