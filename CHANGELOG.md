@@ -1538,6 +1538,13 @@ surface change bumps the PATCH.
   tag kept the newlines inside the first 60 characters of the typed text, so the rest of
   the hit continued on new lines. The tag now flattens the text before it cuts it, and JSON
   `user_feedback` still carries the words whole.
+- **A resumed workflow run's live lanes no longer read as killed.** A run resumed under its
+  own id keeps running under the manifest its killed predecessor wrote until it ends, and
+  that manifest settled every lane with no closing journal line: `agents` read them
+  `killed`, `status` counted none live. A manifest now settles a lane only when the lane's
+  newest record is no more than a minute newer than the manifest's own end instant (the
+  kill's own writes land within 66 ms of it; a resumed run's, hours later); a newer lane is
+  read from its tail and its row names the stale manifest.
 
 ### Performance
 

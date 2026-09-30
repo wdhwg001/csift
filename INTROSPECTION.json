@@ -4733,7 +4733,7 @@
       "code": [
         {
           "path": "src/commands/live/children.rs",
-          "lines": "49-53",
+          "lines": "50-54",
           "snippet": "pub(crate) fn children_report(\n    main_jsonl: &Path,\n    returned: &std::collections::HashSet<String>,\n) -> Result<ChildrenReport> {\n    let mut report = ChildrenReport::default();"
         }
       ],
@@ -9280,7 +9280,7 @@
       "code": [
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "134-137",
+          "lines": "138-141",
           "snippet": "        STALENESS: `pending_classification: awaiting-execution` means slow OR wedged OR \\\n        abandoned; jsonl cannot tell them apart, and at corpus scale a lane pending for \\\n        hours/days is overwhelmingly \\\"parent session ended, nobody is coming back\\\", not \\\n        in-flight work: weigh `pending_since_utc` against now yourself; \\"
         }
       ],
@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2560",
+          "lines": "2561",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -29881,7 +29881,7 @@
         },
         {
           "path": "src/commands/live/children.rs",
-          "lines": "24-30",
+          "lines": "25-31",
           "snippet": "pub(crate) struct ChildState {\n    pub(crate) session_id: String,\n    /// `in-flight` (unreturned tail call) | `generating` (recent tail record and the\n    /// last assistant record is not an end_turn - the model is mid-generation; a\n    /// paired tail alone proves nothing) | `settled`.\n    pub(crate) state: &'static str,\n    pub(crate) detail: String,"
         }
       ],
@@ -30037,12 +30037,12 @@
       "code": [
         {
           "path": "src/commands/live/children.rs",
-          "lines": "15-21",
+          "lines": "16-22",
           "snippet": "/// Tail-record age (seconds) under which a settled-looking child is treated as still\n/// GENERATING when its last assistant record is not an end_turn. Measured: intra-lane\n/// record gaps reach p99.9 = 295s during genuine work (a long generation writes\n/// nothing for minutes), while dead lanes sit >= 31h out - four orders of magnitude of\n/// separation, so 300s misses almost no real work and resurrects no dead lane. A 15s\n/// window reads a lane mid-generation as settled 1 time in 17.\npub(crate) const CHILD_RECENT_SECS: i64 = 300;"
         },
         {
           "path": "src/commands/live/children.rs",
-          "lines": "116-118",
+          "lines": "138-140",
           "snippet": "        } else if tail_age.is_some_and(|a| a <= CHILD_RECENT_SECS)\n            && shape.last_stop_reason.as_deref() != Some(\"end_turn\")\n        {"
         }
       ],
@@ -30113,7 +30113,7 @@
       "code": [
         {
           "path": "src/commands/live/children.rs",
-          "lines": "116-122",
+          "lines": "138-144",
           "snippet": "        } else if tail_age.is_some_and(|a| a <= CHILD_RECENT_SECS)\n            && shape.last_stop_reason.as_deref() != Some(\"end_turn\")\n        {\n            // A paired tail with a fresh record and no end_turn = mid-generation (the\n            // model is thinking/writing between tool calls; stop_reason alone would\n            // mark 73% of DEAD lanes live, so recency is the load-bearing conjunct).\n            ("
         }
       ],
@@ -30726,18 +30726,23 @@
         },
         {
           "path": "src/subagent/meta.rs",
-          "lines": "264-266",
+          "lines": "324-326",
           "snippet": "    /// Workflow agents a run's journal has started and not closed, across every run with no\n    /// manifest yet. An ended run contributes nothing: an agent killed with its run never\n    /// writes a closing line, so its imbalance is permanent and says nothing live."
         },
         {
           "path": "src/subagent/meta.rs",
-          "lines": "308-310",
+          "lines": "368-370",
           "snippet": "    match kind {\n        Some(\"started\") => {\n            data.started += 1;"
         },
         {
           "path": "src/subagent/meta.rs",
-          "lines": "250-256",
-          "snippet": "    pub(crate) fn settled_by_run(&self, subagent: &Subagent) -> Option<RunSettle> {\n        let run = self.events_for(subagent)?;\n        if journal_reports_completion(subagent, self) {\n            return Some(RunSettle::closed_by(\"completed\", \"result\"));\n        }\n        if run.failed.contains(&subagent.agent_id) {\n            return Some(RunSettle::closed_by(\"failed\", \"failed\"));\n"
+          "lines": "293-297",
+          "snippet": "    pub(crate) fn run_reading(\n        &self,\n        subagent: &Subagent,\n        newest_ms: impl FnOnce() -> Option<i64>,\n    ) -> RunReading {"
+        },
+        {
+          "path": "src/subagent/meta.rs",
+          "lines": "311-312",
+          "snippet": "            if newest > end.saturating_add(MANIFEST_SLACK_MS) {\n                return RunReading::StaleManifest(format!("
         }
       ],
       "states": [
@@ -30746,7 +30751,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "Each workflow run's `journal.jsonl` (one per `wf_*` directory) is written INCREMENTALLY - `{type:\"started\", agentId}` at spawn, then ONE closing line per agent: `{type:\"result\", agentId, result}` at return, or `{type:\"failed\", agentId}` when the agent errors - so for a RUNNING run `started` minus the closing lines is the number of that run's agents in flight (measured live: 57 started, 49 returned, 8 in flight). Neither closing line is written once the run is aborted, so an agent killed with its run leaves a permanent imbalance: on one live projects root 62 of 250 journals stay unbalanced by 712 agents, every one of them in a run whose manifest already reads a terminal status.",
-          "depends": "csift's `children_report` counts `journal_in_flight` only over runs that have no manifest yet, as `started` minus (`result` + `failed`), and settles every lane of a run whose manifest exists (TAIL-009: the harness writes it only once the run ends) or whose agent the journal closes, before reading the lane's tail. Counting `result` alone over every run made each killed or failed agent live forever: on one session of that root whose 31 runs had all ended, csift status read 1399 lane(s), 145 live (144 workflow agent(s) in flight) with the installed binary and 1399 lane(s), 1 live with this build, the one live lane being the measuring lane itself. The rule lives in `JournalCache::settled_by_run` (src/subagent/meta.rs), beside the journal parse it reads, and `agents`' lifecycle takes it too, so a lane `status` settles by its run never reads running under `agents`. The journal's in-flight count leaves out an open agent the census already counts live by its own lane: one agent is one live lane, and counting it by its tail AND its `started` line read a single live lane as two.",
+          "depends": "csift's `children_report` counts `journal_in_flight` only over runs that have no manifest yet, as `started` minus (`result` + `failed`), and settles every lane of a run whose manifest exists (TAIL-009: the harness writes it only once the run ends) or whose agent the journal closes, before reading the lane's tail. Counting `result` alone over every run made each killed or failed agent live forever: on one session of that root whose 31 runs had all ended, csift status read 1399 lane(s), 145 live (144 workflow agent(s) in flight) with the installed binary and 1399 lane(s), 1 live with this build, the one live lane being the measuring lane itself. The rule lives in `JournalCache::run_reading` (src/subagent/meta.rs), beside the journal parse it reads, and `agents`' lifecycle takes it too, so a lane `status` settles by its run never reads running under `agents`. The journal's in-flight count leaves out an open agent the census already counts live by its own lane: one agent is one live lane, and counting it by its tail AND its `started` line read a single live lane as two. A manifest settles a lane only while it is no more than a minute older than the lane's newest record (`MANIFEST_SLACK_MS`): the manifest's own `timestamp` is the instant its run ended, and a run resumed under its id (`resumeFromRunId`) keeps its run directory and runs under the manifest its ended predecessor wrote until it ends and rewrites it, so a lane that wrote past that manifest is read from its tail and its row names the stale manifest. The minute is the gap the data leaves: a killed run's lanes write their last records within 66 ms of its manifest's end, a resumed run's thousands of seconds after. The journal's in-flight count still leaves out a run with a manifest, because journal lines carry no instant and a journal's own write instant sits within a millisecond of its manifest's on normal runs.",
           "instrument": "a python walk over every `<uuid>/subagents/workflows/wf_*/journal.jsonl` under the live projects root, counting `started`, `result` and `failed` lines per journal and pairing each run with its manifest `<uuid>/workflows/<run>.json` and that manifest's `status`; run over the whole root and with the measuring session's own tree excluded. Then `csift status` on one session of that root whose runs had all ended, with the installed binary and with this build. Producer leg: the three recorded hops re-read at their offsets in the 2.1.258 binary (the agent() trigger @172612319, the failed-line gate that skips an aborted run @172615523, the started-line writer @172615356)",
           "probe": {
             "kind": "corpus",
@@ -30760,7 +30765,8 @@
           "open_legs": [],
           "residue": [
             "An earlier reading, superseded by the receipt now standing on this state (the producer leg traced in the 2.1.258 binary...): 160 journals, 12,754 lines: `started` 6,687, `result` 6,066, `failed` 1. Exactly two key sets: {agentId, key, type} 6,688 and {agentId, key, result, type} 6,066. Corpus-wide started minus result = 621. 124 journals balance at 0; 36 carry a positive imbalance, and 35 of those 36 - 613 of the 621 - were last written 15 h to 1,843 h ago (77 days). `csift status` on a session whose tail record is 58 d 19 h old prints evidence `children: 3513 lane(s), 359 live (359 workflow agent(s) in flight)` and verdict `waiting-children`. One event per journal line, per `type`; started minus result per journal directory. The mechanism holds and was confirmed live, but the inference 'an imbalance is a LIVE signal precisely because a terminal dump would always balance' is refuted: 98.7% of the corpus-wide imbalance sits in long-dead runs. The consequence is a live csift defect, reproducible in one command - `csift status` on a session whose newest record is 58 days old reports 359 workflow agents in flight and returns the verdict `waiting-children`. src/live/children.rs:104-105 and 126-130 match verbatim; the `_ => {}` arm at 129 is what drops the `failed` type, so a failed agent inflates `journal_in_flight` by one forever. `find ~/.claude/projects -path '*/subagents/workflows/*' -name journal.jsonl -print0 | xargs -0 cat` piped to a python type/key-set census; then per journal `rg -c '\"type\":\"started\"'` minus `rg -c '\"type\":\"result\"'` paired with `stat -f %m` age; then `csift status @<8-char prefix of a long-idle session> --format json`; then the file listing of the one workflow directory whose journal was written in the last hour. Counting rule: A journal counts as stale when its file mtime is more than 1 h old.",
-            "An earlier reading of the same journal census, superseded by the whole-root census of 250 journals now standing on this state: 162 journals, 12,958 lines, 0 unparseable - started 6,789, result 6,167, failed 2; 37 journals unbalanced, summing 622 agents started minus returned; 35 of the 37 last written 15 h or more ago and 1 within the hour (imbalance 8, a run genuinely in flight). Counting rule: one event per journal line, per type; age from the journal file's mtime."
+            "An earlier reading of the same journal census, superseded by the whole-root census of 250 journals now standing on this state: 162 journals, 12,958 lines, 0 unparseable - started 6,789, result 6,167, failed 2; 37 journals unbalanced, summing 622 agents started minus returned; 35 of the 37 last written 15 h or more ago and 1 within the hour (imbalance 8, a run genuinely in flight). Counting rule: one event per journal line, per type; age from the journal file's mtime.",
+            "An earlier reading, superseded by the receipt now standing on this state, which measures the manifest's end instant against each lane's newest record (a python walk over every `<uuid>/subagents/workflows/wf_*/journal.jsonl` under the live projects root, counting `started`, `result` and `failed` lines per journal and pairing each run with its manifes...): whole root: 250 journals, every one with a manifest (completed 235, killed 13, failed 2); started 8,765, result 7,933, failed 129; started minus result sums to 832, started minus result and failed to 712, and all 712 sit in the 62 unbalanced journals of ended runs, so the in-flight count over runs with no manifest is 0. With the measuring session's own tree excluded: 219 journals, all with a manifest, 688 and 667 by the two rules, 0 in flight. on one session of that root whose 31 runs had all ended, csift status read 1399 lane(s), 145 live (144 workflow agent(s) in flight) with the installed binary and 1399 lane(s), 1 live with this build, the one live lane being the measuring lane itself. The three hops read byte-exact at their offsets. 251 run directories, 1 of them without a manifest, holding 1 open agent whose lane transcript is on disk - the shape the census counted twice while that lane's tail was in flight. Counting rule: one observation per journal line, by its `type`; a run is ended when its manifest exists; in flight = started minus closing lines, over runs that are not ended. One observation per run directory, and per open agent id, for the run walk."
           ],
           "producer_chain": [
             {
@@ -30794,10 +30800,10 @@
           "verified": {
             "claude_code": "2.1.258",
             "verdict": "refined",
-            "instrument": "a python walk over every `<uuid>/subagents/workflows/wf_*/journal.jsonl` under the live projects root, counting `started`, `result` and `failed` lines per journal and pairing each run with its manifest `<uuid>/workflows/<run>.json` and that manifest's `status`; run over the whole root and with the measuring session's own tree excluded. Then `csift status` on one session of that root whose runs had all ended, with the installed binary and with this build. Producer leg: the three recorded hops re-read at their offsets in the 2.1.258 binary (the agent() trigger @172612319, the failed-line gate that skips an aborted run @172615523, the started-line writer @172615356). Then a walk of every workflow run directory under the projects root: runs with no manifest, and their journal-open agents that also have a lane transcript.",
-            "observed": "whole root: 250 journals, every one with a manifest (completed 235, killed 13, failed 2); started 8,765, result 7,933, failed 129; started minus result sums to 832, started minus result and failed to 712, and all 712 sit in the 62 unbalanced journals of ended runs, so the in-flight count over runs with no manifest is 0. With the measuring session's own tree excluded: 219 journals, all with a manifest, 688 and 667 by the two rules, 0 in flight. on one session of that root whose 31 runs had all ended, csift status read 1399 lane(s), 145 live (144 workflow agent(s) in flight) with the installed binary and 1399 lane(s), 1 live with this build, the one live lane being the measuring lane itself. The three hops read byte-exact at their offsets. 251 run directories, 1 of them without a manifest, holding 1 open agent whose lane transcript is on disk - the shape the census counted twice while that lane's tail was in flight.",
-            "rule": "one observation per journal line, by its `type`; a run is ended when its manifest exists; in flight = started minus closing lines, over runs that are not ended. One observation per run directory, and per open agent id, for the run walk.",
-            "note": "The closing line has two forms and the text named one; and an imbalance is a live signal only inside a run that has not ended, which the manifest decides. The behavior and depends are rewritten to both."
+            "instrument": "a python walk over every `<uuid>/workflows/<run>.json` manifest under the live projects root, reading its `timestamp`, `startTime`, `durationMs` and `status` beside the file's modification time and the run's journal, and pairing it with the newest timestamped record of every lane `agent-*.jsonl` in its run directory; whole root and with the measuring session's own tree excluded. Then csift agents @<session> --format json and csift status @<session> --format json on every session holding a lane newer than its manifest, on the build that lets any manifest settle a lane and on the build that lets it settle only a lane no more than a minute newer",
+            "observed": "Whole live root at its instant, the measuring session's tree included: 259 manifests (completed 239, killed 14, failed 6), every one carrying `timestamp` 0 to 69 ms after `startTime + durationMs` and within a second of its modification time; 8,801 lanes in manifested runs, of which 69 carry a newest record after their manifest's end - 58 lanes of killed runs 1 to 66 ms after it and 11 lanes of 2 runs 7,000 s or more after it, runs resumed under their id; 2 of 254 journals were written more than a second after their manifest's end, 7 more within a millisecond. On the 5 sessions holding such lanes, agents read 5,999 completed, 104 killed, 102 failed and 57 running on the first build and 5,997, 102, 102 and 62 on the second, 4 rows naming the stale manifest (the root grew by one lane between); status listed 13 then 16 live children, instants of live sessions. With the measuring session's own tree excluded: 225 manifests, 7,791 lanes, 39 lanes 1 to 66 ms after their manifest and the same 11 resumed lanes; agents 4,707 / 85 / 3 / 46 then 4,705 / 83 / 3 / 50, 4 rows naming the stale manifest.",
+            "rule": "One observation per manifest for the instants, one per lane for the newest-record comparison (its last timestamped record), and one per agent row for the surface readings",
+            "note": "The journal rule is unchanged. The manifest now settles a lane only within a minute of the lane's newest record: 7 of the 11 resumed lanes are closed by their own journal lines and keep their settle, and the 4 with no closing line are read from their tails."
           }
         }
       ]
@@ -30949,7 +30955,7 @@
       "code": [
         {
           "path": "src/subagent/lifecycle.rs",
-          "lines": "140-143",
+          "lines": "148-151",
           "snippet": "        if command\n            .as_deref()\n            .is_some_and(|c| crate::bash::danger::classify(c, version.as_deref()).blocks())\n        {"
         },
         {
@@ -61649,12 +61655,12 @@
       "code": [
         {
           "path": "src/subagent/meta.rs",
-          "lines": "270-272",
+          "lines": "330-332",
           "snippet": "        self.by_path\n            .values()\n            .filter(|r| r.ended.is_none())"
         },
         {
           "path": "src/subagent/meta.rs",
-          "lines": "326-337",
+          "lines": "386-397",
           "snippet": "    if kind != Some(\"result\") {\n        return;\n    }\n    let Some(agent) = agent else {\n        return;\n    };\n    let payload = match v.get(\"result\") {\n        Some(serde_json::Value::String(s)) => Some(s.clone()),\n        Some(other) => Some(other.to_string()),\n        None => None,\n    };\n    // FIRST event per agent wins - the former scans returned on first match."
         }
       ],
@@ -62678,7 +62684,7 @@
         },
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "156",
+          "lines": "160",
           "snippet": "\\\"what did the agent conclude\\\": a `sync-tool-result` source faithfully reports \\"
         },
         {
@@ -62688,7 +62694,7 @@
         },
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "155-161",
+          "lines": "159-165",
           "snippet": "        SEMANTICS: it answers \\\"what did the PARENT SESSION record as the return\\\", not \\\n        \\\"what did the agent conclude\\\": a `sync-tool-result` source faithfully reports \\\n        the parent's tool_result even when it is a terse sign-off (`Done.`, `Complete.`) \\\n        plus the harness's appended continuation footer (`agentId: <id> (use SendMessage \\\n        with to: '<id>', summary: '<5-10 word recap>' to continue this agent)` - the harness \\\n        appends, it never truncates); the child's own final words are always \\\n        `csift show @<agent-id> --turn -1..`). \\"
         }
       ],
@@ -64674,7 +64680,7 @@
       "code": [
         {
           "path": "src/subagent/lifecycle.rs",
-          "lines": "169-172",
+          "lines": "177-180",
           "snippet": "pub(crate) fn ends_turn(rec: &Record) -> bool {\n    rec.agent_text().is_some()\n        && rec.message.as_ref().and_then(|m| m.stop_reason.as_deref()) != Some(\"tool_use\")\n}"
         },
         {
@@ -64684,12 +64690,12 @@
         },
         {
           "path": "src/commands/live/children.rs",
-          "lines": "116-117",
+          "lines": "138-139",
           "snippet": "    } else if tail_age.is_some_and(|a| a <= CHILD_RECENT_SECS)\n        && shape.last_stop_reason.as_deref() != Some(\"end_turn\")"
         },
         {
           "path": "src/subagent/lifecycle.rs",
-          "lines": "90-91",
+          "lines": "98-99",
           "snippet": "        Some(settle) if settle.completed() => SubagentStatus::Completed,\n        Some(settle) => SubagentStatus::Ended(settle.outcome.clone()),\n"
         }
       ],
@@ -64699,7 +64705,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "In a subagent lane a returned `tool_result` is written as its own record when the tool returns, and the assistant record that answers it lands only once the model's next content block closes, so for that whole generation gap the returned tool_result is the lane's newest record. On one live projects root a tool_result record in a subagent transcript is followed by an assistant record 320,270 times, after a gap of p50 5.0 s, p99 75.5 s and at most 5,600.8 s.",
-          "depends": "`agents` reads a lane's status off the NEWEST meaningful record (`subagent::lifecycle`): an assistant text ending its turn is `completed` (any stop reason but `tool_use`, which marks a text whose call is still to be written); a returned tool_result or a message delivered to the lane is `running` with no completion instant, because the record answering it is not on disk yet. Walking back to an earlier turn's text read a working lane as `completed` for the length of that gap. `status` classifies the same tail with recency on top - `in-flight` on an unreturned call, `generating` while the tail record is at most 300 s old and the last stop_reason is not end_turn, else `settled` - so a lane `agents` reads `running` is `generating` in `status` while it moves and `settled` once it stopped mid-turn: one fact read on two clocks, `agents` saying what the transcript shows and `status` whether anything still moves. Before either tail verdict, a WORKFLOW lane is settled by its run's own files through `JournalCache::settled_by_run`, the one rule `status`'s child census reads (TAIL-008), so the two surfaces agree on which workflow lanes are live - and the run's WORD decides the status: the agent's own journal closing line first (`result` is `completed`, `failed` is `failed`, whatever the run did afterwards, since an agent that returned before its run was killed did complete), else the manifest an ended run writes (`completed`, or its status verbatim - `killed`, `failed`, an open set - since an agent its run ended with no closing line did not finish on its own). A lane its run ended without completing reads that word with no completion instant and a `settled_by` reason in the words `status` gives a settled lane; reading every run-settled lane `completed` gave a killed lane the same row as one that returned.",
+          "depends": "`agents` reads a lane's status off the NEWEST meaningful record (`subagent::lifecycle`): an assistant text ending its turn is `completed` (any stop reason but `tool_use`, which marks a text whose call is still to be written); a returned tool_result or a message delivered to the lane is `running` with no completion instant, because the record answering it is not on disk yet. Walking back to an earlier turn's text read a working lane as `completed` for the length of that gap. `status` classifies the same tail with recency on top - `in-flight` on an unreturned call, `generating` while the tail record is at most 300 s old and the last stop_reason is not end_turn, else `settled` - so a lane `agents` reads `running` is `generating` in `status` while it moves and `settled` once it stopped mid-turn: one fact read on two clocks, `agents` saying what the transcript shows and `status` whether anything still moves. Before either tail verdict, a WORKFLOW lane is settled by its run's own files through `JournalCache::run_reading`, the one rule `status`'s child census reads (TAIL-008), so the two surfaces agree on which workflow lanes are live - and the run's WORD decides the status: the agent's own journal closing line first (`result` is `completed`, `failed` is `failed`, whatever the run did afterwards, since an agent that returned before its run was killed did complete), else the manifest an ended run writes (`completed`, or its status verbatim - `killed`, `failed`, an open set - since an agent its run ended with no closing line did not finish on its own). A lane its run ended without completing reads that word with no completion instant and a `settled_by` reason in the words `status` gives a settled lane; reading every run-settled lane `completed` gave a killed lane the same row as one that returned.",
           "instrument": "specimen leg: a python walk over every `<uuid>/subagents/**/agent-*.jsonl` under the live projects root (user and assistant records only), taking each user record that carries a tool_result block and the record after it: its type, and for an assistant successor the gap between the two records' own timestamps; run over the whole root and again with the measuring session's own tree excluded. Then `csift agents --format json` over the whole root with the installed binary and with this build, joined on each agent row's `path`, counting the rows whose `status` differs. Producer leg: the per-item transcript writer Kne re-read at its offset in the 2.1.258 binary @166114240",
           "probe": {
             "kind": "corpus",
@@ -89506,7 +89512,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3595"
+          "lines": "3596"
         }
       ],
       "states": [

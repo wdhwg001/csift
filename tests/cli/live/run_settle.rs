@@ -215,3 +215,75 @@ fn a_lane_its_run_ended_takes_the_runs_word_and_no_completion_instant() {
         assert!(line_of(id).ends_with("completed"), "{}", text.stdout);
     }
 }
+
+/// A run resumed under its own id runs under the manifest the killed run wrote until it ends
+/// and rewrites it, so a manifest settles only a lane whose newest record is no newer than the
+/// manifest's own end instant, within a minute: wf_D's manifest ended eleven minutes before its
+/// lane's newest record (the lane is read from its tail - frozen at an unreturned call, so
+/// running and live - and the row names the stale manifest), while wf_E's lane wrote its last
+/// record 20 ms after its manifest's end, the kill's own write, and stays `killed`.
+#[test]
+fn a_manifest_older_than_its_lane_settles_nothing() {
+    let h = Home::new();
+    let sess = "0f1e2d3c-4b5a-4968-8776-a5b4c3d2e1f1";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"resume the fleet"}}"#,
+    );
+    let wf = |run: &str, rel: &str| format!("{ENC}/{sess}/subagents/workflows/{run}/{rel}");
+    let meta = r#"{"agentType":"workflow-subagent"}"#;
+    for (run, agent, ended) in [
+        ("wf_D", "a000000000000000d", "2026-06-07T04:50:00.000Z"),
+        ("wf_E", "a000000000000000e", "2026-06-07T05:01:04.980Z"),
+    ] {
+        h.write(&wf(run, &format!("agent-{agent}.jsonl")), &frozen());
+        h.write(&wf(run, &format!("agent-{agent}.meta.json")), meta);
+        h.write(
+            &wf(run, "journal.jsonl"),
+            &format!("{{\"type\":\"started\",\"agentId\":\"{agent}\"}}\n"),
+        );
+        h.write(
+            &format!("{ENC}/{sess}/workflows/{run}.json"),
+            &format!(r#"{{"runId":"{run}","status":"killed","timestamp":"{ended}"}}"#),
+        );
+    }
+    let agents = h.run(&["agents", &at(sess), "--format", "json"]);
+    assert!(agents.success, "{}", agents.stderr);
+    let row = |id: &str| {
+        rows(&agents.stdout, "agent")
+            .into_iter()
+            .find(|r| r["agent_id"] == id)
+            .unwrap_or_else(|| panic!("no row for {id}: {}", agents.stdout))
+    };
+    let resumed = row("a000000000000000d");
+    assert_eq!(resumed["status"], "running", "{resumed}");
+    assert!(
+        resumed["settled_by"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("manifest (status killed) ended before this lane's newest record"),
+        "{resumed}"
+    );
+    assert_eq!(row("a000000000000000e")["status"], "killed");
+
+    let status = h.run(&["status", &at(sess), "--format", "json"]);
+    assert!(status.success, "{}", status.stderr);
+    let verdict = rows(&status.stdout, "verdict")
+        .into_iter()
+        .next()
+        .expect("the verdict row");
+    let live: Vec<String> = verdict["children"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .map(|c| c["session_id"].as_str().unwrap_or_default().to_string())
+        .collect();
+    assert_eq!(
+        live,
+        vec!["a000000000000000d".to_string()],
+        "{}",
+        status.stdout
+    );
+    assert_eq!(verdict["settled_children"], 1, "{}", status.stdout);
+}

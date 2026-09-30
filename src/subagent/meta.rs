@@ -157,9 +157,37 @@ pub(crate) struct JournalData {
     /// agent of the run whatever a lane's tail shows: a lane the harness stopped after its
     /// structured answer keeps an unreturned call at its tail for good.
     pub(crate) ended: Option<String>,
+    /// The instant that manifest says its run ended: its own `timestamp` (every manifest on
+    /// the live root carries one, within 70 ms of `startTime + durationMs`), else the file's
+    /// modification time. A run resumed under its id keeps writing its lanes after this
+    /// instant, which is what makes the manifest stale for them.
+    pub(crate) ended_at_ms: Option<i64>,
 }
 
-/// How a workflow lane's run settled it ([`JournalCache::settled_by_run`]).
+/// How much later than its run's manifest end a lane's newest record may be and still be
+/// settled by that manifest. A killed run's lanes write their last records AS the run ends -
+/// on one live projects root 58 lanes of killed runs carry a newest record 1 to 66 ms after
+/// their manifest's `timestamp` - while a lane of a run resumed under its id writes long after
+/// (the 11 such lanes there, 7,000 s and more). A minute separates the two by orders of
+/// magnitude on either side; a strict comparison would call every killed lane resumed.
+const MANIFEST_SLACK_MS: i64 = 60_000;
+
+/// What a workflow lane's RUN says before its tail is read ([`JournalCache::run_reading`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RunReading {
+    /// The run settles the lane: its journal closes it, or a manifest no older than the lane's
+    /// newest record says the run ended.
+    Settled(RunSettle),
+    /// The run's manifest ended BEFORE the lane's newest record: a run resumed under its own
+    /// id (`resumeFromRunId`) runs under the manifest the ended run wrote until it ends and
+    /// rewrites it, so that manifest settles nothing of this lane. The lane is read from its
+    /// own tail; the string says why, for the row.
+    StaleManifest(String),
+    /// Nothing in the run decides; the lane is read from its tail.
+    Open,
+}
+
+/// How a workflow lane's run settled it ([`JournalCache::run_reading`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RunSettle {
     /// The run's own word for how this agent ended: `completed`, `failed`, or the manifest's
@@ -227,12 +255,19 @@ impl JournalCache {
             }
             true
         });
-        data.ended = run_manifest(&journal).map(|bytes| {
-            serde_json::from_slice::<serde_json::Value>(&bytes)
-                .ok()
-                .and_then(|v| v.get("status")?.as_str().map(str::to_string))
-                .unwrap_or_else(|| "unreadable".to_string())
-        });
+        if let Some((bytes, mtime_ms)) = run_manifest(&journal) {
+            let v = serde_json::from_slice::<serde_json::Value>(&bytes).ok();
+            data.ended = Some(
+                v.as_ref()
+                    .and_then(|v| v.get("status")?.as_str().map(str::to_string))
+                    .unwrap_or_else(|| "unreadable".to_string()),
+            );
+            data.ended_at_ms = v
+                .as_ref()
+                .and_then(|v| v.get("timestamp")?.as_str())
+                .and_then(crate::timez::epoch_ms)
+                .or(mtime_ms);
+        }
         if readable || data.ended.is_some() {
             self.by_path.insert(journal, data);
         }
@@ -247,15 +282,40 @@ impl JournalCache {
     /// lane to its tail. ONE rule, read by `status`'s child census and by `agents`'
     /// lifecycle, so the two surfaces agree on which lanes are live and `agents` never calls
     /// a killed lane `completed`.
-    pub(crate) fn settled_by_run(&self, subagent: &Subagent) -> Option<RunSettle> {
-        let run = self.events_for(subagent)?;
+    ///
+    /// A manifest settles only a lane whose newest record is no newer than the instant the
+    /// manifest says its run ended (`ended_at_ms`, within [`MANIFEST_SLACK_MS`]); `newest_ms`
+    /// yields that record's instant,
+    /// asked only when the manifest is what would decide. A lane newer than its manifest
+    /// belongs to a run resumed under the same id and is read from its tail
+    /// ([`RunReading::StaleManifest`]); a lane with no timestamped record trusts the manifest.
+    /// The agent's own closing line is per lane and stays decisive either way.
+    pub(crate) fn run_reading(
+        &self,
+        subagent: &Subagent,
+        newest_ms: impl FnOnce() -> Option<i64>,
+    ) -> RunReading {
+        let Some(run) = self.events_for(subagent) else {
+            return RunReading::Open;
+        };
         if journal_reports_completion(subagent, self) {
-            return Some(RunSettle::closed_by("completed", "result"));
+            return RunReading::Settled(RunSettle::closed_by("completed", "result"));
         }
         if run.failed.contains(&subagent.agent_id) {
-            return Some(RunSettle::closed_by("failed", "failed"));
+            return RunReading::Settled(RunSettle::closed_by("failed", "failed"));
         }
-        run.ended.as_ref().map(|status| RunSettle {
+        let Some(status) = run.ended.as_ref() else {
+            return RunReading::Open;
+        };
+        if let (Some(end), Some(newest)) = (run.ended_at_ms, newest_ms()) {
+            if newest > end.saturating_add(MANIFEST_SLACK_MS) {
+                return RunReading::StaleManifest(format!(
+                    "its run's manifest (status {status}) ended before this lane's newest \
+                     record, so the run was resumed under its id: read from the lane's tail"
+                ));
+            }
+        }
+        RunReading::Settled(RunSettle {
             outcome: status.clone(),
             reason: format!("its workflow run ended (manifest status {status})"),
         })
@@ -340,9 +400,16 @@ fn read_journal_line(line: &[u8], data: &mut JournalData) {
 
 /// The run manifest beside a run's journal: `<sidecar>/subagents/workflows/<run>/journal.jsonl`
 /// -> `<sidecar>/workflows/<run>.json`, read when it exists.
-fn run_manifest(journal: &Path) -> Option<Vec<u8>> {
+fn run_manifest(journal: &Path) -> Option<(Vec<u8>, Option<i64>)> {
     let run = journal.parent()?;
     let name = run.file_name()?.to_str()?;
     let sidecar = run.parent()?.parent()?.parent()?;
-    std::fs::read(sidecar.join("workflows").join(format!("{name}.json"))).ok()
+    let path = sidecar.join("workflows").join(format!("{name}.json"));
+    let bytes = std::fs::read(&path).ok()?;
+    let mtime_ms = std::fs::metadata(&path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .and_then(|d| i64::try_from(d.as_millis()).ok());
+    Some((bytes, mtime_ms))
 }

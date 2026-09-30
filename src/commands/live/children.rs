@@ -11,6 +11,7 @@
 //! signal here, unlike the main lane's F9 trap).
 
 use super::*;
+use crate::subagent::RunReading;
 
 /// Tail-record age (seconds) under which a settled-looking child is treated as still
 /// GENERATING when its last assistant record is not an end_turn. Measured: intra-lane
@@ -62,16 +63,34 @@ pub(crate) fn children_report(
     for lane in &subs {
         let sub = &lane.path;
         let sid = crate::subagent::session_id_from_path(sub);
-        let by_run = journals.settled_by_run(lane);
+        // The tail is read here only when a run's manifest is what would decide - to ask
+        // whether the lane wrote past the instant that manifest says its run ended - and is
+        // then reused for the lane's own state.
+        let mut shape: Option<TailShape> = None;
+        let reading = if returned.contains(&sid) {
+            RunReading::Open
+        } else {
+            journals.run_reading(lane, || {
+                let s = tail_shape(sub).ok()?;
+                let newest = s.last_ts_utc.as_deref().and_then(crate::timez::epoch_ms);
+                shape = Some(s);
+                newest
+            })
+        };
         let (state, detail) = if returned.contains(&sid) {
             (
                 "settled",
                 "completion notification received in the main transcript".to_string(),
             )
-        } else if let Some(settle) = by_run {
-            ("settled", settle.reason)
         } else {
-            tail_state(sub)?
+            match reading {
+                RunReading::Settled(settle) => ("settled", settle.reason),
+                RunReading::StaleManifest(why) => {
+                    let (state, detail) = tail_state(sub, shape.take())?;
+                    (state, format!("{detail}; {why}"))
+                }
+                RunReading::Open => tail_state(sub, shape.take())?,
+            }
         };
         if state != "settled" {
             report.live_count += 1;
@@ -99,8 +118,11 @@ pub(crate) fn children_report(
 
 /// A lane's state read off its own transcript tail: `in-flight` on an unreturned call,
 /// `generating` on a fresh tail whose last assistant record is not an end_turn, else `settled`.
-fn tail_state(sub: &Path) -> Result<(&'static str, String)> {
-    let shape = tail_shape(sub)?;
+fn tail_state(sub: &Path, read: Option<TailShape>) -> Result<(&'static str, String)> {
+    let shape = match read {
+        Some(shape) => shape,
+        None => tail_shape(sub)?,
+    };
     // The RECORD-tail instant is the semantic fact (mtime can lag or lead it).
     let tail_age = shape.last_ts_utc.as_deref().and_then(|t| age_secs(Some(t)));
     Ok(if let Some((tool, ts)) = &shape.unreturned_use {

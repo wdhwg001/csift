@@ -36,9 +36,12 @@ pub enum AgentKindFilter {
         subagent transcript's first/last record timestamp. A workflow lane's own RUN \
         decides its status first, by the rule `status` reads: the agent's journal line \
         (`result` is `completed`, `failed` is `failed`), else the manifest an ended run \
-        writes (`completed`, or its status verbatim - `killed`, `failed`, an open set); a \
-        lane its run ended without completing carries no completion instant, and its row \
-        names why in brackets (JSON `settled_by`), in the words `status` uses. Any other \
+        writes (`completed`, or its status verbatim - `killed`, `failed`, an open set) - \
+        unless the lane's newest record is more than a minute newer than that manifest's \
+        own end instant: a run resumed under its id runs under its predecessor's manifest \
+        until it ends, so such a lane is read from its tail and its row names the stale \
+        manifest. A lane its run ended without completing carries no completion instant, \
+        and its row names why in brackets (JSON `settled_by`), in the words `status` uses. Any other \
         lane is `completed` when the transcript's NEWEST meaningful record is an \
         assistant text ending its turn, else \
         `running`/`unknown` - a returned tool_result at the tail is a lane mid-turn, and \
@@ -67,7 +70,8 @@ pub enum AgentKindFilter {
           Workflow `journal.jsonl` event logs are NOT transcripts (read only to corroborate \
         status, never listed). A workflow lane's run decides first - its journal line \
         (`result` completed, `failed` failed), else its ended run's manifest status \
-        (`completed`, or the word verbatim, e.g. `killed`) - and any other lane is \
+        (`completed`, or the word verbatim, e.g. `killed`) unless the lane wrote past \
+        that manifest's end by more than a minute - and any other lane is \
         `completed` when the transcript's newest meaningful record is an assistant text \
         ending its turn, else `running`/`unknown`. \
         The TEXT output is ALWAYS the parent→child topology tree (workflow runs as parents \

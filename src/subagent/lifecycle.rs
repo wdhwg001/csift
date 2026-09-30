@@ -71,12 +71,20 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
     })?;
 
     // A workflow lane's own RUN decides first, by the rule `status` reads
-    // (`JournalCache::settled_by_run`): the agent's closing journal line, else the manifest an
-    // ended run writes. A lane the harness stopped after its answer keeps an unreturned call at
-    // its tail for good, so reading the tail alone called it running while `status` counted it
-    // settled; and a lane its run killed, or its journal failed, is not `completed` whatever its
-    // tail shows, so it takes the run's own word.
-    let by_run = journals.settled_by_run(subagent);
+    // (`JournalCache::run_reading`): the agent's closing journal line, else the manifest an
+    // ended run writes - when that manifest is no older than the lane's newest record. A lane
+    // the harness stopped after its answer keeps an unreturned call at its tail for good, so
+    // reading the tail alone called it running while `status` counted it settled; and a lane
+    // its run killed, or its journal failed, is not `completed` whatever its tail shows, so it
+    // takes the run's own word. A lane NEWER than its run's manifest is read from its tail and
+    // its row says the manifest was stale.
+    let (by_run, stale_manifest) = match journals.run_reading(subagent, || {
+        completed_utc.as_deref().and_then(crate::timez::epoch_ms)
+    }) {
+        RunReading::Settled(settle) => (Some(settle), None),
+        RunReading::StaleManifest(why) => (None, Some(why)),
+        RunReading::Open => (None, None),
+    };
     // Clear the frozen signal when it would be meaningless: a run-settled (workflow) agent has
     // ended regardless of a tail tool_use; and a transcript with NO timestamps has undetermined
     // timing (status Unknown), so we cannot claim "frozen" vs merely unreadable.
@@ -99,7 +107,7 @@ pub fn lifecycle(subagent: &Subagent, journals: &JournalCache) -> Result<Subagen
         started_utc,
         completed_utc,
         status,
-        settled_by: by_run.map(|settle| settle.reason),
+        settled_by: by_run.map(|settle| settle.reason).or(stale_manifest),
         pending,
         skipped_lines: head_skipped + tail_skipped,
         fork_parent_last_uuid,
