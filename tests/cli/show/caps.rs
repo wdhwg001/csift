@@ -293,6 +293,18 @@ fn skip_past_the_end_is_an_empty_answer_and_is_not_an_address() {
         text.stdout
     );
     assert!(!text.stderr.contains("passes over all"), "{}", text.stderr);
+    // With no `--skip` the footer says nothing about one.
+    let plain = h.run(&["show", t, "--turn", "1"]);
+    assert!(
+        plain.stdout.contains("fetched 10 record unit(s)"),
+        "{}",
+        plain.stdout
+    );
+    assert!(
+        !plain.stdout.contains("--skip passed over"),
+        "{}",
+        plain.stdout
+    );
     // Not an address, and not a branch-point option.
     let bare = h.run(&["show", t, "--skip", "3"]);
     assert!(!bare.success);
@@ -360,4 +372,43 @@ fn a_raw_uuid_fetch_names_the_records_the_rendered_one_does() {
         "{}",
         miss.stderr
     );
+}
+
+/// Only a top-level session has an elicitation sidecar - the hook keys it by the top-level
+/// session - so neither fetch of a subagent transcript reads a file that sits where one
+/// would: a uuid only such a file carries is a miss raw and rendered alike.
+#[test]
+fn a_subagent_transcript_reads_no_sidecar_in_either_fetch() {
+    let h = Home::new();
+    fixture(&h);
+    let lane = h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-a1b2c3d4e5f6a7b8.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"s1","parentUuid":null,"isSidechain":true,"timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"user","content":"lane prompt"}}"#,
+            "\n"
+        ),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-a1b2c3d4e5f6a7b8/elicitations.jsonl"),
+        &(format!(
+            r#"{{"type":"assistant","uuid":"u-toolu_SUB","timestamp":"2026-06-07T05:00:40.000Z","sessionId":"{SESS}","isSidechain":false,"message":{{"role":"assistant","stop_reason":"tool_use","content":[{{"type":"tool_use","id":"toolu_SUB","name":"AskUserQuestion","input":{{"questions":[{{"question":"Pick"}}]}}}}]}},"csift":"elicitation-marker-v1","csiftPhase":"pending","csiftKind":"AskUserQuestion","csiftKey":"toolu_SUB","csiftHookEvent":"PreToolUse","hookInput":{{}}}}"#
+        ) + "\n"),
+    );
+    let lane = lane.to_string_lossy().into_owned();
+    for raw in [false, true] {
+        let mut args = vec!["show", lane.as_str(), "--uuid", "u-toolu_SUB"];
+        if raw {
+            args.push("--raw");
+        }
+        let out = h.run(&args);
+        assert!(!out.success, "raw {raw}: {}", out.stdout);
+        assert!(
+            out.stderr.contains("no such record(s): uuid u-toolu_SUB"),
+            "raw {raw}: {}",
+            out.stderr
+        );
+    }
+    let found = h.run(&["show", lane.as_str(), "--uuid", "s1", "--raw"]);
+    assert!(found.success, "{}", found.stderr);
+    assert_eq!(found.stdout.lines().count(), 1, "{}", found.stdout);
 }
