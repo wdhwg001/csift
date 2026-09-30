@@ -319,7 +319,7 @@ teammate has no separate OS process (it shares the orchestrator PID — `pkill` 
 /// takes the transcript id, and only the routing form can collide - which is why csift keys
 /// its own targeting on the transcript id and prints both forms on the node line.
 pub(crate) const TEAMMATE_CONTROL_HINT_L3: &str =
-    "      the routing id Name@Team (the `routing:` field above) is the form TaskStop takes; SendMessage \
+    "      the routing id Name@Team (the `routing:` field above) is a form TaskStop takes; SendMessage \
 refuses any `to` carrying `@`, so that id is never a SendMessage `to`, which takes the bare name or \
 a<Name>-<hex> (the id the hook payload and the transcript file carry, by which SendMessage also resumes \
 a stopped teammate); the routing id can collide (two same-named teammates share it), the transcript id \

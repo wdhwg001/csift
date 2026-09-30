@@ -1518,7 +1518,7 @@ surface change bumps the PATCH.
   files, and `recover --help` says what each spelling then replays.
 - **The `agents` teammate hint no longer offers SendMessage's refusal as the reason TaskStop
   takes the routing id.** Its third line now states the two tools' facts apart: the routing id
-  `Name@Team` is the form TaskStop takes, and SendMessage, which refuses any `to` carrying `@`,
+  `Name@Team` is a form TaskStop takes, and SendMessage, which refuses any `to` carrying `@`,
   takes the bare name or the transcript id.
 
 ### Performance

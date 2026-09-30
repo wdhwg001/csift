@@ -58,7 +58,7 @@ use super::*;
         leading-hex prefix, e.g. `@1a2b3c4d`) scopes to one session; `@<agent-id>` to one \
         subagent + its subtree (a bare hex ≥12 OR a teammate `aName-<hex>` id; exactly what \
         `csift agents` prints); `@<Name>@<Team>` is a teammate's ROUTING form (the `routing:` \
-        field `agents` prints beside that transcript id, the form TaskStop takes; SendMessage \
+        field `agents` prints beside that transcript id, a form TaskStop takes; SendMessage \
         refuses a `to` carrying `@`) and resolves to that one teammate, failing loud when two \
         teammates share it; \
         `@main` is the CALLING top-level session (read from \

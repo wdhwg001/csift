@@ -83,7 +83,7 @@ fn agents_routing_target_behaves_exactly_like_the_transcript_id() {
 const HINT_LINES: [&str; 3] = [
     "note: teammate rows are in-process Agent subagents — steer one with SendMessage addressed by its bare NAME (the `(@name)` shown, without the `@`), and terminate it with `message:{\"type\":\"shutdown_request\"}`.",
     "      TaskStop also stops a teammate by its name or `name@team` from Claude Code 2.1.198 (earlier builds reject every form); the `aName-<hex>` id above is a transcript id, never a task id, and a teammate has no separate OS process (it shares the orchestrator PID — `pkill` won't help).",
-    "      the routing id Name@Team (the `routing:` field above) is the form TaskStop takes; SendMessage refuses any `to` carrying `@`, so that id is never a SendMessage `to`, which takes the bare name or a<Name>-<hex> (the id the hook payload and the transcript file carry, by which SendMessage also resumes a stopped teammate); the routing id can collide (two same-named teammates share it), the transcript id never does.",
+    "      the routing id Name@Team (the `routing:` field above) is a form TaskStop takes; SendMessage refuses any `to` carrying `@`, so that id is never a SendMessage `to`, which takes the bare name or a<Name>-<hex> (the id the hook payload and the transcript file carry, by which SendMessage also resumes a stopped teammate); the routing id can collide (two same-named teammates share it), the transcript id never does.",
 ];
 
 /// The JSON twin, `control_hint` on every teammate row.
@@ -106,6 +106,12 @@ fn agents_teammate_hint_states_the_two_id_rule() {
     }
     assert!(
         !text.stdout.contains("SendMessage needs the routing id"),
+        "{}",
+        text.stdout
+    );
+    // TaskStop also takes the bare name (line 2), so the routing id is A form it takes.
+    assert!(
+        !text.stdout.contains("the form TaskStop takes"),
         "{}",
         text.stdout
     );
