@@ -20317,12 +20317,12 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "22-33",
+          "lines": "34-45",
           "snippet": "    // -- (0) Bash result hint: `staleReadFileStateHint` names files THIS command\n    //    modified out of the read set. CC computed the list from its own readFileState\n    //    (an mtime stat over every read file), so a named match is authoritative. The\n    //    paths are rendered relative to the shell's cwd; resolve before matching. A\n    //    truncated tail (\"... and N more\") names no paths, so only the named first-5 can\n    //    ever match: a target hidden in the remainder is NOT detected here (documented\n    //    limit; the window's bash disclosure still covers the command itself).\n    if let Some(hint) = tur\n        .get(\"staleReadFileStateHint\")\n        .and_then(serde_json::Value::as_str)\n    {\n        if let Some((paths, _more)) = parse_stale_read_hint(hint) {"
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "334-345",
+          "lines": "346-357",
           "snippet": "/// Parse a `toolUseResult.staleReadFileStateHint` string into its named paths plus\n/// the truncated-remainder count. Wire shape (Claude Code 2.1.237, corpus-verified):\n/// `[This command modified N file(s) you've previously read: p1, p2 and M more. Call\n/// Read before editing.]` - the list caps at five names; `M` counts the unnamed rest\n/// (0 when the list is complete). Paths are comma-space separated and rendered\n/// relative to the recording shell's cwd.\npub(crate) fn parse_stale_read_hint(hint: &str) -> Option<(Vec<String>, usize)> {\n    let rest = hint.strip_prefix(\"[This command modified \")?;\n    let colon = rest.find(\": \")?;\n    let mut tail = &rest[colon + 2..];\n    if let Some(end) = tail.rfind(\". Call Read before editing.]\") {\n        tail = &tail[..end];"
         },
         {
@@ -20408,7 +20408,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "104-111",
+          "lines": "116-123",
           "snippet": "        // `staleRecovered:true` on a SUCCESSFUL Edit: CC found the file modified on\n        // disk since the last read, but old_string stayed unique so the edit applied.\n        // The disk holds changes this stream never saw - an authoritative annotation.\n        if tur\n            .get(\"staleRecovered\")\n            .and_then(serde_json::Value::as_bool)\n            .unwrap_or(false)\n        {"
         },
         {
@@ -20487,7 +20487,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "271-283",
+          "lines": "283-295",
           "snippet": "    // (7a) edited_text_file -> an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {\n            let snippet_text = att\n                .get(\"snippet\")\n                .or_else(|| att.get(\"content\"))\n                .and_then(serde_json::Value::as_str)\n                .unwrap_or_default();\n            let snippet = strip_gutter(snippet_text);"
         },
         {
@@ -20666,7 +20666,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "316-332",
+          "lines": "328-344",
           "snippet": "/// Classify a tool_result error body as an integrity error, or `None` if it is some\n/// other tool error. Only [`IntegrityKind::ModifiedSinceRead`] becomes a boundary;\n/// the others are COUNTED annotations (the op never landed).\npub(crate) fn classify_integrity_error(content: &serde_json::Value) -> Option<IntegrityKind> {\n    let text = crate::model::tool_result_content_text(content);\n    if text.contains(\"has been modified since read\") || text.contains(\"File has been modified\") {\n        Some(IntegrityKind::ModifiedSinceRead)\n    } else if text.contains(\"has not been read yet\") || text.contains(\"Read it first\") {\n        Some(IntegrityKind::NotReadYet)\n    } else if text.contains(\"String to replace not found in file\") {\n        Some(IntegrityKind::StringNotFound)\n    } else if text.contains(\"File does not exist\") {\n        Some(IntegrityKind::FileDoesNotExist)\n    } else {\n        None\n    }\n}"
         }
       ],
@@ -20764,8 +20764,8 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "7-11",
-          "snippet": "/// Extract a `FullSnapshot` / `PartialRead` (Read) or a `FullSnapshot` (Write) / `Edit`\n/// from a `toolUseResult` carrier, plus the two Claude Code freshness signals riding\n/// the same carrier: a Bash result's `staleReadFileStateHint` (CC's own modified-file\n/// attribution) and an Edit result's `staleRecovered` flag. `record_cwd` is the\n/// carrying record's own `cwd`, the base the hint's relative paths resolve against."
+          "lines": "17-21",
+          "snippet": "/// Extract a `FullSnapshot` / `PartialRead` (Read) or a `FullSnapshot` (Write) / `Edit`\n/// from a `toolUseResult` carrier, plus the two Claude Code freshness signals riding\n/// the same carrier: a Bash result's `staleReadFileStateHint` (CC's own modified-file\n/// attribution) and an Edit result's `staleRecovered` flag. `cwds.record` is the\n/// carrying record's own `cwd`, the base the hint's relative paths resolve against;"
         },
         {
           "path": "src/cli/files_recover_args/recover.rs",
@@ -21007,7 +21007,7 @@
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "22-28",
+          "lines": "34-40",
           "snippet": "    // -- (0) Bash result hint: `staleReadFileStateHint` names files THIS command\n    //    modified out of the read set. CC computed the list from its own readFileState\n    //    (an mtime stat over every read file), so a named match is authoritative. The\n    //    paths are rendered relative to the shell's cwd; resolve before matching. A\n    //    truncated tail (\"... and N more\") names no paths, so only the named first-5 can\n    //    ever match: a target hidden in the remainder is NOT detected here (documented\n    //    limit; the window's bash disclosure still covers the command itself)."
         }
       ],
@@ -22625,7 +22625,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "223-234",
+          "lines": "235-246",
           "snippet": "    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;\n    if is_full {"
         },
         {
@@ -22756,7 +22756,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "224-233",
+          "lines": "236-245",
           "snippet": "    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
@@ -22876,17 +22876,17 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "245-256",
+          "lines": "257-268",
           "snippet": "    } else {\n        events.push(FileEvent {\n            line_no,\n            turn_index,\n            timestamp_utc: ts.clone(),\n            kind: EventKind::PartialRead {\n                start_line: start_line.max(1),\n                lines,\n                total_lines: total,\n            },\n        });\n    }"
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "162-164",
+          "lines": "174-176",
           "snippet": "    let start_line = count(\"startLine\").unwrap_or(1);\n    let total_lines = count(\"totalLines\");\n    let num_lines = count(\"numLines\");"
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "223-233",
+          "lines": "235-245",
           "snippet": "    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
@@ -23021,7 +23021,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "242-248",
+          "lines": "254-260",
           "snippet": "                source,\n            },\n        });\n    } else {\n        events.push(FileEvent {\n            line_no,\n            turn_index,"
         }
       ],
@@ -23101,7 +23101,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "242-248",
+          "lines": "254-260",
           "snippet": "                source,\n            },\n        });\n    } else {\n        events.push(FileEvent {\n            line_no,\n            turn_index,"
         }
       ],
@@ -23182,7 +23182,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "64-66",
+          "lines": "76-78",
           "snippet": "    // -- (2) Write result: {type:create|update, filePath, content, ...} --\n    // -- (3) Edit result: {filePath, oldString, newString, structuredPatch, ...} (no type) --\n    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);"
         }
       ],
@@ -23282,7 +23282,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "70-71",
+          "lines": "82-83",
           "snippet": "    let has_edit_strings = tur.get(\"oldString\").is_some() || tur.get(\"newString\").is_some();\n    let structured_patch = parse_structured_patch(tur.get(\"structuredPatch\"));"
         },
         {
@@ -23387,7 +23387,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "272-277",
+          "lines": "284-289",
           "snippet": "    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {"
         }
       ],
@@ -23523,7 +23523,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "278-283",
+          "lines": "290-295",
           "snippet": "            let snippet_text = att\n                .get(\"snippet\")\n                .or_else(|| att.get(\"content\"))\n                .and_then(serde_json::Value::as_str)\n                .unwrap_or_default();\n            let snippet = strip_gutter(snippet_text);"
         }
       ],
@@ -23599,12 +23599,12 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "104-111",
+          "lines": "116-123",
           "snippet": "        // `staleRecovered:true` on a SUCCESSFUL Edit: CC found the file modified on\n        // disk since the last read, but old_string stayed unique so the edit applied.\n        // The disk holds changes this stream never saw - an authoritative annotation.\n        if tur\n            .get(\"staleRecovered\")\n            .and_then(serde_json::Value::as_bool)\n            .unwrap_or(false)\n        {"
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "119-124",
+          "lines": "131-136",
           "snippet": "        return;\n    }\n\n    // A Write result: full-content anchor.\n    if let Some(content) = tur.get(\"content\").and_then(serde_json::Value::as_str) {\n        let total = line_count(content);"
         },
         {
@@ -23721,7 +23721,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "104-108",
+          "lines": "116-120",
           "snippet": "        // `staleRecovered:true` on a SUCCESSFUL Edit: CC found the file modified on\n        // disk since the last read, but old_string stayed unique so the edit applied.\n        // The disk holds changes this stream never saw - an authoritative annotation.\n        if tur\n            .get(\"staleRecovered\")"
         }
       ],
@@ -24018,7 +24018,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "233",
+          "lines": "245",
           "snippet": "    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
@@ -24123,7 +24123,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "224-233",
+          "lines": "236-245",
           "snippet": "    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
@@ -24196,7 +24196,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "222-223",
+          "lines": "234-235",
           "snippet": ") {\n    let mut lines: Vec<String> = split_lines(content);"
         }
       ],
@@ -24277,7 +24277,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "223-234",
+          "lines": "235-246",
           "snippet": "    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;\n    if is_full {"
         },
         {
@@ -24369,7 +24369,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "221-235",
+          "lines": "233-247",
           "snippet": "    events: &mut Vec<FileEvent>,\n) {\n    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;\n    if is_full {\n        events.push(FileEvent {"
         }
       ],
@@ -24451,7 +24451,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "221-233",
+          "lines": "233-245",
           "snippet": "    events: &mut Vec<FileEvent>,\n) {\n    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
@@ -24584,7 +24584,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "269-275",
+          "lines": "281-287",
           "snippet": "    let atype = att.get(\"type\").and_then(serde_json::Value::as_str);\n\n    // (7a) edited_text_file -> an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))"
         }
       ],
@@ -24745,7 +24745,7 @@
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "223-233",
+          "lines": "235-245",
           "snippet": "    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
@@ -25058,7 +25058,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "122-124",
+          "lines": "134-136",
           "snippet": "    // A Write result: full-content anchor.\n    if let Some(content) = tur.get(\"content\").and_then(serde_json::Value::as_str) {\n        let total = line_count(content);"
         },
         {
@@ -26827,12 +26827,12 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "56-58",
-          "snippet": "    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {"
+          "lines": "68-70",
+          "snippet": "    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), cwds.call) {"
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "350-353",
+          "lines": "364-367",
           "snippet": "pub(crate) fn names_file(target: &str, path: &str) -> bool {\n    if target == path {\n        return true;\n    }"
         }
       ],
@@ -26842,7 +26842,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "A `Read` of an image file writes a `toolUseResult` whose top-level `type` is `image` and whose `file` object has NO `filePath` at all: it carries `base64` (the payload), `type` (the media type - `image/png` and `image/jpeg` are what the corpus holds), `originalSize`, and an OPTIONAL `dimensions:{originalWidth, originalHeight, displayWidth, displayHeight}` present on 435 of 444 such results.",
-          "depends": "csift's `recover` Read arm keys on a `file` object with a matching `filePath` and calls `path_matches(target_file, path.unwrap_or_default(), record_cwd)`, so an image Read reaches that arm with an EMPTY path string; `path_matches` returns false on an empty path before it resolves anything against the cwd, which is the only reason an image Read is never mistaken for a file event - the `unwrap_or_default()` is load-bearing, not incidental.",
+          "depends": "csift's `recover` Read arm keys on a `file` object with a matching `filePath` and calls `path_matches(target_file, path.unwrap_or_default(), cwds.call)`, so an image Read reaches that arm with an EMPTY path string; `path_matches` returns false on an empty path before it resolves anything against the cwd, which is the only reason an image Read is never mistaken for a file event - the `unwrap_or_default()` is load-bearing, not incidental.",
           "instrument": "Measured over the 7,814 transcript files under ~/.claude/projects with a python3 walk that json-parses every line carrying `toolUseResult` and keeps the ones whose `toolUseResult.file` is an object, bucketing `Counter(tuple(sorted(file.keys())))` by the top-level `type`. Counting rule: one observation per record with an object `file`. Result: 444 `image` results; `file.filePath` present on 0 of 444; key set `{base64, dimensions, originalSize, type}` on 435 and `{base64, originalSize, type}` on 9; `file.type` values `image/png` 371 and `image/jpeg` 73. Schema authority: the Read tool-result schema in the Claude Code 2.1.258 binary, whose `image` variant declares exactly those four members.",
           "probe": {
             "kind": "corpus",
@@ -26946,17 +26946,17 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "156-164",
+          "lines": "168-176",
           "snippet": "    let content = file.get(\"content\").and_then(serde_json::Value::as_str);\n    let count = |k: &str| {\n        file.get(k)\n            .and_then(serde_json::Value::as_u64)\n            .map(|n| n as usize)\n    };\n    let start_line = count(\"startLine\").unwrap_or(1);\n    let total_lines = count(\"totalLines\");\n    let num_lines = count(\"numLines\");"
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "164-186",
+          "lines": "176-198",
           "snippet": "    let num_lines = count(\"numLines\");\n    let counted = num_lines.unwrap_or(0).max(total_lines.unwrap_or(0));\n    let blanked = match content {\n        None => true,\n        Some(\"\") => counted > 0,\n        Some(_) => false,\n    };\n    if blanked {\n        events.push(FileEvent {\n            line_no,\n            turn_index,\n            timestamp_utc: ts.clone(),\n            kind: EventKind::BlankedRead {\n                total_lines: total_lines.or(num_lines),\n            },\n        });\n        return;\n    }\n    let truncated = file\n        .get(\"truncatedByTokenCap\")\n        .and_then(serde_json::Value::as_bool)\n        .unwrap_or(false);\n    push_read_event("
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "223-233",
+          "lines": "235-245",
           "snippet": "    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
@@ -44900,7 +44900,7 @@
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "382-387",
+          "lines": "397-402",
           "snippet": "    if let Some(snap) = rec.snapshot.as_ref() {\n        if let Some(tfb) = snap.get(\"trackedFileBackups\").and_then(|v| v.as_object()) {\n            for (path, entry) in tfb {\n                if path_matches(target_file, path, rec.cwd.as_deref()) {\n                    events.push(FileEvent {\n                        line_no,"
         },
         {
@@ -51757,17 +51757,17 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "55-58",
-          "snippet": "    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {"
+          "lines": "67-70",
+          "snippet": "    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), cwds.call) {"
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "162-164",
+          "lines": "174-176",
           "snippet": "    let start_line = count(\"startLine\").unwrap_or(1);\n    let total_lines = count(\"totalLines\");\n    let num_lines = count(\"numLines\");"
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "224-233",
+          "lines": "236-245",
           "snippet": "    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         }
       ],
@@ -51869,12 +51869,12 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "55-58",
-          "snippet": "    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {"
+          "lines": "67-70",
+          "snippet": "    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), cwds.call) {"
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "223-233",
+          "lines": "235-245",
           "snippet": "    let mut lines: Vec<String> = split_lines(content);\n    let observed = num_lines.unwrap_or(lines.len());\n    let total = total_lines.unwrap_or(observed.max(start_line + lines.len().saturating_sub(1)));\n    if truncated && observed >= total {\n        // the character branch: the final kept line is cut mid-line\n        lines.pop();\n        if lines.is_empty() {\n            return;\n        }\n    }\n    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;"
         },
         {
@@ -52010,7 +52010,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "156-164",
+          "lines": "168-176",
           "snippet": "    let content = file.get(\"content\").and_then(serde_json::Value::as_str);\n    let count = |k: &str| {\n        file.get(k)\n            .and_then(serde_json::Value::as_u64)\n            .map(|n| n as usize)\n    };\n    let start_line = count(\"startLine\").unwrap_or(1);\n    let total_lines = count(\"totalLines\");\n    let num_lines = count(\"numLines\");"
         },
         {
@@ -52020,7 +52020,7 @@
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "156-164",
+          "lines": "168-176",
           "snippet": "    let content = file.get(\"content\").and_then(serde_json::Value::as_str);\n    let count = |k: &str| {\n        file.get(k)\n            .and_then(serde_json::Value::as_u64)\n            .map(|n| n as usize)\n    };\n    let start_line = count(\"startLine\").unwrap_or(1);\n    let total_lines = count(\"totalLines\");\n    let num_lines = count(\"numLines\");"
         }
       ],
@@ -52180,13 +52180,13 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "233-240",
+          "lines": "245-252",
           "snippet": "    let is_full = !truncated && start_line == 1 && observed >= total && total > 0;\n    if is_full {\n        events.push(FileEvent {\n            line_no,\n            turn_index,\n            timestamp_utc: ts.clone(),\n            kind: EventKind::FullSnapshot {\n                content: content.to_string(),"
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "56-59",
-          "snippet": "    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {\n            push_read_file_object(line_no, turn_index, ts, file, SnapSource::FullRead, events);"
+          "lines": "68-71",
+          "snippet": "    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), cwds.call) {\n            push_read_file_object(line_no, turn_index, ts, file, SnapSource::FullRead, events);"
         }
       ],
       "states": [
@@ -52280,7 +52280,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "182-186",
+          "lines": "194-198",
           "snippet": "    let truncated = file\n        .get(\"truncatedByTokenCap\")\n        .and_then(serde_json::Value::as_bool)\n        .unwrap_or(false);\n    push_read_event("
         },
         {
@@ -52364,12 +52364,12 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "162-164",
+          "lines": "174-176",
           "snippet": "    let start_line = count(\"startLine\").unwrap_or(1);\n    let total_lines = count(\"totalLines\");\n    let num_lines = count(\"numLines\");"
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "250-254",
+          "lines": "262-266",
           "snippet": "            kind: EventKind::PartialRead {\n                start_line: start_line.max(1),\n                lines,\n                total_lines: total,\n            },"
         }
       ],
@@ -52437,8 +52437,8 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "55-58",
-          "snippet": "    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {"
+          "lines": "67-70",
+          "snippet": "    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), cwds.call) {"
         }
       ],
       "states": [
@@ -52603,7 +52603,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "245-250",
+          "lines": "257-262",
           "snippet": "    } else {\n        events.push(FileEvent {\n            line_no,\n            turn_index,\n            timestamp_utc: ts.clone(),\n            kind: EventKind::PartialRead {"
         }
       ],
@@ -52849,7 +52849,7 @@
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "269-275",
+          "lines": "281-287",
           "snippet": "    let atype = att.get(\"type\").and_then(serde_json::Value::as_str);\n\n    // (7a) edited_text_file -> an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))"
         }
       ],
@@ -53118,7 +53118,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "272-277",
+          "lines": "284-289",
           "snippet": "    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {"
         }
       ],
@@ -53196,7 +53196,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "122-129",
+          "lines": "134-141",
           "snippet": "    // A Write result: full-content anchor.\n    if let Some(content) = tur.get(\"content\").and_then(serde_json::Value::as_str) {\n        let total = line_count(content);\n        events.push(FileEvent {\n            line_no,\n            turn_index,\n            timestamp_utc: ts.clone(),\n            kind: EventKind::FullSnapshot {"
         },
         {
@@ -53312,7 +53312,7 @@
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "64-66",
+          "lines": "76-78",
           "snippet": "    // -- (2) Write result: {type:create|update, filePath, content, ...} --\n    // -- (3) Edit result: {filePath, oldString, newString, structuredPatch, ...} (no type) --\n    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);"
         }
       ],
@@ -53437,7 +53437,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "97-100",
+          "lines": "109-112",
           "snippet": "                original_file: tur\n                    .get(\"originalFile\")\n                    .and_then(serde_json::Value::as_str)\n                    .map(str::to_string),"
         }
       ],
@@ -53551,7 +53551,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "122-124",
+          "lines": "134-136",
           "snippet": "    // A Write result: full-content anchor.\n    if let Some(content) = tur.get(\"content\").and_then(serde_json::Value::as_str) {\n        let total = line_count(content);"
         },
         {
@@ -53932,12 +53932,12 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "64-71",
-          "snippet": "    // -- (2) Write result: {type:create|update, filePath, content, ...} --\n    // -- (3) Edit result: {filePath, oldString, newString, structuredPatch, ...} (no type) --\n    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);\n    if !path_matches(target_file, path.unwrap_or_default(), record_cwd) {\n        return;\n    }\n    let has_edit_strings = tur.get(\"oldString\").is_some() || tur.get(\"newString\").is_some();\n    let structured_patch = parse_structured_patch(tur.get(\"structuredPatch\"));"
+          "lines": "76-83",
+          "snippet": "    // -- (2) Write result: {type:create|update, filePath, content, ...} --\n    // -- (3) Edit result: {filePath, oldString, newString, structuredPatch, ...} (no type) --\n    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);\n    if !path_matches(target_file, path.unwrap_or_default(), cwds.call) {\n        return;\n    }\n    let has_edit_strings = tur.get(\"oldString\").is_some() || tur.get(\"newString\").is_some();\n    let structured_patch = parse_structured_patch(tur.get(\"structuredPatch\"));"
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "70-71",
+          "lines": "82-83",
           "snippet": "    let has_edit_strings = tur.get(\"oldString\").is_some() || tur.get(\"newString\").is_some();\n    let structured_patch = parse_structured_patch(tur.get(\"structuredPatch\"));"
         }
       ],
@@ -54171,7 +54171,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "86-90",
+          "lines": "98-102",
           "snippet": "            replace_all: tur\n                .get(\"replaceAll\")\n                .and_then(serde_json::Value::as_bool)\n                .unwrap_or(false),\n        }];"
         },
         {
@@ -54299,7 +54299,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "368-374",
+          "lines": "380-386",
           "snippet": "pub(crate) fn parse_structured_patch(v: Option<&serde_json::Value>) -> Option<Vec<PatchHunk>> {\n    let arr = v?.as_array()?;\n    let mut out = Vec::with_capacity(arr.len());\n    for h in arr {\n        let old_start = h.get(\"oldStart\").and_then(serde_json::Value::as_u64)? as usize;\n        let old_lines = h.get(\"oldLines\").and_then(serde_json::Value::as_u64)? as usize;\n        let new_lines = h.get(\"newLines\").and_then(serde_json::Value::as_u64)? as usize;"
         },
         {
@@ -54309,7 +54309,7 @@
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "372-374",
+          "lines": "384-386",
           "snippet": "        let old_start = h.get(\"oldStart\").and_then(serde_json::Value::as_u64)? as usize;\n        let old_lines = h.get(\"oldLines\").and_then(serde_json::Value::as_u64)? as usize;\n        let new_lines = h.get(\"newLines\").and_then(serde_json::Value::as_u64)? as usize;"
         }
       ],
@@ -54721,7 +54721,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "368-371",
+          "lines": "380-383",
           "snippet": "pub(crate) fn parse_structured_patch(v: Option<&serde_json::Value>) -> Option<Vec<PatchHunk>> {\n    let arr = v?.as_array()?;\n    let mut out = Vec::with_capacity(arr.len());\n    for h in arr {"
         }
       ],
@@ -54821,7 +54821,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "70-74",
+          "lines": "82-86",
           "snippet": "    let has_edit_strings = tur.get(\"oldString\").is_some() || tur.get(\"newString\").is_some();\n    let structured_patch = parse_structured_patch(tur.get(\"structuredPatch\"));\n\n    if has_edit_strings {\n        // An Edit (carrier side): keep the strings + structuredPatch + originalFile."
         }
       ],
@@ -54949,8 +54949,8 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "66-71",
-          "snippet": "    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);\n    if !path_matches(target_file, path.unwrap_or_default(), record_cwd) {\n        return;\n    }\n    let has_edit_strings = tur.get(\"oldString\").is_some() || tur.get(\"newString\").is_some();\n    let structured_patch = parse_structured_patch(tur.get(\"structuredPatch\"));"
+          "lines": "78-83",
+          "snippet": "    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);\n    if !path_matches(target_file, path.unwrap_or_default(), cwds.call) {\n        return;\n    }\n    let has_edit_strings = tur.get(\"oldString\").is_some() || tur.get(\"newString\").is_some();\n    let structured_patch = parse_structured_patch(tur.get(\"structuredPatch\"));"
         }
       ],
       "states": [
@@ -55034,7 +55034,7 @@
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "86-92",
+          "lines": "100-106",
           "snippet": "                if let Some(content) = input.get(\"content\").and_then(serde_json::Value::as_str) {\n                    events.push(FileEvent {\n                        line_no,\n                        turn_index,\n                        timestamp_utc: ts.clone(),\n                        kind: EventKind::FullSnapshot {\n                            content: content.to_string(),"
         }
       ],
@@ -55341,8 +55341,8 @@
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "56-58",
-          "snippet": "    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {"
+          "lines": "68-70",
+          "snippet": "    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), cwds.call) {"
         }
       ],
       "states": [
@@ -55954,12 +55954,12 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "478",
+          "lines": "481",
           "snippet": "            let has_structured_result = rec.tool_use_result.is_some();"
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "487-492",
+          "lines": "490-495",
           "snippet": "                        if has_structured_result {\n                            ids_with_result.insert(id.clone());\n                        }\n                        if *is_error == Some(true) {\n                            failed_ids.insert(id.clone());\n                        }"
         }
       ],
@@ -57435,12 +57435,12 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "84-91",
+          "lines": "98-105",
           "snippet": "        match name.as_str() {\n            \"Write\" => {\n                if let Some(content) = input.get(\"content\").and_then(serde_json::Value::as_str) {\n                    events.push(FileEvent {\n                        line_no,\n                        turn_index,\n                        timestamp_utc: ts.clone(),\n                        kind: EventKind::FullSnapshot {"
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "36",
+          "lines": "50",
           "snippet": "/// tool RESULT as a bare `tool_result` string (`\"File created successfully at: ...\"`) with"
         }
       ],
@@ -57511,7 +57511,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "84-85",
+          "lines": "98-99",
           "snippet": "        match name.as_str() {\n            \"Write\" => {"
         }
       ],
@@ -57582,7 +57582,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "46-47",
+          "lines": "60-61",
           "snippet": "/// Gated on `ids_with_result` so it never double-emits in a top-level session.\npub(crate) fn extract_input_fallback("
         }
       ],
@@ -57659,7 +57659,7 @@
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "99-106",
+          "lines": "113-120",
           "snippet": "            \"Edit\" => {\n                let hunks = vec![EditHunk {\n                    old_string: input\n                        .get(\"old_string\")\n                        .and_then(serde_json::Value::as_str)\n                        .unwrap_or_default()\n                        .to_string(),\n                    new_string: input"
         },
         {
@@ -57785,7 +57785,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "85-86",
+          "lines": "99-100",
           "snippet": "            \"Write\" => {\n                if let Some(content) = input.get(\"content\").and_then(serde_json::Value::as_str) {"
         }
       ],
@@ -57898,7 +57898,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "100-105",
+          "lines": "114-119",
           "snippet": "                let hunks = vec![EditHunk {\n                    old_string: input\n                        .get(\"old_string\")\n                        .and_then(serde_json::Value::as_str)\n                        .unwrap_or_default()\n                        .to_string(),"
         }
       ],
@@ -58017,7 +58017,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "77-83",
+          "lines": "91-97",
           "snippet": "        let path = input\n            .get(\"file_path\")\n            .and_then(serde_json::Value::as_str)\n            .unwrap_or_default();\n        if !path_matches(target_file, path, rec.cwd.as_deref()) {\n            continue;\n        }"
         }
       ],
@@ -58288,7 +58288,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "127-133",
+          "lines": "141-147",
           "snippet": "            \"MultiEdit\" => {\n                let hunks: Vec<EditHunk> = input\n                    .get(\"edits\")\n                    .and_then(serde_json::Value::as_array)\n                    .map(|arr| {\n                        arr.iter()\n                            .map(|e| EditHunk {"
         },
         {
@@ -58298,7 +58298,7 @@
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "127-131",
+          "lines": "141-145",
           "snippet": "            \"MultiEdit\" => {\n                let hunks: Vec<EditHunk> = input\n                    .get(\"edits\")\n                    .and_then(serde_json::Value::as_array)\n                    .map(|arr| {"
         }
       ],
@@ -63866,12 +63866,12 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "35-41",
+          "lines": "49-55",
           "snippet": "/// WHY: a subagent (built-in Task/Agent-tool) and a workflow-agent transcript record the\n/// tool RESULT as a bare `tool_result` string (`\"File created successfully at: ...\"`) with\n/// NO structured `toolUseResult` echo - unlike a top-level session, whose carrier carries\n/// `{type:create, filePath, content, ...}`. `extract_from_tool_use_result` reads that echo,\n/// so without this fallback a file WRITTEN BY A SUBAGENT is invisible to `recover`\n/// (`no recoverable history`) even though `files`/`search` see it (they read the tool_use\n/// input directly). The authoritative content IS in the input - `Write.content`,"
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "461-467",
+          "lines": "463-469",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully...\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content.\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
         }
       ],
@@ -64021,7 +64021,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "461-465",
+          "lines": "463-467",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully...\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content."
         }
       ],
@@ -64202,12 +64202,12 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "35-41",
+          "lines": "49-55",
           "snippet": "/// WHY: a subagent (built-in Task/Agent-tool) and a workflow-agent transcript record the\n/// tool RESULT as a bare `tool_result` string (`\"File created successfully at: ...\"`) with\n/// NO structured `toolUseResult` echo - unlike a top-level session, whose carrier carries\n/// `{type:create, filePath, content, ...}`. `extract_from_tool_use_result` reads that echo,\n/// so without this fallback a file WRITTEN BY A SUBAGENT is invisible to `recover`\n/// (`no recoverable history`) even though `files`/`search` see it (they read the tool_use\n/// input directly). The authoritative content IS in the input - `Write.content`,"
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "461-467",
+          "lines": "463-469",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully...\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content.\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
         }
       ],
@@ -64313,7 +64313,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "478-485",
+          "lines": "481-488",
           "snippet": "            let has_structured_result = rec.tool_use_result.is_some();\n            if let Some(blocks) = rec.blocks() {\n                for b in blocks {\n                    if let Block::ToolResult {\n                        tool_use_id: Some(id),\n                        is_error,\n                        ..\n                    } = b"
         }
       ],
@@ -64398,7 +64398,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "319-320",
+          "lines": "331-332",
           "snippet": "pub(crate) fn classify_integrity_error(content: &serde_json::Value) -> Option<IntegrityKind> {\n    let text = crate::model::tool_result_content_text(content);"
         }
       ],
@@ -64490,7 +64490,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "67-76",
+          "lines": "81-90",
           "snippet": "        // Skip when this op already has a `toolUseResult` carrier to reconstruct from, OR\n        // when its result was an ERROR (a failed Edit/Write never mutated the file, so its\n        // input is a phantom - `is_error:true` covers both \"String to replace not found\"\n        // and the Edit-before-Read \"File has not been read yet\" wall, incl. the\n        // Bash-created-then-directly-Edited and the must-re-Read-a-plan cases).\n        if let Some(id) = id {\n            if ids_with_result.contains(id) || failed_ids.contains(id) {\n                continue;\n            }\n        }"
         }
       ],
@@ -82399,7 +82399,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "271-276",
+          "lines": "283-288",
           "snippet": "    // (7a) edited_text_file -> an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);"
         }
       ],

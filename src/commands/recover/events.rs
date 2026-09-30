@@ -29,6 +29,20 @@ pub(crate) fn collect_tool_use_paths(blocks: Option<&[Block]>, out: &mut BTreeMa
     }
 }
 
+/// Record, for each tool_use block, its `tool_use_id -> cwd` of the record carrying it: the
+/// shell cwd its call ran in, which the anchor law (AGENTS 3.11) reads off the TOOL_USE
+/// record rather than off the result written after the call returned.
+pub(crate) fn collect_tool_use_cwds(rec: &Record, out: &mut BTreeMap<String, String>) {
+    let (Some(cwd), Some(blocks)) = (rec.cwd.as_deref(), rec.blocks()) else {
+        return;
+    };
+    for b in blocks {
+        if let Block::ToolUse { id: Some(id), .. } = b {
+            out.insert(id.clone(), cwd.to_string());
+        }
+    }
+}
+
 /// Reconstruct a Write/Edit/MultiEdit content event from the tool_use INPUT when the op
 /// has NO `toolUseResult` carrier (its id is absent from `ids_with_result`).
 ///
@@ -374,6 +388,7 @@ pub(crate) fn extract_from_record(
     rec: &Record,
     target_file: &Target<'_>,
     id_to_path: &BTreeMap<String, String>,
+    id_to_cwd: &BTreeMap<String, String>,
     events: &mut Vec<FileEvent>,
 ) {
     let ts = rec.timestamp.clone();
@@ -453,12 +468,33 @@ pub(crate) fn extract_from_record(
 
     // -- toolUseResult-bearing carriers: Read / Write / Edit / Bash-hint results --
     if let Some(tur) = rec.tool_use_result_value() {
+        // A relative `filePath` in the result is relative to the cwd its CALL ran in (the
+        // anchor law, AGENTS 3.11): the tool_use this result answers, paired by
+        // `tool_use_id` within the turn, and the result's own cwd only when no call is in
+        // reach. The result record is written after the call returned and can carry a later
+        // cwd; on the live root none of the relative ones does, so this is the law's reading
+        // rather than a correction of a measured miss.
+        let call_cwd = rec
+            .blocks()
+            .and_then(|bs| {
+                bs.iter().find_map(|b| match b {
+                    Block::ToolResult {
+                        tool_use_id: Some(id),
+                        ..
+                    } => id_to_cwd.get(id).map(String::as_str),
+                    _ => None,
+                })
+            })
+            .or(rec.cwd.as_deref());
         extract_from_tool_use_result(
             line_no,
             turn_index,
             &ts,
             &tur,
-            rec.cwd.as_deref(),
+            CarrierCwds {
+                record: rec.cwd.as_deref(),
+                call: call_cwd,
+            },
             target_file,
             events,
         );

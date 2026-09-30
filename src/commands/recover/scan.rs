@@ -458,6 +458,8 @@ pub(crate) fn extract_with_turns(
     for (stamp, idxs) in view.groups() {
         // tool_use_id -> file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.
         let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();
+        // tool_use_id -> the cwd its call ran in, for a result's relative `filePath`.
+        let mut id_to_cwd: BTreeMap<String, String> = BTreeMap::new();
         // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -
         // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and
         // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a
@@ -475,6 +477,7 @@ pub(crate) fn extract_with_turns(
         for &i in idxs {
             let rec = &records[i].1;
             collect_tool_use_paths(rec.blocks(), &mut id_to_path);
+            collect_tool_use_cwds(rec, &mut id_to_cwd);
             let has_structured_result = rec.tool_use_result.is_some();
             if let Some(blocks) = rec.blocks() {
                 for b in blocks {
@@ -512,6 +515,7 @@ pub(crate) fn extract_with_turns(
                 rec,
                 target_file,
                 &id_to_path,
+                &id_to_cwd,
                 &mut turn_events,
             );
             // Carrier-less ops (subagent/workflow): reconstruct content from the tool_use

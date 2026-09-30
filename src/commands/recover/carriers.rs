@@ -4,21 +4,33 @@
 
 use super::*;
 
+/// The two shell cwds a `toolUseResult` carrier's relative paths resolve against.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CarrierCwds<'a> {
+    /// The carrying record's own `cwd`: the base of a Bash result's stale-read hint, whose
+    /// paths Claude Code renders relative to the shell after the command ran.
+    pub(crate) record: Option<&'a str>,
+    /// The cwd of the call the result answers: the base of a relative `filePath`.
+    pub(crate) call: Option<&'a str>,
+}
+
 /// Extract a `FullSnapshot` / `PartialRead` (Read) or a `FullSnapshot` (Write) / `Edit`
 /// from a `toolUseResult` carrier, plus the two Claude Code freshness signals riding
 /// the same carrier: a Bash result's `staleReadFileStateHint` (CC's own modified-file
-/// attribution) and an Edit result's `staleRecovered` flag. `record_cwd` is the
-/// carrying record's own `cwd`, the base the hint's relative paths resolve against.
+/// attribution) and an Edit result's `staleRecovered` flag. `cwds.record` is the
+/// carrying record's own `cwd`, the base the hint's relative paths resolve against;
+/// `cwds.call` is the cwd of the call the result answers, the base of a relative `filePath`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn extract_from_tool_use_result(
     line_no: usize,
     turn_index: usize,
     ts: &Option<String>,
     tur: &serde_json::Value,
-    record_cwd: Option<&str>,
+    cwds: CarrierCwds<'_>,
     target_file: &Target<'_>,
     events: &mut Vec<FileEvent>,
 ) {
+    let record_cwd = cwds.record;
     // -- (0) Bash result hint: `staleReadFileStateHint` names files THIS command
     //    modified out of the read set. CC computed the list from its own readFileState
     //    (an mtime stat over every read file), so a named match is authoritative. The
@@ -55,7 +67,7 @@ pub(crate) fn extract_from_tool_use_result(
     // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --
     if let Some(file) = tur.get("file").and_then(|v| v.as_object()) {
         let path = file.get("filePath").and_then(serde_json::Value::as_str);
-        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {
+        if path_matches(target_file, path.unwrap_or_default(), cwds.call) {
             push_read_file_object(line_no, turn_index, ts, file, SnapSource::FullRead, events);
             return;
         }
@@ -64,7 +76,7 @@ pub(crate) fn extract_from_tool_use_result(
     // -- (2) Write result: {type:create|update, filePath, content, ...} --
     // -- (3) Edit result: {filePath, oldString, newString, structuredPatch, ...} (no type) --
     let path = tur.get("filePath").and_then(serde_json::Value::as_str);
-    if !path_matches(target_file, path.unwrap_or_default(), record_cwd) {
+    if !path_matches(target_file, path.unwrap_or_default(), cwds.call) {
         return;
     }
     let has_edit_strings = tur.get("oldString").is_some() || tur.get("newString").is_some();

@@ -1430,7 +1430,8 @@ surface change bumps the PATCH.
   `--coverage` counted all six events. A target that matches more than one distinct file
   in scope is now refused before anything is replayed, in every mode, naming each
   candidate and the count - a relative record path counts, as the file its record's shell
-  cwd resolves it to, so `other/lib.rs` beside `/p/m/lib.rs` is refused too. A file-history
+  cwd resolves it to (a tool result's `filePath` through the cwd of the call it answers), so
+  `other/lib.rs` beside `/p/m/lib.rs` is refused too. A file-history
   snapshot key is relative and its line carries no cwd, so it resolves against the
   transcript's first cwd, the directory it is relative to, and names the same file as the
   absolute Write/Edit path it is the tail of rather than a second one. A candidate, or a

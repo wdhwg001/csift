@@ -470,3 +470,22 @@ fn extract_token_capped_read_is_never_a_full_snapshot() {
     }
     assert!(matches!(ev[2].kind, EventKind::FullSnapshot { .. }));
 }
+
+#[test]
+fn a_relative_result_file_path_takes_the_cwd_of_its_call() {
+    // The call ran in /w/a; its result was written after the shell moved to /w/b. The result's
+    // relative `filePath` names the file under the CALL's cwd (the anchor law).
+    let records = numbered(&[
+        r#"{"type":"user","cwd":"/w/a","message":{"role":"user","content":"write n"}}"#,
+        r#"{"type":"assistant","cwd":"/w/a","message":{"role":"assistant","content":[{"type":"tool_use","id":"tw0","name":"Write","input":{"file_path":"./n.txt","content":"N1\n"}}]}}"#,
+        r#"{"type":"user","cwd":"/w/b","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tw0","content":"File created successfully at: ./n.txt"}]},"toolUseResult":{"type":"create","filePath":"./n.txt","content":"N1\n"}}"#,
+    ]);
+    let at_call = extract_events(&records, "/w/a/n.txt");
+    assert_eq!(at_call.len(), 1, "{at_call:?}");
+    assert!(extract_events(&records, "/w/b/n.txt").is_empty());
+    // With no call in reach the result's own cwd is the base.
+    let orphan = numbered(&[
+        r#"{"type":"user","cwd":"/w/b","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tx","content":"ok"}]},"toolUseResult":{"type":"create","filePath":"./n.txt","content":"N1\n"}}"#,
+    ]);
+    assert_eq!(extract_events(&orphan, "/w/b/n.txt").len(), 1);
+}
