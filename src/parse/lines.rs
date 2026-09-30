@@ -140,6 +140,27 @@ pub fn line_has_user_role_marker(line: &[u8]) -> bool {
     line_role_value_matches(line, true, false)
 }
 
+/// `"role"` is `"assistant"` only.
+pub fn line_has_assistant_role_marker(line: &[u8]) -> bool {
+    line_role_value_matches(line, false, true)
+}
+
+/// An assistant line that may carry an `AskUserQuestion` tool_use. A surface whose
+/// prefilter keeps file traffic alone (`files`, `recover`) admits it too, because a
+/// marker-only answer opens a turn only when its `tool_use_id` names an AskUserQuestion
+/// call in `model::CallIndex`, which the chain's builder fills from the FULL records a
+/// surface parsed - a spine row carries no payload (claim REC-104). Without the call's line
+/// such an answer opens a turn on `search`/`show`/`stats`/`verbatim` and on neither of
+/// those two, and every later turn numbers one lower there. The tool name is a bare value
+/// substring (the needle law), `&&`-gated on the assistant role; a line that merely QUOTES
+/// the word costs one parse and adds nothing to the index, which reads only a `tool_use`
+/// block of that name.
+pub(crate) fn line_may_carry_ask_call(line: &[u8]) -> bool {
+    static ASK: std::sync::LazyLock<memchr::memmem::Finder<'static>> =
+        std::sync::LazyLock::new(|| memchr::memmem::Finder::new(b"AskUserQuestion"));
+    ASK.find(line).is_some() && line_has_assistant_role_marker(line)
+}
+
 /// Strip a trailing `\r`/`\n` and report whether the remaining bytes are non-blank.
 pub(crate) fn line_payload(line: &[u8]) -> Option<&[u8]> {
     let line = line.strip_suffix(b"\n").unwrap_or(line);

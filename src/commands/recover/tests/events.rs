@@ -368,6 +368,10 @@ fn line_is_recover_candidate_matches_each_distinct_marker() {
     assert!(line_is_recover_candidate(
         br#"{"attachment":{"type":"edited_text_file"}}"#
     ));
+    // The AskUserQuestion call line: the turn boundary reads its id.
+    assert!(line_is_recover_candidate(
+        br#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"AskUserQuestion"}]}}"#
+    ));
     // A line carrying NONE of the markers is rejected (the all-false fall-through).
     assert!(!line_is_recover_candidate(
         br#"{"type":"summary","leafUuid":"x"}"#

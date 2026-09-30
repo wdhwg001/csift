@@ -197,6 +197,10 @@ fn line_prefilter_keeps_candidates_drops_noise() {
     assert!(line_is_files_candidate(
         br#"{"toolUseResult":{"filePath":"/p/x"}}"#
     ));
+    // The AskUserQuestion call line: the turn boundary reads its id.
+    assert!(line_is_files_candidate(
+        br#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"AskUserQuestion"}]}}"#
+    ));
     // A pure-noise attachment line with none of the markers is dropped.
     assert!(!line_is_files_candidate(
         br#"{"type":"attachment","data":{"x":1}}"#

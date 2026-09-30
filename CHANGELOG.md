@@ -1461,9 +1461,11 @@ surface change bumps the PATCH.
   opened a turn. The fallback now answers only when that result's `tool_use_id` names an
   AskUserQuestion call of the same transcript; such a shell result keeps
   `agent.tool.result`, and every surface that numbers turns (`search`, `show`, `stats`,
-  `verbatim`, `files`, `recover`, `image`) counts one turn fewer on its transcript. A
-  surface that reads no whole transcript (the `list` preview, the live tail) renders an
-  answer from its structured fields only.
+  `verbatim`, `files`, `recover`, `image`) counts one turn fewer on its transcript.
+  `files` and `recover`, whose prefilters keep file traffic, also parse the line carrying
+  the AskUserQuestion call, so a genuine marker-only answer opens its turn there as it does
+  on every other surface. A surface that reads no whole transcript (the `list` preview,
+  the live tail) renders an answer from its structured fields only.
 - **`verbatim --format json` names itself in its header.** The header line read
   `"command":"turns"`, the command's name before its rename, while every other command's
   header names that command; it reads `"command":"verbatim"`.

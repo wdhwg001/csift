@@ -185,6 +185,23 @@ fn role_marker_is_serialization_tolerant() {
     assert!(!line_has_user_role_marker(
         br#"{"message":{"role": "assistant"}}"#
     ));
+    // The assistant-only variant, and the AskUserQuestion call line files/recover admit:
+    // the tool name AND the assistant role, never either alone.
+    assert!(line_has_assistant_role_marker(
+        br#"{"message":{"role": "assistant"}}"#
+    ));
+    assert!(!line_has_assistant_role_marker(
+        br#"{"message":{"role": "user"}}"#
+    ));
+    assert!(line_may_carry_ask_call(
+        br#"{"message":{"role":"assistant","content":[{"type":"tool_use","name":"AskUserQuestion"}]}}"#
+    ));
+    assert!(!line_may_carry_ask_call(
+        br#"{"message":{"role":"assistant","content":[{"type":"text","text":"ask"}]}}"#
+    ));
+    assert!(!line_may_carry_ask_call(
+        br#"{"type":"attachment","content":"AskUserQuestion"}"#
+    ));
     // A later valid marker after an earlier false hit is still found.
     assert!(line_has_role_marker(
         br#"{"a":{"role":"admin"},"message":{"role": "user"}}"#

@@ -21142,7 +21142,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "365-371",
+          "lines": "368-374",
           "snippet": "/// Collect the SCOPE-ACCOUNTING commands of one transcript: every mutating-CLASS\n/// marker a Bash command yields (`fmt:cargo`, `interp:python`, `pkg:npm`,\n/// `extract:tar`, `git:<sub>` - commands that mutate files they never name), plus\n/// every `PowerShell` tool call (its command text is never lexically parsed, so any\n/// file it touched is invisible; see AGENTS 3.9). Target-independent by nature: these\n/// commands CANNOT be joined to a `--file`, which is exactly why they are counted and\n/// disclosed per window instead of silently ignored."
         }
       ],
@@ -22099,7 +22099,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "365-371",
+          "lines": "368-374",
           "snippet": "/// Collect the SCOPE-ACCOUNTING commands of one transcript: every mutating-CLASS\n/// marker a Bash command yields (`fmt:cargo`, `interp:python`, `pkg:npm`,\n/// `extract:tar`, `git:<sub>` - commands that mutate files they never name), plus\n/// every `PowerShell` tool call (its command text is never lexically parsed, so any\n/// file it touched is invisible; see AGENTS 3.9). Target-independent by nature: these\n/// commands CANNOT be joined to a `--file`, which is exactly why they are counted and\n/// disclosed per window instead of silently ignored."
         }
       ],
@@ -34116,7 +34116,7 @@
       "code": [
         {
           "path": "src/parse/lines.rs",
-          "lines": "144-152",
+          "lines": "165-173",
           "snippet": "pub(crate) fn line_payload(line: &[u8]) -> Option<&[u8]> {\n    let line = line.strip_suffix(b\"\\n\").unwrap_or(line);\n    let line = line.strip_suffix(b\"\\r\").unwrap_or(line);\n    if line.iter().all(u8::is_ascii_whitespace) {\n        None\n    } else {\n        Some(line)\n    }\n}"
         }
       ],
@@ -47725,7 +47725,7 @@
       "code": [
         {
           "path": "src/parse/lines.rs",
-          "lines": "144-152",
+          "lines": "165-173",
           "snippet": "pub(crate) fn line_payload(line: &[u8]) -> Option<&[u8]> {\n    let line = line.strip_suffix(b\"\\n\").unwrap_or(line);\n    let line = line.strip_suffix(b\"\\r\").unwrap_or(line);\n    if line.iter().all(u8::is_ascii_whitespace) {\n        None\n    } else {\n        Some(line)\n    }\n}"
         }
       ],
@@ -51570,7 +51570,7 @@
       "code": [
         {
           "path": "src/parse/lines.rs",
-          "lines": "144-152",
+          "lines": "165-173",
           "snippet": "pub(crate) fn line_payload(line: &[u8]) -> Option<&[u8]> {\n    let line = line.strip_suffix(b\"\\n\").unwrap_or(line);\n    let line = line.strip_suffix(b\"\\r\").unwrap_or(line);\n    if line.iter().all(u8::is_ascii_whitespace) {\n        None\n    } else {\n        Some(line)\n    }\n}"
         }
       ],
@@ -55954,12 +55954,12 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "475",
+          "lines": "478",
           "snippet": "            let has_structured_result = rec.tool_use_result.is_some();"
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "484-489",
+          "lines": "487-492",
           "snippet": "                        if has_structured_result {\n                            ids_with_result.insert(id.clone());\n                        }\n                        if *is_error == Some(true) {\n                            failed_ids.insert(id.clone());\n                        }"
         }
       ],
@@ -56867,7 +56867,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "455-457",
+          "lines": "458-460",
           "snippet": "    for (stamp, idxs) in view.groups() {\n        // tool_use_id -> file_path for THIS turn's Read/Edit/Write/MultiEdit tool_uses.\n        let mut id_to_path: BTreeMap<String, String> = BTreeMap::new();"
         },
         {
@@ -63871,7 +63871,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "458-464",
+          "lines": "461-467",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully...\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content.\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
         }
       ],
@@ -64021,7 +64021,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "458-462",
+          "lines": "461-465",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully...\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content."
         }
       ],
@@ -64207,7 +64207,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "458-464",
+          "lines": "461-467",
           "snippet": "        // tool_use_ids whose result carrier carries the structured `toolUseResult` echo -\n        // i.e. the ops `extract_from_tool_use_result` can reconstruct from. SUBAGENT and\n        // workflow-agent transcripts OMIT `toolUseResult` (the tool_result is just a\n        // `\"File created successfully...\"` string), so those ids are absent here and the\n        // input-side fallback below supplies their content.\n        let mut ids_with_result: std::collections::HashSet<String> =\n            std::collections::HashSet::new();"
         }
       ],
@@ -64313,7 +64313,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "475-482",
+          "lines": "478-485",
           "snippet": "            let has_structured_result = rec.tool_use_result.is_some();\n            if let Some(blocks) = rec.blocks() {\n                for b in blocks {\n                    if let Block::ToolResult {\n                        tool_use_id: Some(id),\n                        is_error,\n                        ..\n                    } = b"
         }
       ],
@@ -66133,6 +66133,11 @@
           "path": "src/model/predicates.rs",
           "lines": "344-357",
           "snippet": "        blocks.iter().any(|b| match b {\n            Block::ToolResult {\n                tool_use_id,\n                content,\n                ..\n            } => {\n                calls.names_ask(tool_use_id.as_deref())\n                    && content\n                        .as_ref()\n                        .map(tool_result_content_text)\n                        .is_some_and(|t| is_auq_answer_text(&t))\n            }\n            _ => false,\n        })"
+        },
+        {
+          "path": "src/parse/lines.rs",
+          "lines": "158-161",
+          "snippet": "pub(crate) fn line_may_carry_ask_call(line: &[u8]) -> bool {\n    static ASK: std::sync::LazyLock<memchr::memmem::Finder<'static>> =\n        std::sync::LazyLock::new(|| memchr::memmem::Finder::new(b\"AskUserQuestion\"));\n    ASK.find(line).is_some() && line_has_assistant_role_marker(line)"
         }
       ],
       "states": [
@@ -66169,7 +66174,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "Claude Code 2.1.258 synthesizes the AskUserQuestion answer text written into the answering `tool_result` in ONE result mapper (164278128) whose body is a FOUR-ARM LADDER over FIVE templates (164278529), in this order: (1) `afkTimeoutMs` set yields the idle text `No response after <N>s - the user may be away from keyboard. ...` (164274496), optionally followed by `Before going idle the user had selected: <summary>.`; (2) a non-blank freeform `response` yields `The user responded: <text>`; (3) a non-empty answers summary yields `Your questions have been answered: <summary>. You can now continue with these answers in mind.` when every answer is one of the listed options, else `The user answered: <summary>. Read the answers carefully - they may request clarification, changes, or that you not proceed - and follow what they actually say.`; (4) otherwise `The user did not answer the questions.` Every arm assigns the text and one writer returns it as {type:\"tool_result\", content, tool_use_id} (164279300). Only arms 2 and 3 are answers. The summary is built from `answers` plus `annotations`, and the sentinel `(notes only)` (164274473) renders a line as `\"<question>\"=(no option selected)`. Each of the four templates the mapper assigns occurs exactly twice in the 2.1.258 executable, once in the packed constant table (75413708, 75413736, 75413840, 75414140) and once in the readable mapper (164278626, 164278993, 164279085, 164279260); the idle template's head `No response after ` follows the same pattern - interned in that table at 74944204 and read in the template function `eNn` at 164274519 - but a whole-executable count of that phrase returns 4, not 2, because the dialog's own idle banner is a SEPARATE interned string ` No response after ` carrying a leading space, and its two copies (the packed table and the banner's child list, each beginning one byte below 71647977 and 179911217) contain the phrase without being the template. Three of the four occurrences therefore sit outside the mapper and only two are the template's, so a bare grep for the phrase is neither a mapper-only nor a template-only count. No UTF-16 encoding of the phrase occurs anywhere in the executable: what is stored 16-bit beside the table entry at 74944204 is the template's TAIL, `s - the user may be away from keyboard. ...`, whose em dash is outside Latin-1 and widens that interned string, the same head-8-bit/tail-16-bit split the table shows for `The user answered: ` at 75413840. The historical `User has answered your questions` phrasing occurs zero times in the 2.1.257, 2.1.258, 2.1.259 and 2.1.260 executables; across the native builds it is present from 2.0.30 through 2.1.144 and gone from 2.1.145 on, the build where `Your questions have been answered` appears; 2.1.144 and 2.1.145 are adjacent entries in the 504-entry published version list, so that step is as tight as the list allows and it is this range's floor. The rest of the ladder arrives above it: `The user responded: ` and `The user did not answer the questions.` are absent at 2.1.152 and present from 2.1.160, with six published entries between those two readings and none of them cached, so that floor is a bracket rather than a step; the idle pair `No response after ` and `Before going idle the user had selected: ` is absent at 2.1.197 and present from 2.1.198; `The user answered: ` is absent at 2.1.215 and present from 2.1.216. So the ladder carries one template at the range floor, three from 2.1.160, the full four-arm shape from 2.1.198 and the fifth template from 2.1.216, and the byte offsets and corpus counts stated here are readings at 2.1.258. Corpus census over 8245 transcripts under the projects root (journal and elicitation-sidecar files excluded; one count per `tool_result` block whose `tool_use_id` joins an AskUserQuestion `tool_use` block in the same transcript): 137 carriers, all paired - 100 `Your questions have been answered`, 18 `The user answered:`, 3 idle-timeout, 10 denial carriers (`The user doesn't want to proceed with this tool use...`, is_error true, 8 of them carrying the clarify-exit feedback as the `To tell you how to proceed, the user said:` tail) and 6 `InputValidationError` carriers (is_error true); zero carriers of `User has answered your questions`, `The user responded:` or `The user did not answer the questions.`",
-          "depends": "csift's `AUQ_ANSWER_MARKERS` carries four phrasings (`User has answered your questions`, `Your questions have been answered`, `The user answered:`, `The user responded:`) and the search prefilter's verifiable synth-marker set carries the same four, so a marker-only carrier under any of them opens a turn and classifies `user.answer`; the unanswered branch (`The user did not answer the questions.`) and the idle-timeout branch (`No response after ...`) are deliberately excluded so neither opens one. The retired first marker is kept because it costs nothing and older transcripts still hold it - it is the emitted form of the builds from 2.0.30 through 2.1.144. The structured signal is primary: `is_auq_answer_boundary` requires a non-errored `tool_result` carrier and then takes a non-empty `toolUseResult.answers` map or a non-blank `response`, falling back to the marker text only when neither is present. Of the 137 AskUserQuestion carriers 121 carry a dict `toolUseResult` (71 answers only, 47 answers plus non-empty `annotations`, 3 `afkTimeoutMs` beside an empty answers map) and the other 16 are the denial and validation carriers, every one `is_error` true, so the gate admits exactly the 118 real answers and excludes both the 3 idle-timeout carriers and the 16 errored ones; 32 of the admitted carriers use the `(notes only)` sentinel, which csift renders from the same `toolUseResult`. The START-anchored `trim_start` + `starts_with` marker test is necessary and not sufficient: the retired phrasing alone occurs 1319 times across 159 transcripts, where a `contains` test would false-positive on every occurrence, and a `tool_result` still OPENS with a marker whenever the tool printed one - a shell run over the harness binary or a grep over these phrasings writes a carrier with no `toolUseResult` whose content starts with the answer text. So the fallback also requires the `tool_result` carrying the marker to name, by its `tool_use_id`, an AskUserQuestion `tool_use` of the same transcript - the join this claim's own census counts by - and a result naming no id names none. The join is csift's `CallIndex`, built ONCE per transcript by the conversation chain from the full records it holds and read by the turn boundary, the `user.answer` label and the rendered opener alike, so the three cannot disagree about a carrier; a surface holding no transcript (the `list` preview, the live tail) takes the structured signals alone, and the search prefilter renders as if every result answered an ask, the superset its whole-file gate needs. A shell carrier of that shape keeps `agent.tool.result` and opens no turn.",
+          "depends": "csift's `AUQ_ANSWER_MARKERS` carries four phrasings (`User has answered your questions`, `Your questions have been answered`, `The user answered:`, `The user responded:`) and the search prefilter's verifiable synth-marker set carries the same four, so a marker-only carrier under any of them opens a turn and classifies `user.answer`; the unanswered branch (`The user did not answer the questions.`) and the idle-timeout branch (`No response after ...`) are deliberately excluded so neither opens one. The retired first marker is kept because it costs nothing and older transcripts still hold it - it is the emitted form of the builds from 2.0.30 through 2.1.144. The structured signal is primary: `is_auq_answer_boundary` requires a non-errored `tool_result` carrier and then takes a non-empty `toolUseResult.answers` map or a non-blank `response`, falling back to the marker text only when neither is present. Of the 137 AskUserQuestion carriers 121 carry a dict `toolUseResult` (71 answers only, 47 answers plus non-empty `annotations`, 3 `afkTimeoutMs` beside an empty answers map) and the other 16 are the denial and validation carriers, every one `is_error` true, so the gate admits exactly the 118 real answers and excludes both the 3 idle-timeout carriers and the 16 errored ones; 32 of the admitted carriers use the `(notes only)` sentinel, which csift renders from the same `toolUseResult`. The START-anchored `trim_start` + `starts_with` marker test is necessary and not sufficient: the retired phrasing alone occurs 1319 times across 159 transcripts, where a `contains` test would false-positive on every occurrence, and a `tool_result` still OPENS with a marker whenever the tool printed one - a shell run over the harness binary or a grep over these phrasings writes a carrier with no `toolUseResult` whose content starts with the answer text. So the fallback also requires the `tool_result` carrying the marker to name, by its `tool_use_id`, an AskUserQuestion `tool_use` of the same transcript - the join this claim's own census counts by - and a result naming no id names none. The join is csift's `CallIndex`, built ONCE per transcript by the conversation chain from the full records it holds - a spine row carries no payload, so every surface that builds the chain parses the line carrying the call, and `files` and `recover`, whose prefilters keep file traffic, admit it by its own needle (`parse::line_may_carry_ask_call`: the tool name, gated on the assistant role) - and read by the turn boundary, the `user.answer` label and the rendered opener alike, so the three cannot disagree about a carrier; a surface holding no transcript (the `list` preview, the live tail) takes the structured signals alone, and the search prefilter renders as if every result answered an ask, the superset its whole-file gate needs. A shell carrier of that shape keeps `agent.tool.result` and opens no turn.",
           "instrument": "In the corpus: per transcript, map every AskUserQuestion `tool_use` id to the `tool_result` block naming it, bucket each result by which phrasing its flattened content starts with after `trim_start`, and cross that with the `toolUseResult` fields present (dict with a non-empty `answers`, dict with `afkTimeoutMs`, or a string); scope every *.jsonl under the projects root except `journal.jsonl` and `elicitations.jsonl`; one count per joined `tool_result` block. csift's side: `csift search '' -t user.answer --count-by label` corpus-wide, whose total is the structured answers plus any marker-only carrier. In the executable: `grep -abo` each template literal and read the mapper window at the readable copy; for the version floors, `grep -a -c` the same literals in each native build.",
           "probe": {
             "kind": "csift",
@@ -66189,7 +66194,8 @@
             "An earlier reading this claim's text was corrected against: (b) the surviving site is a THREE-branch conditional, quoted verbatim from the binary: `Your questions have been answered: ${_}. You can now continue with these answers in mind.`:`The user answered: ${_}. Read the answers carefully \\u2014 they may request clarification, changes, or that you not proceed \\u2014 and follow what they actually say.`;else v=\"The user did not answer the questions.\" (c) on disk: 100 carriers START with 'Your questions have been answered', 16 START with 'The user answered: ', ZERO with 'User has answered your questions', ZERO with 'The user did not answer the questions'. (d) the pattern 'User has answered your questions' still matches 313 records corpus-wide but every one is a quotation inside prose, a tool result or an attachment - none is a carrier and none keys under user.answer. One per tool_result carrier whose rendered content STARTS with the phrasing (trim_start then starts_with, matching the code's own test); a mid-content quotation does not count, which is what separates the 313 pattern matches from the 0 real carriers. The live blast radius is currently nil because the marker test is only the FALLBACK - all 16 `The user answered:` carriers also carry the structured `toolUseResult.answers` object, so `is_auq_answer_boundary` still opens their turns and they still classify `user.answer` (see TURN-010). The exposure is latent and one-sided: any carrier that ever arrives WITHOUT `toolUseResult` under the new phrasing would silently stop opening a turn. Code sites src/model/markers.rs:3-9, 14-17 and 30-33 all match verbatim - the code is exactly as the claim describes it, which is precisely why the drift shows up as a missing marker rather than a wrong one. (b) strings -n 6 ~/.local/share/claude/versions/2.1.258 | rg -o '.{0,60}Your questions have been answered.{0,420}'; (c) python3 over every top-level transcript: for each type=='user' record carrying a tool_result block, take the block's rendered content and count it when it STARTS WITH one of the candidate phrasings; (d) csift search '<phrasing>' --count-by label for each phrasing",
             "An earlier reading, superseded by the receipt now standing on this state (python3 over every *.jsonl under the projects root except `journal.jsonl` and `elicitations.jsonl`...): Result phrasings: 100 'Your questions have been answered' (59 with answers only, 41 with answers+annotations), 18 'The user answered:' (12 answers, 6 answers+annotations), 3 'No response after' (all three carrying afkTimeoutMs), 10 rejection texts; The ladder was read in the shipped binary and every live phrasing it can emit was then counted on disk through an id join, which is what turns 'three branches' into five templates with 100 / 18 / 3 / 0 / 0 carriers. The producer leg traced to closure in the 2.1.258 binary (trigger AskUserQuestion dialog submit async function Boe(T) @181436165; gate the four-arm ladder that picks the answer template @164278529; writer return{type:\"tool_result\",content:v,tool_use_id:f} @164279300), each excerpt re-read within 400 bytes of its offset; specimen leg: python3 over every *.jsonl under the projects root (8027 files): per file, map every AskUserQuestion tool_use id to the tool_result naming it, then bucket each result by the phrasing its flattened text starts with and cross that with the toolUseResult fields present Counting rule: three hops (trigger, gate, writer) as verbatim excerpts at byte offsets; a negative closes only by an enumeration of every site; attribution derives from the legs (partial + observed = specimen-only); one per AskUserQuestion tool_use id joined to its tool_result in the same file; the phrasing is taken after trim_start, as the code's own test does",
             "An earlier reading, superseded by the receipt now standing on this state (python3 over every *.jsonl under the projects root except `journal.jsonl` and `elicitations.jsonl`...): every sentence of the new text is backed by a cited hop, a dated build or a specimen receipt; an untraced sub-fact is narrowed out into residue, never asserted",
-            "No backward-compatibility claim is split out of this one. A split exists so each half can cite the arm that serves it, and both halves here are served by ONE table: the retired prefix and the current five sit together in csift's marker list, and the same membership test reads a record written at either build. Two claims would carry the same six code sites and state what the two ranges already state."
+            "No backward-compatibility claim is split out of this one. A split exists so each half can cite the arm that serves it, and both halves here are served by ONE table: the retired prefix and the current five sit together in csift's marker list, and the same membership test reads a record written at either build. Two claims would carry the same six code sites and state what the two ranges already state.",
+            "An earlier reading, superseded by the receipt now standing on this state, which re-runs its census on the build whose files and recover prefilters admit the call line and adds the cross-surface comparison (csift search '' -t user.answer --format json over every *.jsonl under the live projects root, each hit paired to the `tool_use` its carrier names, every step once under the marker fallback without the call join and once with it): without the join 133 `user.answer` records in 27 transcripts - 127 carry a `toolUseResult` object and answer an AskUserQuestion call, 6 carry `toolUseResult` null and answer a Bash call, all 6 in subagent transcripts, each opening the second of its transcript's 2 turns; the phrase query `csift search 'Your questions have been answered' -t user.answer` returned 5 of those 6 without the join and 0 with it; with the join 127 records in 21 transcripts, every one answering an AskUserQuestion call, and each of the 6 transcripts reads 1 turn. Excluding the measuring session's own tree (its top-level transcript holds 6 of the 127, its subagent transcripts all 6 shell carriers): 121 records in 20 transcripts both without the join and with it. Counting rule: one per `user.answer` record the search emits; a turn count is `stats`' `turns` for one transcript."
           ],
           "producer_chain": [
             {
@@ -66249,10 +66255,10 @@
           "verified": {
             "claude_code": "2.1.258",
             "verdict": "refined",
-            "instrument": "csift search '' -t user.answer --format json over every *.jsonl under the live projects root; per hit, the call its `result_of` edge names, read with csift show @<transcript> --line <that line> --raw | jq '.message.content[] | select(.type==\"tool_use\") | .name', and the carrier's own line through jq '.toolUseResult | type'; csift search 'Your questions have been answered' -t user.answer over the same root; csift stats @<transcript> on each transcript whose answer changed; every step once under the marker fallback without the call join and once with it",
-            "observed": "Whole live root at its instant, the measuring session's tree included. Without the join: 133 `user.answer` records in 27 transcripts - 127 carry a `toolUseResult` object and answer an AskUserQuestion call, 6 carry `toolUseResult` null and answer a Bash call, all 6 in subagent transcripts, each opening the second of its transcript's 2 turns; the phrase query returns 5 of those 6. With the join: 127 records in 21 transcripts, every one answering an AskUserQuestion call; the 6 read `agent.tool.result`, each of their transcripts reads 1 turn, and the phrase query returns 0. Excluding the measuring session's own tree (its top-level transcript holds 6 of the 127, its subagent transcripts all 6 shell carriers): 121 records in 20 transcripts both without the join and with it, and 0 shell carriers.",
-            "rule": "One per `user.answer` record `csift search` emits; the paired call is the `tool_use` block whose id the carrier's `tool_result` names, and a turn count is `stats`' `turns` for one transcript",
-            "note": "The marker fallback now pairs with the call: a `tool_result` opening with an answer marker answers only when its `tool_use_id` names an AskUserQuestion `tool_use` of the same transcript. The depends text states the join and where it is read; the residue line on the six shell carriers states that they keep their tool-result leaf. On this root every shell carrier of that shape sits inside the measuring session's own tree, so the excluded reading does not move."
+            "instrument": "csift search '' -t user.answer --max-count 0 --format json over every *.jsonl under the live projects root, each hit's `toolUseResult` type and the name of the call its result names read with csift show @<transcript> --line <line> --raw | jq; then, on every top-level *.jsonl under that root carrying an AskUserQuestion `tool_use` block, csift files <transcript> --no-subagents --by timeline --format json against csift search '' <transcript> --no-subagents -t agent.tool.use --max-count 0 --format json, comparing the `turn_index` the two give one jsonl line; the comparison once on the build whose files and recover prefilters drop the call's line and once on the build that admits it",
+            "observed": "Whole live root at its instant, the measuring session's tree included: 127 `user.answer` records in 21 transcripts, every one carrying a `toolUseResult` object and answering an AskUserQuestion call, so the root holds no marker-only answer. Cross-surface: 23 top-level transcripts carry an AskUserQuestion call; on the build that drops the call line 26,783 `files` mutation rows, 26,741 of them on a line `search` also reports, 0 differing turn indices; on the build that admits it 26,786 rows, 26,744 compared, 0 differing (the root grew by three rows between the two readings). With the measuring session's own tree excluded: 21 transcripts, 22,865 rows, 22,823 compared, 0 differing on both builds.",
+            "rule": "One per `user.answer` record the search emits, joined to the `tool_use` its carrier names; one comparison per `files` mutation row whose jsonl line also carries a `search -t agent.tool.use` hit, a mismatch being a comparison whose two `turn_index` values differ",
+            "note": "The call index is filled from the records a surface parsed, and the files and recover prefilters dropped the assistant line carrying the AskUserQuestion call, so a marker-only answer opened its turn on search, show, stats and verbatim and on neither of those two; both prefilters now admit that line. With no marker-only answer on this root the comparison reads 0 on both builds, and the shape is pinned on the fixture of `search::taxonomy::openers::an_answer_marker_opens_a_turn_only_on_the_askuserquestion_result`, where `files` put the Write after the answer in turn 0 and `recover --patches` read `turns 0..0`, and every surface reads turn 1 now."
           }
         }
       ]
@@ -69292,7 +69298,7 @@
         },
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "411-419",
+          "lines": "414-422",
           "snippet": "                } else if name == \"PowerShell\" && cmd.is_some() {\n                    out.push(OpaqueCommand {\n                        session_id: session_id.to_string(),\n                        line_no,\n                        turn_index,\n                        timestamp_utc: rec.timestamp.clone(),\n                        marker: \"powershell\".to_string(),\n                    });\n                }"
         }
       ],
@@ -70945,7 +70951,7 @@
       "code": [
         {
           "path": "src/commands/recover/scan.rs",
-          "lines": "411-419",
+          "lines": "414-422",
           "snippet": "                } else if name == \"PowerShell\" && cmd.is_some() {\n                    out.push(OpaqueCommand {\n                        session_id: session_id.to_string(),\n                        line_no,\n                        turn_index,\n                        timestamp_utc: rec.timestamp.clone(),\n                        marker: \"powershell\".to_string(),\n                    });\n                }"
         }
       ],

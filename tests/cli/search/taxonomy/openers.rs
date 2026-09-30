@@ -226,6 +226,8 @@ fn an_answer_marker_opens_a_turn_only_on_the_askuserquestion_result() {
             r#"{"type":"assistant","uuid":"a2","parentUuid":"r1","timestamp":"2026-06-07T05:00:03.000Z","message":{"id":"m2","role":"assistant","content":[{"type":"tool_use","id":"q1","name":"AskUserQuestion","input":{"questions":[{"question":"Pick","header":"P","options":[{"label":"zqxAnswered"}]}]}}]}}"#, "\n",
             r#"{"type":"user","uuid":"r2","parentUuid":"a2","timestamp":"2026-06-07T05:00:04.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"q1","content":"Your questions have been answered: \"Pick\"=\"zqxAnswered\". You can now continue with these answers in mind."}]}}"#, "\n",
             r#"{"type":"assistant","uuid":"a3","parentUuid":"r2","timestamp":"2026-06-07T05:00:05.000Z","message":{"id":"m3","role":"assistant","content":[{"type":"text","text":"noted"}]}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a4","parentUuid":"a3","timestamp":"2026-06-07T05:00:06.000Z","message":{"id":"m4","role":"assistant","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/p/answers/out.txt","content":"zqxWritten\n"}}]}}"#, "\n",
+            r#"{"type":"user","uuid":"r4","parentUuid":"a4","timestamp":"2026-06-07T05:00:07.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"File created successfully at: /p/answers/out.txt"}]}}"#, "\n",
         ),
     );
     let at = at(sess);
@@ -285,4 +287,32 @@ fn an_answer_marker_opens_a_turn_only_on_the_askuserquestion_result() {
         .filter_map(|u| u["line"].as_u64())
         .collect();
     assert_eq!(openers, vec![1, 5], "{}", verbatim.stdout);
+
+    // `files` and `recover` prefilter for file traffic and still read the call index: the
+    // Write after the answer is in turn 1 there too.
+    let files = h.run(&["files", &at, "--by", "timeline", "--format", "json"]);
+    let turns: Vec<u64> = json_rows(&files.stdout, "mutation")
+        .iter()
+        .filter_map(|m| m["turn_index"].as_u64())
+        .collect();
+    assert_eq!(turns, vec![1], "{}", files.stdout);
+    let windowed = h.run(&[
+        "files", &at, "--by", "timeline", "--turn", "1", "--format", "json",
+    ]);
+    assert_eq!(
+        json_rows(&windowed.stdout, "mutation").len(),
+        1,
+        "{}",
+        windowed.stdout
+    );
+    let file = "/p/answers/out.txt";
+    let patches = h.run(&["recover", &at, "--file", file, "--patches"]);
+    assert!(patches.stdout.contains("turns 1..1"), "{}", patches.stdout);
+    let cov = h.run(&["recover", &at, "--file", file, "--turn", "1", "--coverage"]);
+    assert!(
+        cov.success && cov.stdout.contains("events: 1 write"),
+        "{}{}",
+        cov.stdout,
+        cov.stderr
+    );
 }

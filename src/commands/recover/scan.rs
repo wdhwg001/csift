@@ -355,7 +355,10 @@ pub(crate) fn line_is_recover_candidate(line: &[u8]) -> bool {
                 memmem::Finder::new(b"tool_use_error"),
             ]
         });
-    crate::parse::line_has_user_role_marker(line) || NEEDLES.iter().any(|f| f.find(line).is_some())
+    // The AskUserQuestion call line: the turn boundary reads its id.
+    crate::parse::line_has_user_role_marker(line)
+        || NEEDLES.iter().any(|f| f.find(line).is_some())
+        || crate::parse::line_may_carry_ask_call(line)
 }
 
 // -----------------------------------------------------------------------------
