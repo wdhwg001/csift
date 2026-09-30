@@ -1497,6 +1497,10 @@ surface change bumps the PATCH.
   names the manifest line, the summary counts it beside the recovered files, the refusal
   names both outcomes and lists the first ten candidates with a count of the rest, and
   `recover --help` states that two spellings of one file are refused as two.
+- **The `agents` teammate hint no longer offers SendMessage's refusal as the reason TaskStop
+  takes the routing id.** Its third line now states the two tools' facts apart: the routing id
+  `Name@Team` is the form TaskStop takes, and SendMessage, which refuses any `to` carrying `@`,
+  takes the bare name or the transcript id.
 
 ### Performance
 
