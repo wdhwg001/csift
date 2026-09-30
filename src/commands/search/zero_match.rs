@@ -73,8 +73,13 @@ pub(crate) fn diagnose_zero_match(
     // A `--turn` window leaves out every record outside turn numbering - a recalled draft, a
     // rewound opener, a record on an abandoned branch - so a window can empty a result the
     // label filter did not. The same pattern and label filter with the window dropped, kept
-    // to those records, says how many it left out.
-    let outside_turns = if turn_range.is_some() {
+    // to those records, says how many it left out. Those records are exactly the ABANDONED
+    // ones, which the first scan already counted over every transcript it read (a file the
+    // whole-file gate skipped holds no match for the probe either, since the probe keeps the
+    // pattern), so a scope with none needs no probe to answer zero.
+    let outside_turns = if turn_range.is_some() && outcome.chain.abandoned_records == 0 {
+        Some(None)
+    } else if turn_range.is_some() {
         let unnumbered: Vec<Exchange> = probe(args, None)?
             .into_iter()
             .filter(|e| e.turn_index.is_none())

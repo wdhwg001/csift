@@ -454,4 +454,20 @@ fn a_turn_window_over_a_session_with_nothing_abandoned_adds_no_line() {
     assert!(out.success, "{}", out.stderr);
     assert!(out.stderr.contains("DEFINITIVE absence"), "{}", out.stderr);
     assert!(!out.stderr.contains(TW_LINE), "{}", out.stderr);
+    // The first scan counted no abandoned record, so the answer is 0 without the probe -
+    // the same key the probe would have written, never the null of a run with no window.
+    let j = h.run(&[
+        "search",
+        "",
+        at(sess).as_str(),
+        "-t",
+        "user.unsent",
+        "--turn",
+        "..",
+        "--format",
+        "json",
+    ]);
+    let summary = json_summary(&j.stdout);
+    assert_eq!(summary["abandoned_records"], 0, "{summary}");
+    assert_eq!(summary["outside_turn_numbering"], 0, "{summary}");
 }
