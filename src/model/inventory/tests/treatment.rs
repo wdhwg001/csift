@@ -22,27 +22,6 @@ fn labels(line: &str) -> Vec<Class> {
         .classify(&ClassifyCtx::top_level())
 }
 
-/// One synthetic line per row of the three VALUE axes - a line type, a system subtype, an
-/// attachment payload type - built from the row's own shape and nothing else.
-fn line_for(shape: Shape) -> Option<String> {
-    Some(match shape {
-        // A non-transcript line: its own type is the whole shape. The extra key is there
-        // so the line is a JSON object with content, which every real one is.
-        Shape::TopLevelType(t) if !matches!(t, "user" | "assistant" | "system" | "attachment") => {
-            format!(r#"{{"type":"{t}","zzprobe":"x"}}"#)
-        }
-        Shape::SystemSubtype(s) => {
-            format!(r#"{{"type":"system","uuid":"zz1","subtype":"{s}","content":"zzprobe"}}"#)
-        }
-        Shape::AttachmentType(a) => format!(
-            r#"{{"type":"attachment","uuid":"zz1","attachment":{{"type":"{a}","zzprobe":"x"}}}}"#
-        ),
-        // The four transcript types carry no leaf of their own and the block/template axes
-        // need a record shape their own specimen tables already hold.
-        _ => return None,
-    })
-}
-
 /// Every row of the three value axes that names a LEAF produces it from a whole record.
 ///
 /// `every_row_agrees_with_the_classify_family_table_it_records` asks the family table the
@@ -62,7 +41,7 @@ fn every_shaped_row_produces_its_leaf_from_a_whole_record() {
     let mut checked = 0usize;
     for r in rows() {
         let Some(leaf) = r.leaf else { continue };
-        let Some(line) = line_for(r.shape) else {
+        let Some(line) = specimens::value_line(r.shape) else {
             continue;
         };
         if NEEDS_A_SECOND_FACT.iter().any(|(v, _)| *v == r.value()) {

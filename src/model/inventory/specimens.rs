@@ -162,3 +162,24 @@ pub(crate) const TEMPLATE_SPECIMENS: &[(&str, &str)] = &[
         r#"{"type":"user","uuid":"tf","isMeta":true,"origin":{"kind":"human"},"message":{"role":"user","content":"The user sent a new message while you were working:\n\ncheck the other lane"}}"#,
     ),
 ];
+
+/// One synthetic line per row of the three VALUE axes - a line type, a system subtype, an
+/// attachment payload type - built from the row's own shape and nothing else. `None` for
+/// the four transcript types, which carry no leaf of their own, and for the block and
+/// template axes, whose record shapes the two tables above hold.
+pub(crate) fn value_line(shape: Shape) -> Option<String> {
+    Some(match shape {
+        // A non-transcript line: its own type is the whole shape. The extra key is there
+        // so the line is a JSON object with content, which every real one is.
+        Shape::TopLevelType(t) if !matches!(t, "user" | "assistant" | "system" | "attachment") => {
+            format!(r#"{{"type":"{t}","zzprobe":"x"}}"#)
+        }
+        Shape::SystemSubtype(s) => {
+            format!(r#"{{"type":"system","uuid":"zz1","subtype":"{s}","content":"zzprobe"}}"#)
+        }
+        Shape::AttachmentType(a) => format!(
+            r#"{{"type":"attachment","uuid":"zz1","attachment":{{"type":"{a}","zzprobe":"x"}}}}"#
+        ),
+        _ => return None,
+    })
+}

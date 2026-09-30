@@ -72,6 +72,18 @@ pub(crate) fn render_label(h: &Hit) -> String {
     // still a record, the stamping site still runs for it, and the facts a family
     // attached there reached JSON while the text surface dropped them on the floor.
     let ext = extension_zone(h);
+    // A record Claude Code's request assembler never puts in the model's context says so in
+    // the label zone - display-only, like [narration summary]: it is not matchable text, so
+    // it needs no synthesized-marker registration. The tag follows [`Hit::delivered`], the
+    // one verdict JSON `delivered` projects, so it prints exactly where that reads false: a
+    // leaf the model never receives (a turn closer, a compaction boundary, a queued or
+    // recalled message) as much as a record the per-record override drops. Rendered through
+    // [`Marker`] so the marker vocabulary has ONE renderer.
+    let nd = if h.delivered() {
+        String::new()
+    } else {
+        format!(" {}", Marker::plain("not delivered").render())
+    };
     // An ADDRESSED record csift models no leaf for (the refetch law, `Hit::class`): say so
     // instead of borrowing a neighbouring leaf's name - and NAME the on-disk shape when
     // the record carries one, so a reader learns what the line is rather than only that
@@ -92,8 +104,8 @@ pub(crate) fn render_label(h: &Hit) -> String {
         // the harness's own - and the bare word is the floor for a line whose own `type`
         // key is missing, the only case with no value left to name.
         return match shape {
-            Some(s) => format!("unmodeled: {s}{ext}"),
-            None => format!("unmodeled{ext}"),
+            Some(s) => format!("unmodeled: {s}{nd}{ext}"),
+            None => format!("unmodeled{nd}{ext}"),
         };
     };
     // Tool pairing (`▹`) takes the dedicated two-sided form below.
@@ -103,17 +115,6 @@ pub(crate) fn render_label(h: &Hit) -> String {
         " [error]"
     } else {
         ""
-    };
-    // A record Claude Code's request assembler DROPPED says so in the label zone -
-    // display-only, like [narration summary]: it is not matchable text, so it needs no
-    // synthesized-marker registration. Reachable only through a glob or an explicit
-    // leaf; a bare role never selects such a record in the first place.
-    // Rendered through [`Marker`] so the marker vocabulary has ONE renderer: a family's
-    // own marker and the engine's own come out in the same shape.
-    let nd = if h.delivery == Some(false) {
-        format!(" {}", Marker::plain("not delivered").render())
-    } else {
-        String::new()
     };
     // The SURVIVAL AXIS rides the label zone the same way - display-only, so it
     // needs no synthesized-marker registration. `[rewound]` says the branch WAS answered

@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2548",
+          "lines": "2550",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -37752,7 +37752,7 @@
       "code": [
         {
           "path": "src/commands/search/render.rs",
-          "lines": "150-153",
+          "lines": "151-154",
           "snippet": "    // A narration record is an API summary, never the model's reasoning - the marker\n    // rides the LABEL zone (display-only, like [error]); matchable text stays verbatim.\n    if class == Class::AgentThinkingNarration {\n        return format!(\"{} [narration summary]{nd}\", class.path());"
         },
         {
@@ -42430,7 +42430,7 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "156-163",
+          "lines": "157-164",
           "snippet": "    // zone - display-only; the matchable text stays the verbatim queued content.\n    if class == Class::UserQueued {\n        let op = h.queue_operation.as_deref().unwrap_or(\"queued\");\n        return match h.queue_reason.as_deref() {\n            Some(reason) => format!(\"{} [{op} \u00b7 {reason}]{nd}\", class.path()),\n            None => format!(\"{} [{op}]{nd}\", class.path()),\n        };\n    }"
         },
         {
@@ -80229,8 +80229,8 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "111-117",
-          "snippet": "    // Rendered through [`Marker`] so the marker vocabulary has ONE renderer: a family's\n    // own marker and the engine's own come out in the same shape.\n    let nd = if h.delivery == Some(false) {\n        format!(\" {}\", Marker::plain(\"not delivered\").render())\n    } else {\n        String::new()\n    };"
+          "lines": "80-86",
+          "snippet": "    // recalled message) as much as a record the per-record override drops. Rendered through\n    // [`Marker`] so the marker vocabulary has ONE renderer.\n    let nd = if h.delivered() {\n        String::new()\n    } else {\n        format!(\" {}\", Marker::plain(\"not delivered\").render())\n    };"
         }
       ],
       "states": [
@@ -83280,7 +83280,7 @@
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "386",
+          "lines": "380",
           "snippet": "fn checkpoint_join(obj: &serde_json::Map<String, serde_json::Value>) -> Option<String> {"
         },
         {
@@ -84660,7 +84660,7 @@
         },
         {
           "path": "src/commands/search/render.rs",
-          "lines": "129-132",
+          "lines": "130-133",
           "snippet": "    let dk = match (class, h.denial_kind.as_deref()) {\n        (Class::AgentToolResult, Some(kind)) => format!(\" [denied: {kind}]\"),\n        _ => String::new(),\n    };"
         }
       ],
@@ -87147,7 +87147,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "356-362",
+          "lines": "350-356",
           "snippet": "        \"fork-context-ref\" => super::for_edge(\n            EdgeKind::ForkedFrom,\n            Basis::Key,\n            at(\"parentLastUuid\"),\n            at(\"parentSessionId\"),\n            ctx,\n        ),"
         }
       ],
@@ -87340,7 +87340,7 @@
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "364-370",
+          "lines": "358-364",
           "snippet": "        \"continued-in\" => super::for_edge(\n            EdgeKind::ContinuedIn,\n            Basis::Key,\n            None,\n            at(\"continuedInSessionId\"),\n            ctx,\n        ),"
         }
       ],
@@ -89494,7 +89494,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3579"
+          "lines": "3581"
         }
       ],
       "states": [

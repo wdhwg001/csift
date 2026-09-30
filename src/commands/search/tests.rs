@@ -154,6 +154,7 @@ fn kept_fixture(lines: &[&str], matcher: &Matcher) -> Vec<Kept> {
 }
 
 mod bookkeeping;
+mod delivery;
 mod emission;
 mod exchange;
 mod facts;

@@ -1459,6 +1459,13 @@ surface change bumps the PATCH.
 - **`verbatim --format json` names itself in its header.** The header line read
   `"command":"turns"`, the command's name before its rename, while every other command's
   header names that command; it reads `"command":"verbatim"`.
+- **`[not delivered]` prints wherever the JSON `delivered` reads false.** The text tag
+  followed only the per-record delivery override, so a leaf the model never receives by
+  its leaf - the turn closers, a compaction boundary, a scheduler event, a kill, a queued
+  or recalled message - read `delivered: false` in JSON and carried no tag on `search`
+  or `show`; the bookkeeping family printed its own copy to cover its leaves. One verdict
+  now drives both: every undelivered unit is tagged once, and a bookkeeping line's label
+  is unchanged. `search --help` states the rule.
 
 ### Performance
 

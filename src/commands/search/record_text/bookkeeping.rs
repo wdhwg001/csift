@@ -278,14 +278,6 @@ impl Fact {
     }
 }
 
-/// The marker word every unit of the family carries. None of these lines is admitted to
-/// the message array, which is what the JSON `delivered` field has always said about all
-/// thirteen leaves and what the TEXT surface said about none of them - the engine prints
-/// that marker only for a record carrying a per-record delivery override, and a
-/// bookkeeping line's invisibility comes from its leaf instead. Rendered through the
-/// engine's own [`Marker`], so both surfaces spell it one way.
-const NOT_DELIVERED: &str = "not delivered";
-
 /// The `harness.bookkeeping` family's per-unit facts and markers.
 ///
 /// Called for EVERY emitted unit through [`crate::commands::search::family_facts`], so
@@ -307,7 +299,9 @@ pub(crate) fn facts(
     }
     let line_type = rec.r#type.as_deref().unwrap_or_default();
     let facts = edge(line_type, raw, ctx).map_or_else(Vec::new, |f| vec![f]);
-    (facts, vec![Marker::plain(NOT_DELIVERED)])
+    // No marker: a bookkeeping line is never in the model's context, and the engine's own
+    // `[not delivered]` follows `Hit::delivered`, which reads that off the leaf.
+    (facts, Vec::new())
 }
 
 /// The PROVENANCE relation a bookkeeping line carries - what the line is FOR.

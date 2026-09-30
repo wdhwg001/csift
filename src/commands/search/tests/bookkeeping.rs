@@ -1,5 +1,5 @@
 //! The `harness.bookkeeping` family's own unit tests: the key=value head, the provenance
-//! edges and the marker every unit of the family carries.
+//! edges, and the `[not delivered]` tag every unit of the family renders.
 
 use super::*;
 
@@ -144,7 +144,7 @@ fn a_head_with_no_present_key_prints_the_type_alone() {
 /// relation each line type carries. A caller with no row space resolves no uuid, so the
 /// edges print their ids - which is what a unit test, and any file-oriented surface, gets.
 #[test]
-fn facts_carry_the_marker_and_the_line_type_s_relation() {
+fn facts_carry_the_line_type_s_relation_and_no_marker_of_their_own() {
     let ctx = ClassifyCtx::top_level();
     let zones = |line: &str| {
         let record = rec(line);
@@ -165,14 +165,16 @@ fn facts_carry_the_marker_and_the_line_type_s_relation() {
     let (edges, markers) = zones(
         r#"{"type":"last-prompt","leafUuid":"aaaaaaaa-0000-4000-8000-000000000001","lastPrompt":"go"}"#,
     );
-    assert_eq!(markers, vec!["[not delivered]".to_string()]);
+    // The `[not delivered]` tag is the ENGINE's, printed from `Hit::delivered` like every
+    // other leaf's, so the family pushes no copy of it (a copy would print it twice).
+    assert!(markers.is_empty(), "{markers:?}");
     assert_eq!(
         edges,
         vec!["[for: leaf aaaaaaaa (not in this file)]".to_string()]
     );
-    // A line type with no relation carries the marker and nothing else.
+    // A line type with no relation carries nothing at all.
     let (edges, markers) = zones(r#"{"type":"mode","mode":"default"}"#);
-    assert_eq!(markers, vec!["[not delivered]".to_string()]);
+    assert!(markers.is_empty(), "{markers:?}");
     assert!(edges.is_empty(), "{edges:?}");
     // The checkpoint is the SUM of two NUMBERS - `startTime` in epoch milliseconds, as the
     // harness writes it - one hour after the start instant, in local text.
@@ -260,25 +262,20 @@ fn the_fork_edge_names_its_session_with_or_without_a_record() {
 #[test]
 fn the_person_s_queued_text_is_refused_by_the_family() {
     let ctx = ClassifyCtx::top_level();
-    let markers = |line: &str| {
+    let rendered = |line: &str| {
         let record = rec(line);
-        let (facts, markers) = family::facts(
-            &record,
-            Some(line),
-            &Section::record(record.promoted_class()),
-            &ctx,
-        );
-        (facts.len(), markers.len())
+        family::render(&record, Some(line), Class::BookkeepingQueue, &ctx)
     };
     assert_eq!(
-        markers(r#"{"type":"queue-operation","operation":"enqueue","content":"please continue"}"#),
-        (0, 0),
+        rendered(r#"{"type":"queue-operation","operation":"enqueue","content":"please continue"}"#),
+        None,
         "the human's own queued text is the user family's"
     );
-    assert_eq!(
-        markers(r#"{"type":"queue-operation","operation":"dequeue"}"#),
-        (0, 1),
-        "a content-less dequeue is the harness's own row"
+    let own = rendered(r#"{"type":"queue-operation","operation":"dequeue"}"#);
+    assert!(
+        own.as_deref()
+            .is_some_and(|t| t.starts_with("[queue-operation")),
+        "a content-less dequeue is the harness's own row: {own:?}"
     );
 }
 

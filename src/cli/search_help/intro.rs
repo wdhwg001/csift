@@ -222,9 +222,10 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         with the leaf default csift mirrors it per record - a `system`/`local_command`\n  \
         record IS sent, an `isVirtual` record and the `<synthetic>` API-error placeholder\n  \
         are NOT, an attachment whose payload type the converter drops is NOT, and a\n  \
-        `hook_success` IS exactly when it carries a rendered body. An undelivered record\n  \
-        renders `[not delivered]`; JSON carries `delivered` on every hit. ONE leaf is\n  \
-        exempt from axis 2, the single stated exception to the visible-face law:\n  \
+        `hook_success` IS exactly when it carries a rendered body. A record the model\n  \
+        never receives - by its leaf (axis 1) or by this predicate - renders\n  \
+        `[not delivered]`, exactly where the JSON `delivered` every hit carries reads\n  \
+        false. ONE leaf is exempt from axis 2, the single stated exception to the visible-face law:\n  \
         `agent.message.structured` rides a converter-dropped payload, so the axis would\n  \
         take it out of `-t agent` and `-t agent.message` and leave that category showing\n  \
         only its plain half. The axis asks what the model RECEIVED and this is the leaf\n  \
