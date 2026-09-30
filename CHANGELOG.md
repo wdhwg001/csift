@@ -1523,6 +1523,15 @@ surface change bumps the PATCH.
   `Name@Team` is a form TaskStop takes, and SendMessage, which refuses any `to` carrying `@`,
   takes the bare name or the transcript id. `agents --help`'s paragraph on a teammate's two ids
   says the same: a form TaskStop takes, beside the bare name.
+- **A zero match under `--turn` blamed the label filter for what the window left out.** An
+  abandoned record - a recalled draft, a rewound turn, a record on an abandoned branch -
+  belongs to no numbered turn, so a `--turn` window leaves it out, and the diagnosis probed
+  only `-t`: `-t user.unsent --turn ..` over a session with one draft said the pattern
+  occurs under other labels and the label filter excluded them. The diagnosis now also
+  counts the records the pattern and label filter match outside turn numbering and, when
+  there are any, says so on a line printed first, naming both ways back (drop `--turn`, or
+  window by time); the JSON summary carries the count as `outside_turn_numbering`. `search
+  --help` says so.
 - **`show`'s cap continuation dropped the records after an abandoned one, and fetched
   records nobody addressed.** The rendered fetch kept its first `cap` units in render order,
   which puts an abandoned unit after every live one, and read the continuation off that

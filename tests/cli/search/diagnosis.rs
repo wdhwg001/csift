@@ -336,3 +336,122 @@ fn every_output_mode_carries_the_zero_match_diagnosis() {
         probe.stderr
     );
 }
+
+const TW_ENC: &str = "-Users-dev-example-project";
+
+/// Two turns and, between them, a recalled draft (L3) that shares the resend's parent: the
+/// draft sits outside turn numbering, so a `--turn` window leaves it out.
+fn draft_session(h: &Home, sess: &str, with_draft: bool) {
+    let draft = if with_draft {
+        concat!(
+            r#"{"type":"user","uuid":"d1","parentUuid":"a1","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"a recalled phrasing"}}"#,
+            "\n"
+        )
+    } else {
+        ""
+    };
+    h.write(
+        &format!("{TW_ENC}/{sess}.jsonl"),
+        &[
+            r#"{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"one"}}"#.to_string() + "\n",
+            r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reply one"}]}}"#.to_string() + "\n",
+            draft.to_string(),
+            r#"{"type":"user","uuid":"u2","parentUuid":"a1","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"user","content":"two"}}"#.to_string() + "\n",
+            r#"{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-06-07T05:00:04.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reply two"}]}}"#.to_string() + "\n",
+        ]
+        .concat(),
+    );
+}
+
+const TW_LINE: &str = "OUTSIDE turn numbering";
+
+/// A `--turn` window that empties a result by leaving out a record outside turn numbering is
+/// named as the cause, ahead of the label probe and with the two ways back, and the JSON
+/// summary counts those records; the line is absent where the window left nothing out.
+#[test]
+fn a_turn_window_that_left_out_an_abandoned_match_says_so() {
+    let h = Home::new();
+    let sess = "7a6b5c4d-3e2f-4109-a876-5432100cab02";
+    draft_session(&h, sess, true);
+    let t = at(sess);
+    let base = ["search", "", t.as_str(), "-t", "user.unsent"];
+    let whole = h.run(&base);
+    assert!(
+        whole.stdout.contains("a recalled phrasing"),
+        "{}",
+        whole.stdout
+    );
+    let mut windowed = base.to_vec();
+    windowed.extend(["--turn", ".."]);
+    let out = h.run(&windowed);
+    assert!(out.success, "{}", out.stderr);
+    assert!(
+        out.stdout.contains("no matching exchanges"),
+        "{}",
+        out.stdout
+    );
+    let line = out
+        .stderr
+        .lines()
+        .find(|l| l.contains(TW_LINE))
+        .unwrap_or_else(|| panic!("the turn-window line: {}", out.stderr));
+    assert!(line.contains("matches 1 record(s)"), "{line}");
+    assert!(line.contains("user.unsent ×1"), "{line}");
+    assert!(
+        line.contains("drop --turn") && line.contains("--since/--until"),
+        "{line}"
+    );
+    let first = out.stderr.find(TW_LINE).unwrap_or(0);
+    if let Some(label) = out.stderr.find("DOES occur") {
+        assert!(first < label, "the turn-window line first: {}", out.stderr);
+    }
+    // The terminal modes print the same stderr line.
+    for mode in ["-c", "-l"] {
+        let mut args = windowed.clone();
+        args.push(mode);
+        let out = h.run(&args);
+        assert!(out.stderr.contains(TW_LINE), "{mode}: {}", out.stderr);
+    }
+    let mut json = windowed.clone();
+    json.extend(["--format", "json"]);
+    let summary = json_summary(&h.run(&json).stdout);
+    assert_eq!(summary["outside_turn_numbering"], 1, "{summary}");
+    // A pattern the draft does not contain: nothing left out, no line, a zero count.
+    let out = h.run(&[
+        "search",
+        "zz-not-in-it",
+        t.as_str(),
+        "-t",
+        "user.unsent",
+        "--turn",
+        "..",
+        "--format",
+        "json",
+    ]);
+    assert!(!out.stderr.contains(TW_LINE), "{}", out.stderr);
+    assert_eq!(json_summary(&out.stdout)["outside_turn_numbering"], 0);
+    // No `--turn`: the key is null.
+    let mut plain = vec!["search", "zz-not-in-it", t.as_str(), "--format", "json"];
+    plain.extend(["-t", "user.unsent"]);
+    let summary = json_summary(&h.run(&plain).stdout);
+    assert_eq!(summary["outside_turn_numbering"], serde_json::Value::Null);
+}
+
+#[test]
+fn a_turn_window_over_a_session_with_nothing_abandoned_adds_no_line() {
+    let h = Home::new();
+    let sess = "7a6b5c4d-3e2f-4109-a876-5432100cab03";
+    draft_session(&h, sess, false);
+    let out = h.run(&[
+        "search",
+        "",
+        at(sess).as_str(),
+        "-t",
+        "user.unsent",
+        "--turn",
+        "..",
+    ]);
+    assert!(out.success, "{}", out.stderr);
+    assert!(out.stderr.contains("DEFINITIVE absence"), "{}", out.stderr);
+    assert!(!out.stderr.contains(TW_LINE), "{}", out.stderr);
+}

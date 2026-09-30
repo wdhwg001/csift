@@ -320,6 +320,12 @@ pub(crate) fn render_json(
             }
             None => serde_json::Value::Null,
         };
+        // The records a `--turn` window left out because they sit outside turn numbering:
+        // a count under a window, null without one.
+        summary_fields["outside_turn_numbering"] = match &d.outside_turns {
+            Some(found) => json!(found.as_ref().map_or(0, |(_, recs)| *recs)),
+            None => serde_json::Value::Null,
+        };
     }
     let summary = crate::text::envelope_summary(summary_fields);
     writeln!(out, "{}", serde_json::to_string(&summary)?)?;

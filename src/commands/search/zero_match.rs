@@ -27,50 +27,54 @@ pub(crate) fn diagnose_zero_match(
         return Ok(None);
     }
     let label_filtered = !args.labels.is_empty() || !args.labels_not.is_empty();
-    let excluded_by_label = if label_filtered {
-        let mut probe = args.clone();
-        probe.labels.clear();
-        probe.labels_not.clear();
-        let probe_files: Vec<FileResult> = session_files
+    // Both probes re-run the SAME query over the same scope with one filter changed, keeping
+    // every other one - the reverse closure included, or a probe would name records outside
+    // the set the reader asked about. They count LABELS, never edges, so no edge is built.
+    let probe = |q: &SearchArgs, window: Option<crate::text::RangeSpec>| -> Result<Vec<Exchange>> {
+        let files: Vec<FileResult> = session_files
             .par_iter()
             .map(|p| {
                 search_one_file(
                     p,
-                    &probe,
+                    q,
                     matcher,
-                    turn_range,
+                    window,
                     time_window,
                     None,
                     false,
                     spawn_map,
                     inner_parallel,
-                    // The zero-match probe re-runs the SAME query with the label filter
-                    // dropped, so it keeps every other filter - the reverse closure
-                    // included, or the probe would name labels outside the set the
-                    // reader asked about.
                     for_addr,
-                    // The probe counts LABELS, never edges: it feeds `label_census`
-                    // alone, so nothing it builds would be read.
                     false,
                     cross,
                 )
             })
             .collect::<Result<Vec<_>>>()?;
-        let mut probe_ex: Vec<Exchange> = Vec::new();
-        for fr in probe_files {
-            probe_ex.extend(fr.exchanges);
-        }
+        Ok(files.into_iter().flat_map(|fr| fr.exchanges).collect())
+    };
+    let excluded_by_label = if label_filtered {
+        let mut unfiltered = args.clone();
+        unfiltered.labels.clear();
+        unfiltered.labels_not.clear();
         // The probe deliberately reports the FULL label sets - it exists to name
         // exactly what the dropped `-t`/`-T` filter excluded.
-        let (counts, recs) = label_census(&probe_ex, LabelFilter::all());
-        (recs > 0).then(|| {
-            let mut rows: Vec<(String, usize)> = counts
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v))
-                .collect();
-            rows.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-            (rows, recs)
-        })
+        census_rows(label_census(
+            &probe(&unfiltered, turn_range)?,
+            LabelFilter::all(),
+        ))
+    } else {
+        None
+    };
+    // A `--turn` window leaves out every record outside turn numbering - a recalled draft, a
+    // rewound opener, a record on an abandoned branch - so a window can empty a result the
+    // label filter did not. The same pattern and label filter with the window dropped, kept
+    // to those records, says how many it left out.
+    let outside_turns = if turn_range.is_some() {
+        let unnumbered: Vec<Exchange> = probe(args, None)?
+            .into_iter()
+            .filter(|e| e.turn_index.is_none())
+            .collect();
+        Some(census_rows(label_census(&unnumbered, args.label_filter())))
     } else {
         None
     };
@@ -80,6 +84,7 @@ pub(crate) fn diagnose_zero_match(
         skipped_lines: outcome.skipped_lines,
         label_filtered,
         excluded_by_label,
+        outside_turns,
         gated_unreached: args.gated_unreached(),
         attachment_unread: args
             .attachment_leaves_unread()
@@ -90,4 +95,17 @@ pub(crate) fn diagnose_zero_match(
     };
     emit_empty_diagnosis(&args.pattern, &diag);
     Ok(Some(diag))
+}
+
+/// A label census as the diagnosis reports it: per-leaf rows, richest first, and the record
+/// total; `None` when it counted no record.
+fn census_rows((counts, recs): (BTreeMap<&'static str, usize>, usize)) -> Option<LabelRows> {
+    (recs > 0).then(|| {
+        let mut rows: Vec<(String, usize)> = counts
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect();
+        rows.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+        (rows, recs)
+    })
 }

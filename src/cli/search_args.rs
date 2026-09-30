@@ -64,7 +64,12 @@ use super::*;
         diagnosis: \"DEFINITIVE absence (exit 0), NOT an error\", the active filters, and (when a \
         `-t`/`-T` filter was on) an active probe that NAMES the label(s) the pattern DOES occur \
         under (e.g. it was excluded by your `-t user.message` but occurs under `agent.tool.use`). \
-        Read the diagnosis and adjust the filter; do NOT assume a syntax error. To SEE a scope's \
+        Under `--turn` it also counts the records the pattern and the label filter match OUTSIDE \
+        turn numbering - a recalled draft, a rewound turn, a record on an abandoned branch, \
+        which a turn window leaves out - on a line of its own, printed first when there are \
+        any, with the two ways to reach them: drop `--turn`, or window by time with \
+        `--since`/`--until`. The terminal modes (`-c`, `-l`, `--count-by`) print the same \
+        stderr lines. Read the diagnosis and adjust the filter; do NOT assume a syntax error. To SEE a scope's \
         record-types before you filter, run `--count-by label` (a per-leaf census; with an empty \
         pattern it censuses the whole scope).\n\n\
         `--max-count` caps emitted exchanges but reports the dropped count (default: \

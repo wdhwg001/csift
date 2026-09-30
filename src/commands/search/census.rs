@@ -212,6 +212,10 @@ pub(crate) fn axis_census(
 /// filters that constrained it, and - when a `-t`/`-T` filter was active - names the label(s)
 /// the pattern DOES occur under (the exact L74681 trap: a tool-name searched under
 /// `-t user.message`). Emitted to stderr so stdout stays a pure stream.
+/// A probe's label census as the diagnosis reports it: per-leaf rows, richest first, and the
+/// record total.
+pub(crate) type LabelRows = (Vec<(String, usize)>, usize);
+
 #[derive(Debug)]
 pub(crate) struct EmptyDiagnosis {
     pub(crate) sessions_in_scope: usize,
@@ -223,7 +227,11 @@ pub(crate) struct EmptyDiagnosis {
     /// `Some((per-leaf rows richest-first, total records))` when a `-t`/`-T` filter was active
     /// AND the pattern matches under OTHER labels; `None` when no label filter, or the pattern
     /// is genuinely absent even unfiltered.
-    pub(crate) excluded_by_label: Option<(Vec<(String, usize)>, usize)>,
+    pub(crate) excluded_by_label: Option<LabelRows>,
+    /// Under a `--turn` window: `Some(Some((rows, total)))` when the pattern and the label
+    /// filter match records OUTSIDE turn numbering, which the window leaves out;
+    /// `Some(None)` when they match none; `None` with no `--turn`.
+    pub(crate) outside_turns: Option<Option<LabelRows>>,
     /// True when no active selector reached a gated (promoted non-record)
     /// leaf - those lines were never parsed, so the absence does not cover them.
     pub(crate) gated_unreached: bool,
@@ -273,6 +281,22 @@ pub(crate) fn active_filters_str(args: &SearchArgs) -> String {
     }
 }
 
+/// The first six per-leaf rows of a probe, `leaf ×N` joined by ` · `, and a count of the rest.
+fn label_rows(rows: &[(String, usize)]) -> String {
+    let shown: Vec<String> = rows
+        .iter()
+        .take(6)
+        .map(|(l, n)| format!("{l} ×{n}"))
+        .collect();
+    let more = rows.len().saturating_sub(6);
+    let tail = if more > 0 {
+        format!(" (+{more} more label(s))")
+    } else {
+        String::new()
+    };
+    format!("{}{tail}", shown.join(" · "))
+}
+
 /// Emit the zero-match diagnosis to stderr (stdout stays pure for the caller's pipe).
 pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {
     eprintln!(
@@ -293,23 +317,21 @@ pub(crate) fn emit_empty_diagnosis(pattern: &str, diag: &EmptyDiagnosis) {
     } else {
         format!("\"{pattern}\"")
     };
+    // First, because its remedy keeps the reader's label filter.
+    if let Some(Some((rows, recs))) = &diag.outside_turns {
+        eprintln!(
+            "csift: ⚠ but {quoted} matches {recs} record(s) OUTSIDE turn numbering ({}) - a \
+             recalled draft, a rewound turn or a record on an abandoned branch, which a --turn \
+             window leaves out; drop --turn, or window by time with --since/--until.",
+            label_rows(rows)
+        );
+    }
     match &diag.excluded_by_label {
         Some((rows, recs)) => {
-            let shown: Vec<String> = rows
-                .iter()
-                .take(6)
-                .map(|(l, n)| format!("{l} ×{n}"))
-                .collect();
-            let more = rows.len().saturating_sub(6);
-            let tail = if more > 0 {
-                format!(" (+{more} more label(s))")
-            } else {
-                String::new()
-            };
             eprintln!(
-                "csift: ⚠ but {quoted} DOES occur — {recs} record(s) under: {}{tail}. \
+                "csift: ⚠ but {quoted} DOES occur — {recs} record(s) under: {}. \
                  Your -t/-T excluded them; drop -t/-T or select one of those labels.",
-                shown.join(" · ")
+                label_rows(rows)
             );
         }
         None if diag.label_filtered => {
