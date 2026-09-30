@@ -118,6 +118,29 @@ fn classify_subagent_return_is_tool_result_plus_inbox() {
     );
 }
 
+/// Only a result whose id the spawn lookup resolves is a return: an ordinary result stays
+/// `agent.tool.result` with the lookup in hand, and a carrier holding both returns the
+/// SPAWN's call, which is the id its record-level text unit carries.
+#[test]
+fn a_return_carrier_returns_the_call_that_spawned_and_no_other() {
+    let ctx = ClassifyCtx {
+        spawn: Some(&FakeSpawn),
+        ..ClassifyCtx::top_level()
+    };
+    let ordinary = parse(
+        r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_read","content":"file text"}]}}"#,
+    );
+    assert_eq!(ordinary.subagent_return_call_id(&ctx), None);
+    assert_eq!(ordinary.classify(&ctx), vec![Class::AgentToolResult]);
+    let both = parse(
+        r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_read","content":"file text"},{"type":"tool_result","tool_use_id":"toolu_spawn","content":"subagent done"}]}}"#,
+    );
+    assert_eq!(
+        both.subagent_return_call_id(&ctx).as_deref(),
+        Some("toolu_spawn")
+    );
+}
+
 #[test]
 fn classify_teammate_spawn_ack_is_tool_result_only_not_inbox() {
     // Edge-fixtures correction #3: a persistent teammate `Agent` spawn's tool_result is an

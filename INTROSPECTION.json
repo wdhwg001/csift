@@ -86328,7 +86328,7 @@
         },
         {
           "path": "src/model/tests/classify_comm.rs",
-          "lines": "369",
+          "lines": "392",
           "snippet": "fn a_coordinator_relay_renders_its_arrow() {"
         }
       ],
