@@ -38,7 +38,7 @@ fn excerpt(ts: Option<String>, text: &str) -> LastMsg {
 /// steer, which rides a `queued_command` attachment line that carries no `role` key. The
 /// needle is a bare value substring (the needle law), so a line that merely mentions the
 /// word is parsed and then refused by the label test in [`person_words`].
-fn admits_line(line: &[u8]) -> bool {
+pub(crate) fn admits_line(line: &[u8]) -> bool {
     crate::parse::line_has_role_marker(line)
         || memchr::memmem::find(line, b"queued_command").is_some()
 }

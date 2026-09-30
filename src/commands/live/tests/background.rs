@@ -177,6 +177,28 @@ fn last_messages_skip_the_resume_repair_pair() {
     assert_eq!(u.text, "the real last prompt");
 }
 
+/// The tail walk parses a role-bearing line and a queued steer's attachment line, and no other
+/// line kind: a bookkeeping line or another attachment would cost a parse and could never
+/// take either slot.
+#[test]
+fn the_last_walk_parses_role_lines_and_a_queued_steer_and_nothing_else() {
+    assert!(admits_line(
+        br#"{"type":"user","message":{"role":"user","content":"sound it"}}"#
+    ));
+    assert!(admits_line(
+        br#"{"type":"assistant","message":{"role":"assistant","content":[]}}"#
+    ));
+    assert!(admits_line(
+        br#"{"type":"attachment","attachment":{"type":"queued_command","prompt":"stop"}}"#
+    ));
+    assert!(!admits_line(
+        br#"{"type":"last-prompt","lastPrompt":"sound it","sessionId":"s"}"#
+    ));
+    assert!(!admits_line(
+        br#"{"type":"attachment","attachment":{"type":"hook_success","stdout":"ok"}}"#
+    ));
+}
+
 /// The newest of the person's words takes the slot whether or not it opened a turn, and
 /// renders as `search` renders the same leaf.
 #[test]
