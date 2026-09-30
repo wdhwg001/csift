@@ -369,3 +369,33 @@ fn a_reach_target_that_names_no_lane_says_so_rather_than_answering_emptily() {
         out.stderr
     );
 }
+
+/// A `@trap` that resolves to the main transcript names a top-level session exactly, so its
+/// `parent` line reads `none`; only the environment form, which cannot tell a top-level
+/// session from a subagent, reads unknown.
+#[test]
+fn a_trap_resolved_to_the_main_transcript_reads_parent_none() {
+    let h = Home::new();
+    let sess = "00000000-0000-4000-8000-000000000083";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        &format!(
+            "{}\n{}\n",
+            format_args!(
+                r#"{{"type":"user","uuid":"m1","timestamp":"2026-06-07T05:00:00.000Z","sessionId":"{sess}","cwd":"{CWD}","version":"2.1.258","message":{{"role":"user","content":"who am i"}}}}"#
+            ),
+            r#"{"type":"assistant","uuid":"m2","timestamp":"2026-06-07T05:00:02.000Z","version":"2.1.258","message":{"role":"assistant","content":[{"type":"tool_use","id":"bt","name":"Bash","input":{"command":"csift whoami @trap:SableCopperFinch4817"}}]}}"#
+        ),
+    );
+    let out = h.run_with_env(
+        &["whoami", "@trap:SableCopperFinch4817"],
+        &[("CLAUDE_CODE_SESSION_ID", sess)],
+    );
+    assert!(out.success, "stderr: {}", out.stderr);
+    assert!(
+        out.stdout
+            .contains("parent   none (a top-level session has no lane above it)"),
+        "{}",
+        out.stdout
+    );
+}
