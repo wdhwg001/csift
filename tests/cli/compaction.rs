@@ -230,6 +230,22 @@ fn boundary_json_keeps_the_full_uuid_lists_verbatim() {
     assert!(orow["mode"].is_null() && orow["compact_metadata"].is_null());
 }
 
+/// The boundary above is fetched ALONE and still reports its mode, because the pairing is
+/// read off the whole file before the address narrows the output; `show --help` says that,
+/// and says the one way a boundary reads null.
+#[test]
+fn show_help_says_a_boundary_fetched_alone_reports_its_mode() {
+    let h = Home::new();
+    let help = h.run(&["show", "--help"]);
+    let flat = help.stdout.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        flat.contains("so a boundary fetched alone reports its mode - and it stays null only where the file leaves the boundary unpaired"),
+        "{}",
+        help.stdout
+    );
+    assert!(!flat.contains("did not include one"), "{}", help.stdout);
+}
+
 #[test]
 fn verbatim_banners_the_mode_and_still_reconstructs_across_the_cut() {
     let h = summarize_home();

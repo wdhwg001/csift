@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2561",
+          "lines": "2562",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -44725,7 +44725,7 @@
         },
         {
           "path": "src/cli/show_stats_args.rs",
-          "lines": "170-174",
+          "lines": "173-177",
           "snippet": "    /// `42..` = turn 42 \u2192 the end). Fetches every user and assistant record of the named\n    /// turns (reads a turn's whole back-and-forth); the gated non-record lines a turn\n    /// carries (turn-duration, stop-hooks, away-summary, queue, snapshot, system) belong\n    /// to no turn fetch: address them by `--line`/`--uuid`, or name their leaf -\n    /// `search -t 'harness.bookkeeping.*' -t 'harness.turn.*' -t 'harness.system.*'`."
         }
       ],
@@ -89512,7 +89512,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3596"
+          "lines": "3597"
         }
       ],
       "states": [

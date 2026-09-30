@@ -1545,6 +1545,10 @@ surface change bumps the PATCH.
   newest record is no more than a minute newer than the manifest's own end instant (the
   kill's own writes land within 66 ms of it; a resumed run's, hours later); a newer lane is
   read from its tail and its row names the stale manifest.
+- **`show --help` said a compaction boundary fetched without its summary reports no mode.**
+  The pairing is read off the whole file before any address narrows the output, so a
+  boundary fetched alone reports its mode; the help now says so, and that a boundary reads
+  null only when the file itself leaves it unpaired.
 
 ### Performance
 

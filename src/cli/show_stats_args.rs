@@ -82,8 +82,11 @@ const SHOW_AFTER_HELP_TAIL: &str = ". `text` is one line: whitespace runs are \
         newline there either; `--raw` stays the path to the bytes. `mode` and `compact_metadata` are \
         the compaction pair's own fields and null on every other record: `mode` is \
         `compact` | `summarize-from-here` | `summarize-up-to-here` (a `/rewind` summarize \
-        IS a compaction; the boundary learns its mode from the summary that follows it, and \
-        stays null when the fetch did not include one), and `compact_metadata` is the \
+        IS a compaction; the boundary learns its mode from the summary that follows it in the \
+        FILE - the pairing is read before any address narrows the output, so a boundary \
+        fetched alone reports its mode - and it stays null only where the file leaves the \
+        boundary unpaired: no summary after it, or a second boundary first), and \
+        `compact_metadata` is the \
         boundary's own object verbatim, including the `preservedMessages` uuid lists the \
         one-line excerpt only counts. The summary is {records, dropped_by_cap, refetch_remainder \
         (the ready-to-run continuation command when the cap dropped units, else null), \
