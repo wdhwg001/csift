@@ -32,13 +32,14 @@ pub(crate) fn collect_tool_use_paths(blocks: Option<&[Block]>, out: &mut BTreeMa
 /// Record, for each tool_use block, its `tool_use_id -> cwd` of the record carrying it: the
 /// shell cwd its call ran in, which the anchor law (AGENTS 3.11) reads off the TOOL_USE
 /// record rather than off the result written after the call returned.
-pub(crate) fn collect_tool_use_cwds(rec: &Record, out: &mut BTreeMap<String, String>) {
+/// Both sides borrow from the record, which outlives the turn the map is built for.
+pub(crate) fn collect_tool_use_cwds<'a>(rec: &'a Record, out: &mut BTreeMap<&'a str, &'a str>) {
     let (Some(cwd), Some(blocks)) = (rec.cwd.as_deref(), rec.blocks()) else {
         return;
     };
     for b in blocks {
         if let Block::ToolUse { id: Some(id), .. } = b {
-            out.insert(id.clone(), cwd.to_string());
+            out.insert(id.as_str(), cwd);
         }
     }
 }
@@ -218,7 +219,7 @@ impl<'a> Target<'a> {
     pub(crate) fn new(file: Option<&'a str>) -> Self {
         Target {
             file,
-            norm: file.map(normalize_path),
+            norm: file.map(|f| normalize_path(f).into_owned()),
             origin_cwd: None,
             exact: false,
             matched: std::cell::RefCell::default(),
@@ -282,11 +283,21 @@ pub(crate) fn path_matches_as(
     // The target names the path as written OR the file it resolves to: the candidate a
     // refusal prints for a relative path is the resolved one, so passing it back must find
     // the same events.
+    let written = !target.exact && names_file(t, &normalize_path(path));
+    // Most record paths name another file, and the candidate is a string built per call (a
+    // join to the cwd, a normalised copy), so it is built only where it can match: a path the
+    // target names ends with the target's last component, and every candidate ends with the
+    // key's own last component whenever that is a plain name - the join appends it, and
+    // normalising keeps it. A key ending in `.`, `..` or a separator takes the long way.
+    let key_last = last_component(key);
+    if !written && !matches!(key_last, "" | "." | "..") && key_last != last_component(t) {
+        return false;
+    }
     let file = candidate(key, cwd);
     let hit = if target.exact {
         file == t
     } else {
-        names_file(t, &normalize_path(path)) || names_file(t, &file)
+        written || names_file(t, &file)
     };
     if hit {
         target.matched.borrow_mut().insert(file);
@@ -313,7 +324,7 @@ pub(crate) fn extract_from_record(
     rec: &Record,
     target_file: &Target<'_>,
     id_to_path: &BTreeMap<String, String>,
-    id_to_cwd: &BTreeMap<String, String>,
+    id_to_cwd: &BTreeMap<&str, &str>,
     events: &mut Vec<FileEvent>,
 ) {
     let ts = rec.timestamp.clone();
@@ -406,7 +417,7 @@ pub(crate) fn extract_from_record(
                     Block::ToolResult {
                         tool_use_id: Some(id),
                         ..
-                    } => id_to_cwd.get(id).map(String::as_str),
+                    } => id_to_cwd.get(id.as_str()).copied(),
                     _ => None,
                 })
             })

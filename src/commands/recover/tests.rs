@@ -34,6 +34,7 @@ mod diff;
 mod disclosure;
 mod events;
 mod patching;
+mod paths;
 mod render;
 mod replay;
 mod signals;

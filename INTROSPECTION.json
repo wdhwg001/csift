@@ -26832,7 +26832,7 @@
         },
         {
           "path": "src/commands/recover/paths.rs",
-          "lines": "60-63",
+          "lines": "96-99",
           "snippet": "pub(crate) fn names_file(target: &str, path: &str) -> bool {\n    if target == path {\n        return true;\n    }"
         }
       ],
@@ -44906,7 +44906,7 @@
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "322-327",
+          "lines": "333-338",
           "snippet": "    if let Some(snap) = rec.snapshot.as_ref() {\n        if let Some(tfb) = snap.get(\"trackedFileBackups\").and_then(|v| v.as_object()) {\n            for (path, entry) in tfb {\n                if path_matches(target_file, path, rec.cwd.as_deref()) {\n                    events.push(FileEvent {\n                        line_no,"
         },
         {
@@ -55040,7 +55040,7 @@
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "100-106",
+          "lines": "101-107",
           "snippet": "                if let Some(content) = input.get(\"content\").and_then(serde_json::Value::as_str) {\n                    events.push(FileEvent {\n                        line_no,\n                        turn_index,\n                        timestamp_utc: ts.clone(),\n                        kind: EventKind::FullSnapshot {\n                            content: content.to_string(),"
         }
       ],
@@ -57441,12 +57441,12 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "98-105",
+          "lines": "99-106",
           "snippet": "        match name.as_str() {\n            \"Write\" => {\n                if let Some(content) = input.get(\"content\").and_then(serde_json::Value::as_str) {\n                    events.push(FileEvent {\n                        line_no,\n                        turn_index,\n                        timestamp_utc: ts.clone(),\n                        kind: EventKind::FullSnapshot {"
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "50",
+          "lines": "51",
           "snippet": "/// tool RESULT as a bare `tool_result` string (`\"File created successfully at: ...\"`) with"
         }
       ],
@@ -57517,7 +57517,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "98-99",
+          "lines": "99-100",
           "snippet": "        match name.as_str() {\n            \"Write\" => {"
         }
       ],
@@ -57588,7 +57588,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "60-61",
+          "lines": "61-62",
           "snippet": "/// Gated on `ids_with_result` so it never double-emits in a top-level session.\npub(crate) fn extract_input_fallback("
         }
       ],
@@ -57665,7 +57665,7 @@
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "113-120",
+          "lines": "114-121",
           "snippet": "            \"Edit\" => {\n                let hunks = vec![EditHunk {\n                    old_string: input\n                        .get(\"old_string\")\n                        .and_then(serde_json::Value::as_str)\n                        .unwrap_or_default()\n                        .to_string(),\n                    new_string: input"
         },
         {
@@ -57791,7 +57791,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "99-100",
+          "lines": "100-101",
           "snippet": "            \"Write\" => {\n                if let Some(content) = input.get(\"content\").and_then(serde_json::Value::as_str) {"
         }
       ],
@@ -57904,7 +57904,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "114-119",
+          "lines": "115-120",
           "snippet": "                let hunks = vec![EditHunk {\n                    old_string: input\n                        .get(\"old_string\")\n                        .and_then(serde_json::Value::as_str)\n                        .unwrap_or_default()\n                        .to_string(),"
         }
       ],
@@ -58023,7 +58023,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "91-97",
+          "lines": "92-98",
           "snippet": "        let path = input\n            .get(\"file_path\")\n            .and_then(serde_json::Value::as_str)\n            .unwrap_or_default();\n        if !path_matches(target_file, path, rec.cwd.as_deref()) {\n            continue;\n        }"
         }
       ],
@@ -58294,7 +58294,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "141-147",
+          "lines": "142-148",
           "snippet": "            \"MultiEdit\" => {\n                let hunks: Vec<EditHunk> = input\n                    .get(\"edits\")\n                    .and_then(serde_json::Value::as_array)\n                    .map(|arr| {\n                        arr.iter()\n                            .map(|e| EditHunk {"
         },
         {
@@ -58304,7 +58304,7 @@
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "141-145",
+          "lines": "142-146",
           "snippet": "            \"MultiEdit\" => {\n                let hunks: Vec<EditHunk> = input\n                    .get(\"edits\")\n                    .and_then(serde_json::Value::as_array)\n                    .map(|arr| {"
         }
       ],
@@ -63872,7 +63872,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "49-55",
+          "lines": "50-56",
           "snippet": "/// WHY: a subagent (built-in Task/Agent-tool) and a workflow-agent transcript record the\n/// tool RESULT as a bare `tool_result` string (`\"File created successfully at: ...\"`) with\n/// NO structured `toolUseResult` echo - unlike a top-level session, whose carrier carries\n/// `{type:create, filePath, content, ...}`. `extract_from_tool_use_result` reads that echo,\n/// so without this fallback a file WRITTEN BY A SUBAGENT is invisible to `recover`\n/// (`no recoverable history`) even though `files`/`search` see it (they read the tool_use\n/// input directly). The authoritative content IS in the input - `Write.content`,"
         },
         {
@@ -64208,7 +64208,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "49-55",
+          "lines": "50-56",
           "snippet": "/// WHY: a subagent (built-in Task/Agent-tool) and a workflow-agent transcript record the\n/// tool RESULT as a bare `tool_result` string (`\"File created successfully at: ...\"`) with\n/// NO structured `toolUseResult` echo - unlike a top-level session, whose carrier carries\n/// `{type:create, filePath, content, ...}`. `extract_from_tool_use_result` reads that echo,\n/// so without this fallback a file WRITTEN BY A SUBAGENT is invisible to `recover`\n/// (`no recoverable history`) even though `files`/`search` see it (they read the tool_use\n/// input directly). The authoritative content IS in the input - `Write.content`,"
         },
         {
@@ -64496,7 +64496,7 @@
       "code": [
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "81-90",
+          "lines": "82-91",
           "snippet": "        // Skip when this op already has a `toolUseResult` carrier to reconstruct from, OR\n        // when its result was an ERROR (a failed Edit/Write never mutated the file, so its\n        // input is a phantom - `is_error:true` covers both \"String to replace not found\"\n        // and the Edit-before-Read \"File has not been read yet\" wall, incl. the\n        // Bash-created-then-directly-Edited and the must-re-Read-a-plan cases).\n        if let Some(id) = id {\n            if ids_with_result.contains(id) || failed_ids.contains(id) {\n                continue;\n            }\n        }"
         }
       ],
