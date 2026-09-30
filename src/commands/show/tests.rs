@@ -277,6 +277,18 @@ fn touching_and_overlapping_line_pieces_merge() {
         },
     );
     assert_eq!(args(&capped), Some("--line 3..9,20..22"));
+    // Pieces that only touch - one ends on the line before the next begins - merge too, and
+    // a gap of one line keeps them apart.
+    let s = specs(&[], &[(3, 5), (6, 8), (10, 11)]);
+    let capped = cap_units(
+        &units,
+        1,
+        &Addressed::Records {
+            specs: &s,
+            uuids: &none,
+        },
+    );
+    assert_eq!(args(&capped), Some("--line 3..8,10..11"));
 }
 
 #[test]
