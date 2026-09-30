@@ -225,21 +225,21 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
         `hook_success` IS exactly when it carries a rendered body. A record the model\n  \
         never receives - by its leaf (axis 1) or by this predicate - renders\n  \
         `[not delivered]`, exactly where the JSON `delivered` every hit carries reads\n  \
-        false. ONE leaf is exempt from axis 2, the single stated exception to the visible-face law:\n  \
-        `agent.message.structured` rides a converter-dropped payload, so the axis would\n  \
-        take it out of `-t agent` and `-t agent.message` and leave that category showing\n  \
-        only its plain half. The axis asks what the model RECEIVED and this is the leaf\n  \
-        the model WROTE, so a bare `agent.message` gives you both - the way the API gives\n  \
-        a turn free text or a schema-bound answer and never both. The record was still not\n  \
-        delivered, so its `delivered` field and its marker are unchanged. AXIS 3,\n  \
-        SURVIVAL: Claude Code rebuilds a session by walking `parentUuid` from ONE leaf, and\n  \
-        a record that walk no longer reaches is off the conversation however it was\n  \
-        delivered - marked `[abandoned]` / `[rewound]` / `[replay copy of L<n>]`, outside\n  \
-        turn numbering, reached by a glob or an exact leaf. A PRE-CUT record (above a\n  \
-        compaction cut) is never narrowed away: what the model saw AT THE TIME is the\n  \
-        question an archive answers. JSON carries `survival`, `abandoned_root_line` and\n  \
-        `replay_copy_of` per hit and the totals in the summary; the text footer states\n  \
-        every one of them.\n  \
+        false. ONE leaf is exempt from axis 2, the single stated exception to the\n  \
+        visible-face law: `agent.message.structured` rides a converter-dropped payload, so\n  \
+        the axis would take it out of `-t agent` and `-t agent.message` and leave that\n  \
+        category showing only its plain half. The axis asks what the model RECEIVED and\n  \
+        this is the leaf the model WROTE, so a bare `agent.message` gives you both - the\n  \
+        way the API gives a turn free text or a schema-bound answer and never both. The\n  \
+        record was still not delivered, so its `delivered` field and its marker are\n  \
+        unchanged. AXIS 3, SURVIVAL: Claude Code rebuilds a session by walking `parentUuid`\n  \
+        from ONE leaf, and a record that walk no longer reaches is off the conversation\n  \
+        however it was delivered - marked `[abandoned]` / `[rewound]` /\n  \
+        `[replay copy of L<n>]`, outside turn numbering, reached by a glob or an exact\n  \
+        leaf. A PRE-CUT record (above a compaction cut) is never narrowed away: what the\n  \
+        model saw AT THE TIME is the question an archive answers. JSON carries `survival`,\n  \
+        `abandoned_root_line` and `replay_copy_of` per hit and the totals in the summary;\n  \
+        the text footer states every one of them.\n  \
           THE 1:1 LAW: `csift show --line N` never hard-misses a PARSEABLE line. A shape\n  \
         csift models no leaf for renders `? unmodeled: <type[/subtype|/attachment.type]>`\n  \
         with the line\'s own top-level keys (JSON `label`:null, `labels`:[], `unmodeled`),\n  \
