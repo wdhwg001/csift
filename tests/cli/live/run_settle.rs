@@ -287,3 +287,57 @@ fn a_manifest_older_than_its_lane_settles_nothing() {
     );
     assert_eq!(verdict["settled_children"], 1, "{}", status.stdout);
 }
+
+/// The minute is inclusive: a lane whose newest record is EXACTLY a minute after its run's
+/// manifest ended is the kill's own write and stays settled, and one millisecond more reads
+/// the lane from its tail.
+#[test]
+fn a_manifest_settles_a_lane_up_to_exactly_a_minute_older() {
+    let h = Home::new();
+    let sess = "0f1e2d3c-4b5a-4968-8776-a5b4c3d2e1f2";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        r#"{"type":"user","uuid":"u1","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"resume the fleet"}}"#,
+    );
+    let wf = |run: &str, rel: &str| format!("{ENC}/{sess}/subagents/workflows/{run}/{rel}");
+    // The frozen lane's newest record is 05:01:05.000.
+    for (run, agent, ended) in [
+        ("wf_F", "a000000000000000f", "2026-06-07T05:00:05.000Z"),
+        ("wf_G", "a0000000000000010", "2026-06-07T05:00:04.999Z"),
+    ] {
+        h.write(&wf(run, &format!("agent-{agent}.jsonl")), &frozen());
+        h.write(
+            &wf(run, &format!("agent-{agent}.meta.json")),
+            r#"{"agentType":"workflow-subagent"}"#,
+        );
+        h.write(
+            &wf(run, "journal.jsonl"),
+            &format!("{{\"type\":\"started\",\"agentId\":\"{agent}\"}}\n"),
+        );
+        h.write(
+            &format!("{ENC}/{sess}/workflows/{run}.json"),
+            &format!(r#"{{"runId":"{run}","status":"killed","timestamp":"{ended}"}}"#),
+        );
+    }
+    let agents = h.run(&["agents", &at(sess), "--format", "json"]);
+    assert!(agents.success, "{}", agents.stderr);
+    let status_of = |id: &str| {
+        rows(&agents.stdout, "agent")
+            .into_iter()
+            .find(|r| r["agent_id"] == id)
+            .unwrap_or_else(|| panic!("no row for {id}: {}", agents.stdout))["status"]
+            .clone()
+    };
+    assert_eq!(
+        status_of("a000000000000000f"),
+        "killed",
+        "{}",
+        agents.stdout
+    );
+    assert_eq!(
+        status_of("a0000000000000010"),
+        "running",
+        "{}",
+        agents.stdout
+    );
+}
