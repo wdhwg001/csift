@@ -435,7 +435,8 @@ commands/agents/   # run (filters/windows/teammate hint), render (text tree), js
 commands/files/    # types, run, mutations (structured + bash heuristics), rollup, render
 commands/recover/  # types, run (batch driver), backups (--list-backups store listing),
                    #   bash_anchors (per-turn content-anchor gates + suppression),
-                   #   scan (+opaque accounting), events (extraction),
+                   #   scan (+opaque accounting), events (extraction), paths (the candidate a
+                   #   record path stands for, the one lexical spelling, the suffix match),
                    #   carriers (toolUseResult/attachment + freshness signals), buffer (SparseBuffer),
                    #   replay, diff (LCS/unified), render (disclosure + merge), restore, report, timeline
 commands/plan.rs + plan/

@@ -26831,8 +26831,8 @@
           "snippet": "    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), cwds.call) {"
         },
         {
-          "path": "src/commands/recover/events.rs",
-          "lines": "364-367",
+          "path": "src/commands/recover/paths.rs",
+          "lines": "60-63",
           "snippet": "pub(crate) fn names_file(target: &str, path: &str) -> bool {\n    if target == path {\n        return true;\n    }"
         }
       ],
@@ -44906,7 +44906,7 @@
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "397-402",
+          "lines": "322-327",
           "snippet": "    if let Some(snap) = rec.snapshot.as_ref() {\n        if let Some(tfb) = snap.get(\"trackedFileBackups\").and_then(|v| v.as_object()) {\n            for (path, entry) in tfb {\n                if path_matches(target_file, path, rec.cwd.as_deref()) {\n                    events.push(FileEvent {\n                        line_no,"
         },
         {
