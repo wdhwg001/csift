@@ -1555,6 +1555,12 @@ surface change bumps the PATCH.
   `user.message`, `user.answer` or `user.rejection`, turn-opening or not, in the text
   `search` renders (`/name args` for the slash command, a relayed or queued message's own
   body); a `<task-notification>` pulse is not the person's words and no longer takes it.
+- **A fork child's first carrier emitted an inbox unit that named no call.** A subagent
+  return carrier holding text beside its result emits two `agent.communication.inbox` units,
+  and the text one read `pairing` null, no tool name and no `result_of` edge while the
+  result one read the call. The text unit now carries the carrier's call, so both report
+  one pairing, one tool name and one edge (`orphan` and `not in this file` when the call is
+  on no line of the file).
 
 ### Performance
 

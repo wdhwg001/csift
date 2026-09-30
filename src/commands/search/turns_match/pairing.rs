@@ -77,8 +77,10 @@ pub(crate) fn build_tool_index(rows: &[Row<'_>]) -> ToolIndex {
 /// in a teams session) falls outside the `pairing` census whenever its comm view wins the
 /// dedup. A use-side hit is paired iff its result-id is present (else pending - frozen /
 /// elicitation / unreturned); a result-side hit is paired iff its use-id is present (else
-/// orphan - compacted / sliced away). A hit with no `tool_use_id` (a record-text unit: an
-/// inbound teammate-message, an idle signal section) stays `None` - outside the axis.
+/// orphan - compacted / sliced away). A hit with no `tool_use_id` (a record-text unit whose
+/// record names no call: an inbound teammate-message, an idle signal section) stays `None` -
+/// outside the axis; the TEXT unit of a subagent-return carrier names its carrier's call
+/// and pairs like the result unit beside it.
 pub(crate) fn set_pairing(h: &mut Hit, ix: &ToolIndex) {
     let (use_ids, result_ids) = (&ix.uses, &ix.results);
     let Some(id) = h.tool_use_id.as_deref() else {

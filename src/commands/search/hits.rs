@@ -416,12 +416,25 @@ pub(crate) fn collect_record_hits(
             } else {
                 None
             };
+            // The TEXT of a subagent-return carrier is an inbox unit of its own beside the
+            // result block's, and both answer for one call: without the id this unit read
+            // `pairing` null, no tool name and no `result_of` edge while its sibling read
+            // the call. Over one projects root 56 of 441 return carriers hold such text,
+            // every one a fork child's first carrier (38 of 423 with the measuring
+            // session's own tree left out). A unit whose record names no call stays
+            // outside the pairing axis.
+            let tuid = if class == Class::CommInbox {
+                rec.subagent_return_call_id(ctx)
+            } else {
+                None
+            };
+            let tool = tuid.as_deref().and_then(|id| tool_names.get(id).cloned());
             emit(
                 class,
                 &text,
-                None,
+                tool,
                 dir,
-                None,
+                tuid,
                 None,
                 crate::model::TaskIds::default(),
                 None,

@@ -485,7 +485,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "510-513",
+          "lines": "516-519",
           "snippet": "                if section.contains(NOTIFICATION_RESULT_TAG) {\n                    let child = extract_xml_tag(section, \"tool-use-id\")\n                        .and_then(|id| ctx.spawn.and_then(|sp| sp.child_for_spawn_tool_use_id(&id)))\n                        .unwrap_or_else(|| \"?\".to_string());"
         },
         {
@@ -2866,7 +2866,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "360-363",
+          "lines": "366-369",
           "snippet": "        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -2992,7 +2992,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "360-363",
+          "lines": "366-369",
           "snippet": "        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -3080,7 +3080,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "360-363",
+          "lines": "366-369",
           "snippet": "        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         },
         {
@@ -10417,7 +10417,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "304-307",
+          "lines": "310-313",
           "snippet": "        // BATCHED mixed-family sections: a `<task-notification>` automation pulse and/or an\n        // inbound peer message can be concatenated in ONE record. Scan ALL sections and UNION\n        // their labels, with notification precedence over a peer tag quoted inside a\n        // notification span. When >=1 section matches, that fully classifies the record."
         }
       ],
@@ -10517,7 +10517,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "360-363",
+          "lines": "366-369",
           "snippet": "        if is_agents_stopped_notice(s) {\n            push_unique(out, Class::NotificationSubagent);\n            return;\n        }"
         }
       ],
@@ -13306,7 +13306,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "300-303",
+          "lines": "306-309",
           "snippet": "        if self.is_compact_summary.unwrap_or(false) {\n            push_unique(out, Class::CompactionSummary);\n            return;\n        }"
         }
       ],
@@ -16254,7 +16254,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "159-167",
+          "lines": "165-173",
           "snippet": "        // Elicitation sidecar markers (section 3.10): a PENDING marker stands in for the native\n        // tool_use CC has not yet written -> agent.tool.use (covers the MCP `system` form too,\n        // which carries no tool_use block). A RESOLVED marker is a pairing artifact -> no label.\n        if self.is_elicitation_marker() {\n            if self.csift_phase.as_deref() == Some(\"pending\") {\n                push_unique(&mut out, Class::AgentToolUse);\n            }\n            return out;\n        }"
         }
       ],
@@ -17103,7 +17103,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "159-167",
+          "lines": "165-173",
           "snippet": "        // Elicitation sidecar markers (section 3.10): a PENDING marker stands in for the native\n        // tool_use CC has not yet written -> agent.tool.use (covers the MCP `system` form too,\n        // which carries no tool_use block). A RESOLVED marker is a pairing artifact -> no label.\n        if self.is_elicitation_marker() {\n            if self.csift_phase.as_deref() == Some(\"pending\") {\n                push_unique(&mut out, Class::AgentToolUse);\n            }\n            return out;\n        }"
         }
       ],
@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2563",
+          "lines": "2564",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -19289,7 +19289,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "174-177",
+          "lines": "180-183",
           "snippet": "        if self.hook_additional_context_text().is_some() {\n            self.push_hook_classes(&mut out);\n            return out;\n        }"
         },
         {
@@ -37676,7 +37676,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "246-250",
+          "lines": "252-256",
           "snippet": "                Block::Thinking { .. } | Block::RedactedThinking { .. } => {\n                    if let Some(c) = thinking::classify(b) {\n                        push_unique(out, c);\n                    }\n                }"
         }
       ],
@@ -37868,7 +37868,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "246-250",
+          "lines": "252-256",
           "snippet": "                Block::Thinking { .. } | Block::RedactedThinking { .. } => {\n                    if let Some(c) = thinking::classify(b) {\n                        push_unique(out, c);\n                    }\n                }"
         }
       ],
@@ -45778,7 +45778,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "206-211",
+          "lines": "212-217",
           "snippet": "        if !self.is_type(\"assistant\") && !self.is_type(\"user\") {\n            if let Some(c) = self.promoted_class() {\n                push_unique(&mut out, c);\n            }\n            return out;\n        }"
         },
         {
@@ -50686,7 +50686,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "364-369",
+          "lines": "370-375",
           "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (`parent \u21e8 self`),\n        // not the operator - and that holds regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
         },
         {
@@ -52966,7 +52966,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "187-198",
+          "lines": "193-204",
           "snippet": "        if self.is_type(\"attachment\") {\n            if let Some(payload) = self.attachment_value() {\n                if let Some(ty) = payload.get(\"type\").and_then(serde_json::Value::as_str) {\n                    if ty == \"queued_command\" && attachments::payload_origin_is_human(payload) {\n                        push_unique(&mut out, Class::UserMessage);\n                        return out;\n                    }\n                    if let Some(c) = attachments::classify(ty) {\n                        push_unique(&mut out, c);\n                    }\n                }\n            }"
         }
       ],
@@ -61052,7 +61052,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "364-369",
+          "lines": "370-375",
           "snippet": "        // The spawn-prompt seed of a subagent transcript is an inbound comm (`parent \u21e8 self`),\n        // not the operator - and that holds regardless of isMeta.\n        if ctx.is_subagent && ctx.is_transcript_opener {\n            push_unique(out, Class::CommInbox);\n            return;\n        }"
         }
       ],
@@ -65741,7 +65741,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "335-338",
+          "lines": "341-344",
           "snippet": "        if s.starts_with(LOCAL_COMMAND_STDOUT_PREFIX) {\n            push_unique(out, Class::CommandStdout);\n            return;\n        }"
         }
       ],
@@ -66021,7 +66021,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "339-350",
+          "lines": "345-356",
           "snippet": "        if is_slash_command_wrapper(s) {\n            // Prose typed after the slash command (`<command-args>`) IS genuine user\n            // input - and the RICHER view (richest-view law: the prose beats the\n            // wrapper), so it is pushed FIRST: the unfiltered record-text emission\n            // renders `/name args`, never the wrapper XML. An explicit\n            // `-t harness.command.invocation` still reaches the wrapper form.\n            if self.slash_command_args().is_some() {\n                push_unique(out, Class::UserMessage);\n            }\n            push_unique(out, Class::CommandInvocation);\n            return;\n        }"
         }
       ],
@@ -67451,7 +67451,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "480-484",
+          "lines": "486-490",
           "snippet": "        if !self.is_type(\"user\")\n            || self.is_elicitation_marker()\n            || self.is_compact_summary.unwrap_or(false)\n        {\n            return out;"
         }
       ],
@@ -80882,7 +80882,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "218-220",
+          "lines": "224-226",
           "snippet": "            Some(\"assistant\") if self.is_resume_placeholder() => {\n                push_unique(&mut out, Class::ResumePlaceholder);\n            }"
         },
         {
@@ -82828,7 +82828,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "375-378",
+          "lines": "381-384",
           "snippet": "        if self.is_scheduled_fire_prompt(ctx) {\n            push_unique(out, Class::ScheduleFire);\n            return;\n        }"
         },
         {
@@ -82930,7 +82930,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "370-374",
+          "lines": "376-380",
           "snippet": "        // harness.schedule.fire: the PROMPT a scheduled task fired. LAST of the harness arms\n        // by construction - the fired text is whatever the operator armed, so every marker\n        // above must get first refusal, and the two tick prompts that DO carry a marker keep\n        // their own leaves. Before this arm such a record matched nothing and fell straight\n        // into the isMeta exclusion below: unsearchable, and absent from every census."
         },
         {
@@ -86529,7 +86529,7 @@
       "code": [
         {
           "path": "src/model/classify.rs",
-          "lines": "449-453",
+          "lines": "455-459",
           "snippet": "if self.is_meta.unwrap_or(false)\n                && blocks.iter().any(|b| matches!(b, Block::Image { .. }))\n            {\n                push_unique(out, Class::ContextImage);\n            }"
         },
         {
@@ -89512,7 +89512,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3604"
+          "lines": "3605"
         }
       ],
       "states": [
@@ -90839,7 +90839,7 @@
         },
         {
           "path": "src/model/classify.rs",
-          "lines": "387-389",
+          "lines": "393-395",
           "snippet": "        if !self.is_meta.unwrap_or(false) && !self.is_turn_companion() {\n            push_unique(out, Class::UserMessage);\n        }"
         }
       ],

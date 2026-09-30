@@ -125,21 +125,27 @@ impl Record {
     /// or async) - the ACK shares the spawn `tool_use_id` so the lookup WOULD resolve it, but it
     /// is not a return.
     pub(crate) fn is_subagent_return(&self, ctx: &ClassifyCtx) -> bool {
-        let Some(spawn) = ctx.spawn else {
-            return false;
-        };
+        self.subagent_return_call_id(ctx).is_some()
+    }
+
+    /// The call a SUBAGENT RETURN returns: the `tool_use_id` of the first result block on
+    /// this carrier that the spawn lookup resolves to a spawned child, under the two
+    /// refusals [`Record::is_subagent_return`] states. A carrier that also holds TEXT - a
+    /// fork child's first carrier, the fork call's result beside its `<fork-boilerplate>`
+    /// directive - emits that text as a record-level `agent.communication.inbox` unit
+    /// beside its result block's unit, and this is the id the text unit carries, so the
+    /// two report one pairing, one tool name and one `result_of` edge.
+    pub(crate) fn subagent_return_call_id(&self, ctx: &ClassifyCtx) -> Option<String> {
+        let spawn = ctx.spawn?;
         if self.is_spawn_launch_ack() {
-            return false;
+            return None;
         }
-        let Some(blocks) = self.blocks() else {
-            return false;
-        };
-        blocks.iter().any(|b| match b {
+        self.blocks()?.iter().find_map(|b| match b {
             Block::ToolResult {
                 tool_use_id: Some(id),
                 ..
-            } => spawn.child_for_spawn_tool_use_id(id).is_some(),
-            _ => false,
+            } if spawn.child_for_spawn_tool_use_id(id).is_some() => Some(id.clone()),
+            _ => None,
         })
     }
 

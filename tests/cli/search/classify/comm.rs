@@ -317,6 +317,87 @@ fn search_subagent_scope_spawn_lookup_resolves_in_subagent_spawn_and_return() {
     );
 }
 
+/// A subagent RETURN carrier that also holds TEXT - a fork child's first carrier, the
+/// fork call's result beside its `<fork-boilerplate>` directive - emits TWO inbox units:
+/// the record-level one for the text and the block one for the result. Both name the same
+/// call, so both report the same pairing, tool name and `result_of` edge: the record-level
+/// unit read `pairing` null, no tool name and only a `parent` edge while its sibling read
+/// `paired`, the tool and the call's line. With the call in the file both units read
+/// `paired`; with the call on no line of the file both read `orphan`, no tool name, and a
+/// `result_of` edge naming the id `not in this file`.
+#[test]
+fn a_return_carrier_s_text_unit_names_the_call_its_result_unit_names() {
+    let enc = "-Users-x-forked";
+    let sess = "27272727-3838-4949-5a5a-6b6b6b6b6b6b";
+    let child = "cccc5555dddd6666";
+    let seed = r#"{"type":"user","uuid":"u0","sessionId":"27272727-3838-4949-5a5a-6b6b6b6b6b6b","cwd":"/Users/x/forked","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"fork it"}}"#;
+    let call = r#"{"type":"assistant","uuid":"fa0","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_forkcall","name":"Task","input":{"description":"zzfork","subagent_type":"executor"}}]}}"#;
+    let carrier = r#"{"type":"user","uuid":"fr0","parentUuid":"fa0","timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_forkcall","content":"zzforked result"},{"type":"text","text":"<fork-boilerplate> zzdirective for the fork"}]}}"#;
+    for (with_call, pairing, tool) in [(true, "paired", Some("Task")), (false, "orphan", None)] {
+        let h = Home::new();
+        h.write(&format!("{enc}/{sess}.jsonl"), &format!("{seed}\n"));
+        let lines = if with_call {
+            format!("{call}\n{carrier}\n")
+        } else {
+            format!("{carrier}\n")
+        };
+        h.write(
+            &format!("{enc}/{sess}/subagents/agent-{child}.jsonl"),
+            &lines,
+        );
+        h.write(
+            &format!("{enc}/{sess}/subagents/agent-{child}.meta.json"),
+            r#"{"agentType":"executor","toolUseId":"toolu_forkcall"}"#,
+        );
+        let out = h.run(&[
+            "search",
+            "",
+            "-t",
+            "agent.communication.inbox",
+            at(child).as_str(),
+            "--no-subagents",
+            "--format",
+            "json",
+        ]);
+        assert!(out.success, "stderr: {}", out.stderr);
+        let hits: Vec<serde_json::Value> = out
+            .stdout
+            .lines()
+            .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+            .filter(|o| o["kind"] == "exchange")
+            .flat_map(|o| o["hits"].as_array().cloned().unwrap_or_default())
+            .collect();
+        assert_eq!(
+            hits.len(),
+            2,
+            "the text unit and the result unit:\n{}",
+            out.stdout
+        );
+        for hit in &hits {
+            assert_eq!(hit["pairing"], pairing, "with_call={with_call}: {hit}");
+            assert_eq!(
+                hit["tool_name"].as_str(),
+                tool,
+                "with_call={with_call}: {hit}"
+            );
+            let result_of: Vec<&serde_json::Value> = hit["for"]
+                .as_array()
+                .map(|a| a.iter().filter(|e| e["kind"] == "result_of").collect())
+                .unwrap_or_default();
+            assert_eq!(result_of.len(), 1, "with_call={with_call}: {hit}");
+            assert_eq!(result_of[0]["basis"], "key", "{hit}");
+            let target = &result_of[0]["target"];
+            if with_call {
+                assert_eq!(target["line"], 1, "the call's own line: {hit}");
+            } else {
+                assert!(target["line"].is_null(), "{hit}");
+                assert_eq!(target["uuid"], "toolu_forkcall", "{hit}");
+                assert_eq!(target["note"], "not in this file", "{hit}");
+            }
+        }
+    }
+}
+
 /// K2: a COORDINATOR relay is a delivered message, so an ordinary scan finds it. It is an
 /// isMeta record - the harness wrote it into the conversation - so it opens no turn, and
 /// the opener render answers nothing for it; it is no attachment either. The record
