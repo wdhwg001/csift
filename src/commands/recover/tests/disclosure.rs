@@ -116,3 +116,27 @@ fn collect_opaque_ignores_other_tools_with_a_command_field() {
     ]);
     assert!(collect_opaque_commands("s", &records, &view_of(&records)).is_empty());
 }
+
+#[test]
+fn the_refusal_lists_ten_candidates_whole_and_counts_only_what_it_cuts() {
+    // Ten candidates fit the list and nothing is counted beside it; the eleventh is the
+    // first the list cuts, and the count names exactly that one.
+    let paths: Vec<String> = (1..=11).map(|i| format!("/p/d{i:02}/README.md")).collect();
+    let refusal = |n: usize| {
+        let names: std::collections::BTreeSet<&str> =
+            paths[..n].iter().map(String::as_str).collect();
+        super::super::run::ambiguous_target("--file", "README.md", &names)
+    };
+    let ten = refusal(10);
+    assert_eq!(ten.lines().filter(|l| l.starts_with("  /p/")).count(), 10);
+    assert!(!ten.contains("more"), "{ten}");
+    let eleven = refusal(11);
+    assert_eq!(
+        eleven.lines().filter(|l| l.starts_with("  /p/")).count(),
+        10
+    );
+    assert!(
+        eleven.contains("  ... +1 more (a longer suffix narrows the list)"),
+        "{eleven}"
+    );
+}
