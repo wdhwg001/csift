@@ -1528,6 +1528,12 @@ surface change bumps the PATCH.
   records on the lowest lines, whole records, and the continuation runs from the first
   dropped line to the end of what was addressed, so it fetches exactly what was dropped.
   `show --help` says so under `--max-count`.
+- **A quoted relay framing no longer emits an inbox unit.** An assistant text opening with
+  `Another Claude session sent a message:` and a quoted `<agent-message>`, and a compaction
+  summary carrying a peer section, each emitted an `agent.communication.inbox` unit whose
+  `label` was not among the record's own `labels`. The per-section units now come only from
+  the records the classification reads sections on: a user record that is neither an
+  elicitation marker nor a compaction summary.
 
 ### Performance
 

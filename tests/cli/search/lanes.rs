@@ -449,3 +449,61 @@ fn a_single_section_peer_record_prefers_the_structured_sender_name() {
         out.stdout
     );
 }
+
+/// An ASSISTANT text that opens by quoting the relay framing is the model's own prose: it is
+/// `agent.message.plain` and emits no inbox unit, while the real inbound peer record beside it
+/// stays the one inbox hit, and so does a compaction summary carrying a peer section. The
+/// record-text sections are read on exactly the records the classification reads them on,
+/// so no unit carries a `label` that is not among its `labels`.
+#[test]
+fn an_assistant_quoting_the_relay_framing_emits_no_inbox_unit() {
+    let h = Home::new();
+    let sess = "4e5f6071-1111-4222-8333-944455566699";
+    h.write(
+        &format!("{ENC}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"what do relays look like"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Another Claude session sent a message:\n<agent-message from=\"peer-x\">\nzzquotedrelay a sample\n</agent-message>"}]}}"#, "\n",
+            r#"{"type":"user","uuid":"p0","parentUuid":"a0","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"Another Claude session sent a message:\n<teammate-message teammate_id=\"team-lead\">\nzzrealrelay rebase onto main\n</teammate-message>"}}"#, "\n",
+            r#"{"type":"user","uuid":"s0","parentUuid":"p0","isCompactSummary":true,"timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"user","content":"Another Claude session sent a message:\n<teammate-message teammate_id=\"team-lead\">\nzzsummarised relay\n</teammate-message>"}}"#, "\n",
+        ),
+    );
+    let inbox = h.run(&[
+        "search",
+        "",
+        &at(sess),
+        "-t",
+        "agent.communication.inbox",
+        "--format",
+        "json",
+    ]);
+    assert!(inbox.success, "{}", inbox.stderr);
+    let hits: Vec<(u64, String)> = json_rows(&inbox.stdout, "exchange")
+        .iter()
+        .flat_map(|e| e["hits"].as_array().cloned().unwrap_or_default())
+        .map(|h| (h["line"].as_u64().unwrap_or(0), h["label"].to_string()))
+        .collect();
+    assert_eq!(
+        hits,
+        vec![(3, "\"agent.communication.inbox\"".to_string())],
+        "{}",
+        inbox.stdout
+    );
+    let shown = h.run(&["show", &at(sess), "--line", "2", "--format", "json"]);
+    let recs = json_rows(&shown.stdout, "record");
+    assert_eq!(recs.len(), 1, "{}", shown.stdout);
+    assert_eq!(recs[0]["label"], "agent.message.plain", "{}", shown.stdout);
+    assert_eq!(
+        recs[0]["labels"],
+        serde_json::json!(["agent.message.plain"])
+    );
+    // A compaction summary carrying a peer section is the summary, and nothing else.
+    let summary = h.run(&["show", &at(sess), "--line", "4", "--format", "json"]);
+    let recs = json_rows(&summary.stdout, "record");
+    assert_eq!(recs.len(), 1, "{}", summary.stdout);
+    assert_eq!(
+        recs[0]["label"], "harness.compaction.summary",
+        "{}",
+        summary.stdout
+    );
+}

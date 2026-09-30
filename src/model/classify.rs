@@ -467,9 +467,22 @@ impl Record {
     /// outside every notification span yields `agent.communication.{inbox,signal}` (`<sender> ⇨ self`).
     /// EMPTY when the record carries no such section - the caller then falls back to the single
     /// richest-label record-text emission.
+    ///
+    /// Read on exactly the records the classification reads these sections on - the
+    /// `classify` -> `classify_user` path: a `type:"user"` record that is neither an
+    /// elicitation marker nor a compaction summary. An ASSISTANT text that QUOTES a relay
+    /// preamble or a pulse at its start is the model's own prose (`agent.message.plain`), and
+    /// a compaction summary carrying a peer section is `harness.compaction.summary`; emitting a
+    /// section for either put a unit on the record whose `label` was not among its `labels`.
     #[must_use]
     pub fn record_text_sections(&self, ctx: &ClassifyCtx) -> Vec<RecordTextSection> {
         let mut out: Vec<RecordTextSection> = Vec::new();
+        if !self.is_type("user")
+            || self.is_elicitation_marker()
+            || self.is_compact_summary.unwrap_or(false)
+        {
+            return out;
+        }
         let Some(raw) = self.raw_message_text() else {
             return out;
         };
