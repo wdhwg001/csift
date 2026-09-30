@@ -1600,6 +1600,14 @@ surface change bumps the PATCH.
   result one read the call. The text unit now carries the carrier's call, so both report
   one pairing, one tool name and one edge (`orphan` and `not in this file` when the call is
   on no line of the file).
+- **A spawn prompt that names a fork record is still the lane's seed.** `search` took a
+  lane for a `/fork` clone when the literal `fork-context-ref` occurred anywhere in the first
+  4096 bytes of its line 1, and a subagent's line 1 is its spawn prompt, so a prompt about
+  forks read as a clone: its seed classified `user.message` instead of
+  `agent.communication.inbox`, lost its `parent ⇨ self` direction and joined every spanning
+  count of the person's words. Line 1's type decides now, read as the quoted value
+  `"fork-context-ref"` the candidate gate already uses, which a quote-escaping JSON string
+  cannot carry.
 
 ### Performance
 

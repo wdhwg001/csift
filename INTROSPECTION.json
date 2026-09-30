@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2567",
+          "lines": "2568",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -50696,8 +50696,8 @@
         },
         {
           "path": "src/commands/search/scan.rs",
-          "lines": "472-473",
-          "snippet": "    let head_end = memchr::memchr(b'\\n', bytes)\n        .unwrap_or(bytes.len())"
+          "lines": "482",
+          "snippet": "    let head_is_fork = memchr::memmem::find(&bytes[..head_end], b\"\\\"fork-context-ref\\\"\").is_some();"
         }
       ],
       "states": [
@@ -50706,7 +50706,7 @@
           "from_basis": "verified",
           "to": null,
           "behavior": "A subagent transcript's first record is an isSidechain:true type:\"user\" seed carrying the spawn prompt in 7483 of 7516 measured transcripts (99.56%). The other 33 open with a type:\"fork-context-ref\" line - a context-fork spawn shape carrying {agentId, contextLength, parentLastUuid, parentSessionId} and no message - after which the first real record is an isSidechain:true assistant; 31 of those 33 carry no user seed anywhere. In TOP-LEVEL transcripts a sidechain record does not occur at all (0 lines across 64 transcripts).",
-          "depends": "`is_genuine_user` deliberately does NOT gate on `isSidechain`, so the `list` per-subagent preview can treat the seed as the subagent's first user message; the seed classifies `agent.communication.inbox` (parent to self), not `user.message`. Since that change a subagent transcript whose line 1 is a `fork-context-ref` record has NO spawn seed: its openers are the parent's own human messages and classify `user.message`; only a genuine child's first opener is the parent-to-self seed.",
+          "depends": "`is_genuine_user` deliberately does NOT gate on `isSidechain`, so the `list` per-subagent preview can treat the seed as the subagent's first user message; the seed classifies `agent.communication.inbox` (parent to self), not `user.message`. A subagent transcript whose line 1 is a `fork-context-ref` record has NO spawn seed: its openers are the parent's own human messages and classify `user.message`; only a genuine child's first opener is the parent-to-self seed. The line's TYPE decides which of the two a transcript is, never the literal occurring on it: `search` reads the QUOTED value `\"fork-context-ref\"` in the first 4096 bytes of line 1 (src/commands/search/scan.rs), because a spawn seed's prompt can name the record in prose, and a quote inside a JSON string is stored escaped, so the quoted form occurs only where a whole string value reads it. Reading the bare literal took such a seed for a clone's opener: it classified `user.message`, lost its parent-to-self direction and joined every spanning count of the person's words.",
           "instrument": "`head -1 <a subagent transcript> | rg -c isSidechain` (expect 1) and `rg -c '\"isSidechain\":true' <a top-level transcript>` (expect 0). Counting rule = physical lines carrying the flag, per lane.",
           "probe": {
             "kind": "corpus",
@@ -50767,11 +50767,11 @@
           },
           "verified": {
             "claude_code": "2.1.258",
-            "verdict": "holds",
-            "instrument": "the producer leg traced in the 2.1.258 binary (trigger Agent tool async call({prompt:e,subagent_type:n,...}) building zr=[xe({content:e})] @163919950; gate runner mT: let Ht,bn=_?wfn(_):[],Rn=[...bn,...n] @163774706; gate appendEntry case\"dedup-transcript\": C=e.isSidechain&&e.agentId!==void 0, I=C?Ud(uo(e.agentId)):_ @166107421; writer async function Kne(e,n,r,o){...insertMessageChain(dMe(e),!0,n,r,...)} @166114240; writer insertMessageChain record literal: isSidechain:n, agentId:r @166105359), each excerpt re-read within 400 bytes of its offset; specimen leg: python census over every project dir under the corpus root: line 1 of every subagent transcript (journal.jsonl excluded) bucketed as (type, isSidechain, content-is-string); isSidechain:true lines counted in every top-level transcript; and for every fork-opening file a scan for any non-meta non-summary string-content user record anywhere in the file",
-            "observed": "complete producer trace: trigger Agent tool async call({prompt:e,subagent_type:n,...}) building zr=[xe({content:e})] @163919950; gate runner mT: let Ht,bn=_?wfn(_):[],Rn=[...bn,...n] @163774706; gate appendEntry case\"dedup-transcript\": C=e.isSidechain&&e.agentId!==void 0, I=C?Ud(uo(e.agentId)):_ @166107421; writer async function Kne(e,n,r,o){...insertMessageChain(dMe(e),!0,n,r,...)} @166114240; writer insertMessageChain record literal: isSidechain:n, agentId:r @166105359. writer excerpt: async function Kne(e,n,r,o){let d=Q(),f=__t(ya(d));await Fi().insertMessageChain(dMe(e),!0,n,r,void 0,d,f,o)}a specimen: 7,646 subagent transcripts: 7,613 open with ('user', True, True) and 33 with ('fork-context-ref', None, False) - no other line-1 shape. 67 top-level transcripts: 0 isSidechain:true lines. Of the 33 fork openers, 32 carry no string-content user record anywhere and 1 does. (Refines the claim's 7483/75",
-            "rule": "One bucket per subagent transcript keyed on physical line 1; sidechain lines counted per physical line in top-level files",
-            "note": "The Agent tool mints the seed as a plain user record, the runner persists the child's messages with isSidechain hardcoded true, and appendEntry routes those to the agent file - while the fork branch replaces the seed with a context-ref, exactly the two line-1 shapes the corpus shows."
+            "verdict": "refined",
+            "instrument": "the five producer hops of this state re-read in the 2.1.258 binary, each excerpt compared byte for byte at its recorded offset and counted over the whole build; specimen leg: a python walk of line 1 of every lane transcript of one projects root (every `*.jsonl` under a `subagents/` directory, `journal.jsonl`, `elicitations.jsonl` and anything under `csift-channel/` excluded), searching the first 4096 bytes for the bare literal `fork-context-ref` and for the quoted `\"fork-context-ref\"`, and reading the line's depth-1 `type` by a full JSON parse; the same walk repeated with the measuring session's own lanes left out",
+            "observed": "5 of 5 hops byte-exact at their offsets, each excerpt once in the build; the build carries the bare literal 10 times and the quoted one 5 times. Whole root: 11,280 lane transcripts; line 1 carries the bare literal on 39, the quoted literal on 33 and a depth-1 type of `fork-context-ref` on 33; the 6 lines with the bare literal alone are all `type:\"user\"` spawn seeds whose prompt names the record in prose, under 2 session directories of 2 project directories; quoted but not typed 0, typed but not quoted 0; 0 line-1 parse failures. With the measuring session's own lanes left out: 9,837 lane transcripts, 15 typed, 1 prose seed.",
+            "rule": "One observation per lane transcript, keyed on its physical line 1 and the first 4096 bytes of it; the whole-root and the excluded readings are each an instant's reading of a live root",
+            "note": "The fork opener is the only line-1 shape carrying the quoted value, so the quoted needle separates the two populations exactly where the bare literal mistook 6 spawn seeds for clones."
           }
         }
       ]
@@ -89512,7 +89512,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3626"
+          "lines": "3627"
         }
       ],
       "states": [

@@ -468,11 +468,18 @@ pub(crate) fn search_one_file(
 
     // A `/fork` child's line 1 is a `fork-context-ref` record: the transcript is a CLONE
     // of its parent's, so its first turn-opener is the parent's human message, not a
-    // spawn-prompt seed. The value substring is the needle the needle law admits.
+    // spawn-prompt seed. Line 1's TYPE decides, never a substring of its text: an ordinary
+    // lane's line 1 is its spawn prompt, and a prompt ABOUT forks carries the bare literal
+    // in prose - 6 of 11,280 lane transcripts on one projects root, against 33 whose line 1
+    // is the record (1 against 15 with the measuring session's own lanes left out) - which
+    // read that seed as the operator's message and dropped its direction. The QUOTED value
+    // is the needle the candidate gate uses: a quote inside a JSON string is stored escaped,
+    // so `"fork-context-ref"` with its own quotes occurs only where a whole string value
+    // reads that - the record's `type` - and on none of those 6 prompts.
     let head_end = memchr::memchr(b'\n', bytes)
         .unwrap_or(bytes.len())
         .min(4096);
-    let head_is_fork = memchr::memmem::find(&bytes[..head_end], b"fork-context-ref").is_some();
+    let head_is_fork = memchr::memmem::find(&bytes[..head_end], b"\"fork-context-ref\"").is_some();
     let rows = merge_rows(&records, &spine);
     let (mut exchanges, turn_count, chain_counts) = reconstruct_and_match(
         path,

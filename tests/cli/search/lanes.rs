@@ -419,6 +419,58 @@ fn a_fork_clone_has_no_spawn_seed_but_a_genuine_child_does() {
     assert_eq!(of(sess), vec!["user.message"], "{}", j.stdout);
 }
 
+#[test]
+fn a_spawn_prompt_that_names_a_fork_record_is_still_the_seed() {
+    // Line 1's TYPE makes a fork clone, never the literal occurring on it. A spawn prompt
+    // ABOUT forks carries `fork-context-ref` in prose; read as a clone, its seed was the
+    // operator's message, lost its `parent ⇨ self` direction and joined every spanning
+    // count of the person's words.
+    let h = Home::new();
+    let enc = "-Users-dev-example-project";
+    let sess = "13131313-2424-4535-8646-757575757576";
+    h.write(
+        &format!("{enc}/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u0","timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"chart the reef"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"a0","parentUuid":"u0","timestamp":"2026-06-07T05:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"charting"}]}}"#, "\n",
+        ),
+    );
+    let lane = "d1d1d1d1d1d1d1d1";
+    h.write(
+        &format!("{enc}/{sess}/subagents/agent-{lane}.jsonl"),
+        concat!(
+            r#"{"parentUuid":null,"isSidechain":true,"type":"user","uuid":"s0","timestamp":"2026-06-07T05:00:02.000Z","message":{"role":"user","content":"Read how a fork-context-ref line is treated, then chart the reef"}}"#, "\n",
+            r#"{"type":"assistant","uuid":"s1","parentUuid":"s0","isSidechain":true,"timestamp":"2026-06-07T05:00:03.000Z","message":{"role":"assistant","content":[{"type":"text","text":"charted"}]}}"#, "\n",
+        ),
+    );
+    let j = h.run(&["search", "chart the reef", &at(lane), "--format", "json"]);
+    assert!(j.success, "stderr: {}", j.stderr);
+    let rows = json_rows(&j.stdout, "exchange");
+    assert_eq!(rows.len(), 1, "one exchange in:\n{}", j.stdout);
+    let hit = &rows[0]["hits"][0];
+    assert_eq!(hit["line"], 1, "{}", j.stdout);
+    assert_eq!(
+        hit["label"], "agent.communication.inbox",
+        "the seed is the parent's message, not the operator's: {}",
+        j.stdout
+    );
+    assert_eq!(
+        hit["from"], sess,
+        "the direction names the parent: {}",
+        j.stdout
+    );
+    assert_eq!(hit["to"], "self", "{}", j.stdout);
+    // Spanning the session, the person's words are the top-level prompt alone.
+    let c = h.run(&["search", "", &at(sess), "-t", "user", "--count-by", "label"]);
+    assert!(c.success, "stderr: {}", c.stderr);
+    assert_eq!(
+        c.stdout.trim(),
+        "1  user.message",
+        "the brief is no user.message: {}",
+        c.stdout
+    );
+}
+
 const NAMED_SESS: &str = "00000000-0000-4000-8000-0000000000d4";
 
 #[test]
