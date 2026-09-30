@@ -234,11 +234,12 @@ pub struct RecoverArgs {
     pub sessions_from: Option<std::path::PathBuf>,
 
     /// The ABSOLUTE file path whose history to reconstruct, matched against the path
-    /// exactly as written in the transcript (with a basename-suffix fallback). A suffix that
-    /// names MORE THAN ONE distinct absolute path in scope is refused before anything is
-    /// replayed, naming every candidate and the count - replaying them together would stitch
-    /// several files' edits into one buffer; pass the absolute path, or a longer suffix that
-    /// names exactly one. REQUIRED
+    /// exactly as written in the transcript and against a relative one resolved through its
+    /// record's shell cwd (with a basename-suffix fallback). A suffix that names MORE THAN
+    /// ONE distinct file in scope - a relative record path counts, as the file its cwd
+    /// resolves it to - is refused before anything is replayed, naming every candidate and
+    /// the count - replaying them together would stitch several files' edits into one
+    /// buffer; pass one of the candidates, or a longer suffix that names exactly one. REQUIRED
     /// for every mode (`--patches` / `--at` / `--coverage`). The MAGIC value `@plan`
     /// (bash-safe, no escaping) instead reconstructs the session-BOUND plan file: the
     /// path from the session's `plan_mode` attachment, so a deleted plan is recoverable

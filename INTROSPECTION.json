@@ -6980,7 +6980,7 @@
       "code": [
         {
           "path": "src/commands/recover/bash_anchors.rs",
-          "lines": "279-286",
+          "lines": "283-290",
           "snippet": "/// The COMPLETENESS-gated stdout of a Bash result: the FIRST carrier record in this\n/// turn answering the tool_use id, whose `toolUseResult` echoes the command output.\n/// `None` when that carrier lacks the echo (workflow lanes never carry it; built-in\n/// and teammate lanes and the main lane do - the module doc has the measurement),\n/// stderr is non-empty, the command was interrupted, or the output was externalized\n/// to a persisted file (the inline text is not the whole stdout then). The gate is\n/// data-driven: no lane predicate, and no second carrier is tried.\nfn gated_stdout("
         },
         {
@@ -6990,7 +6990,7 @@
         },
         {
           "path": "src/commands/recover/bash_anchors.rs",
-          "lines": "300-314",
+          "lines": "304-318",
           "snippet": "        let tur = rec.tool_use_result_value()?;\n        let stdout = tur.get(\"stdout\").and_then(serde_json::Value::as_str)?;\n        let stderr_clean = tur\n            .get(\"stderr\")\n            .and_then(serde_json::Value::as_str)\n            .is_none_or(|s| s.trim().is_empty());\n        let interrupted = tur\n            .get(\"interrupted\")\n            .and_then(serde_json::Value::as_bool)\n            .unwrap_or(false);\n        let persisted = tur.get(\"persistedOutputPath\").is_some();\n        if stderr_clean && !interrupted && !persisted {\n            return Some((*line_no, rec.timestamp.clone(), stdout.to_string()));\n        }\n        return None;"
         }
       ],
@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2553",
+          "lines": "2554",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -20322,7 +20322,7 @@
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "333-344",
+          "lines": "334-345",
           "snippet": "/// Parse a `toolUseResult.staleReadFileStateHint` string into its named paths plus\n/// the truncated-remainder count. Wire shape (Claude Code 2.1.237, corpus-verified):\n/// `[This command modified N file(s) you've previously read: p1, p2 and M more. Call\n/// Read before editing.]` - the list caps at five names; `M` counts the unnamed rest\n/// (0 when the list is complete). Paths are comma-space separated and rendered\n/// relative to the recording shell's cwd.\npub(crate) fn parse_stale_read_hint(hint: &str) -> Option<(Vec<String>, usize)> {\n    let rest = hint.strip_prefix(\"[This command modified \")?;\n    let colon = rest.find(\": \")?;\n    let mut tail = &rest[colon + 2..];\n    if let Some(end) = tail.rfind(\". Call Read before editing.]\") {\n        tail = &tail[..end];"
         },
         {
@@ -20487,8 +20487,8 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "270-282",
-          "snippet": "    // (7a) edited_text_file -> an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {\n            let snippet_text = att\n                .get(\"snippet\")\n                .or_else(|| att.get(\"content\"))\n                .and_then(serde_json::Value::as_str)\n                .unwrap_or_default();\n            let snippet = strip_gutter(snippet_text);"
+          "lines": "271-283",
+          "snippet": "    // (7a) edited_text_file -> an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {\n            let snippet_text = att\n                .get(\"snippet\")\n                .or_else(|| att.get(\"content\"))\n                .and_then(serde_json::Value::as_str)\n                .unwrap_or_default();\n            let snippet = strip_gutter(snippet_text);"
         },
         {
           "path": "src/commands/recover/types.rs",
@@ -20666,7 +20666,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "315-331",
+          "lines": "316-332",
           "snippet": "/// Classify a tool_result error body as an integrity error, or `None` if it is some\n/// other tool error. Only [`IntegrityKind::ModifiedSinceRead`] becomes a boundary;\n/// the others are COUNTED annotations (the op never landed).\npub(crate) fn classify_integrity_error(content: &serde_json::Value) -> Option<IntegrityKind> {\n    let text = crate::model::tool_result_content_text(content);\n    if text.contains(\"has been modified since read\") || text.contains(\"File has been modified\") {\n        Some(IntegrityKind::ModifiedSinceRead)\n    } else if text.contains(\"has not been read yet\") || text.contains(\"Read it first\") {\n        Some(IntegrityKind::NotReadYet)\n    } else if text.contains(\"String to replace not found in file\") {\n        Some(IntegrityKind::StringNotFound)\n    } else if text.contains(\"File does not exist\") {\n        Some(IntegrityKind::FileDoesNotExist)\n    } else {\n        None\n    }\n}"
         }
       ],
@@ -23387,8 +23387,8 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "271-276",
-          "snippet": "    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {"
+          "lines": "272-277",
+          "snippet": "    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {"
         }
       ],
       "states": [
@@ -23523,7 +23523,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "277-282",
+          "lines": "278-283",
           "snippet": "            let snippet_text = att\n                .get(\"snippet\")\n                .or_else(|| att.get(\"content\"))\n                .and_then(serde_json::Value::as_str)\n                .unwrap_or_default();\n            let snippet = strip_gutter(snippet_text);"
         }
       ],
@@ -24584,7 +24584,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "268-274",
+          "lines": "269-275",
           "snippet": "    let atype = att.get(\"type\").and_then(serde_json::Value::as_str);\n\n    // (7a) edited_text_file -> an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))"
         }
       ],
@@ -26828,11 +26828,11 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "56-58",
-          "snippet": "    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {"
+          "snippet": "    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {"
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "217-220",
+          "lines": "259-262",
           "snippet": "pub(crate) fn names_file(target: &str, path: &str) -> bool {\n    if target == path {\n        return true;\n    }"
         }
       ],
@@ -26842,7 +26842,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "A `Read` of an image file writes a `toolUseResult` whose top-level `type` is `image` and whose `file` object has NO `filePath` at all: it carries `base64` (the payload), `type` (the media type - `image/png` and `image/jpeg` are what the corpus holds), `originalSize`, and an OPTIONAL `dimensions:{originalWidth, originalHeight, displayWidth, displayHeight}` present on 435 of 444 such results.",
-          "depends": "csift's `recover` Read arm keys on a `file` object with a matching `filePath` and calls `path_matches(target_file, path.unwrap_or_default())`, so an image Read reaches that arm with an EMPTY path string; `path_matches` returns false on an empty target match, which is the only reason an image Read is never mistaken for a file event - the `unwrap_or_default()` is load-bearing, not incidental.",
+          "depends": "csift's `recover` Read arm keys on a `file` object with a matching `filePath` and calls `path_matches(target_file, path.unwrap_or_default(), record_cwd)`, so an image Read reaches that arm with an EMPTY path string; `path_matches` returns false on an empty path before it resolves anything against the cwd, which is the only reason an image Read is never mistaken for a file event - the `unwrap_or_default()` is load-bearing, not incidental.",
           "instrument": "Measured over the 7,814 transcript files under ~/.claude/projects with a python3 walk that json-parses every line carrying `toolUseResult` and keeps the ones whose `toolUseResult.file` is an object, bucketing `Counter(tuple(sorted(file.keys())))` by the top-level `type`. Counting rule: one observation per record with an object `file`. Result: 444 `image` results; `file.filePath` present on 0 of 444; key set `{base64, dimensions, originalSize, type}` on 435 and `{base64, originalSize, type}` on 9; `file.type` values `image/png` 371 and `image/jpeg` 73. Schema authority: the Read tool-result schema in the Claude Code 2.1.258 binary, whose `image` variant declares exactly those four members.",
           "probe": {
             "kind": "corpus",
@@ -44900,8 +44900,8 @@
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "249-254",
-          "snippet": "    if let Some(snap) = rec.snapshot.as_ref() {\n        if let Some(tfb) = snap.get(\"trackedFileBackups\").and_then(|v| v.as_object()) {\n            for (path, entry) in tfb {\n                if path_matches(target_file, path) {\n                    events.push(FileEvent {\n                        line_no,"
+          "lines": "291-296",
+          "snippet": "    if let Some(snap) = rec.snapshot.as_ref() {\n        if let Some(tfb) = snap.get(\"trackedFileBackups\").and_then(|v| v.as_object()) {\n            for (path, entry) in tfb {\n                if path_matches(target_file, path, rec.cwd.as_deref()) {\n                    events.push(FileEvent {\n                        line_no,"
         },
         {
           "path": "src/commands/search/record_text/promoted.rs",
@@ -51758,7 +51758,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "55-58",
-          "snippet": "    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {"
+          "snippet": "    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {"
         },
         {
           "path": "src/commands/recover/carriers.rs",
@@ -51870,7 +51870,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "55-58",
-          "snippet": "    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {"
+          "snippet": "    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {"
         },
         {
           "path": "src/commands/recover/carriers.rs",
@@ -52186,7 +52186,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "56-59",
-          "snippet": "    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {\n            push_read_file_object(line_no, turn_index, ts, file, SnapSource::FullRead, events);"
+          "snippet": "    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {\n            push_read_file_object(line_no, turn_index, ts, file, SnapSource::FullRead, events);"
         }
       ],
       "states": [
@@ -52438,7 +52438,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "55-58",
-          "snippet": "    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {"
+          "snippet": "    // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --\n    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {"
         }
       ],
       "states": [
@@ -52849,7 +52849,7 @@
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "268-274",
+          "lines": "269-275",
           "snippet": "    let atype = att.get(\"type\").and_then(serde_json::Value::as_str);\n\n    // (7a) edited_text_file -> an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))"
         }
       ],
@@ -53118,8 +53118,8 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "271-276",
-          "snippet": "    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {"
+          "lines": "272-277",
+          "snippet": "    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {"
         }
       ],
       "states": [
@@ -53933,7 +53933,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "64-71",
-          "snippet": "    // -- (2) Write result: {type:create|update, filePath, content, ...} --\n    // -- (3) Edit result: {filePath, oldString, newString, structuredPatch, ...} (no type) --\n    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);\n    if !path_matches(target_file, path.unwrap_or_default()) {\n        return;\n    }\n    let has_edit_strings = tur.get(\"oldString\").is_some() || tur.get(\"newString\").is_some();\n    let structured_patch = parse_structured_patch(tur.get(\"structuredPatch\"));"
+          "snippet": "    // -- (2) Write result: {type:create|update, filePath, content, ...} --\n    // -- (3) Edit result: {filePath, oldString, newString, structuredPatch, ...} (no type) --\n    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);\n    if !path_matches(target_file, path.unwrap_or_default(), record_cwd) {\n        return;\n    }\n    let has_edit_strings = tur.get(\"oldString\").is_some() || tur.get(\"newString\").is_some();\n    let structured_patch = parse_structured_patch(tur.get(\"structuredPatch\"));"
         },
         {
           "path": "src/commands/recover/carriers.rs",
@@ -54299,7 +54299,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "367-373",
+          "lines": "368-374",
           "snippet": "pub(crate) fn parse_structured_patch(v: Option<&serde_json::Value>) -> Option<Vec<PatchHunk>> {\n    let arr = v?.as_array()?;\n    let mut out = Vec::with_capacity(arr.len());\n    for h in arr {\n        let old_start = h.get(\"oldStart\").and_then(serde_json::Value::as_u64)? as usize;\n        let old_lines = h.get(\"oldLines\").and_then(serde_json::Value::as_u64)? as usize;\n        let new_lines = h.get(\"newLines\").and_then(serde_json::Value::as_u64)? as usize;"
         },
         {
@@ -54309,7 +54309,7 @@
         },
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "371-373",
+          "lines": "372-374",
           "snippet": "        let old_start = h.get(\"oldStart\").and_then(serde_json::Value::as_u64)? as usize;\n        let old_lines = h.get(\"oldLines\").and_then(serde_json::Value::as_u64)? as usize;\n        let new_lines = h.get(\"newLines\").and_then(serde_json::Value::as_u64)? as usize;"
         }
       ],
@@ -54721,7 +54721,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "367-370",
+          "lines": "368-371",
           "snippet": "pub(crate) fn parse_structured_patch(v: Option<&serde_json::Value>) -> Option<Vec<PatchHunk>> {\n    let arr = v?.as_array()?;\n    let mut out = Vec::with_capacity(arr.len());\n    for h in arr {"
         }
       ],
@@ -54950,7 +54950,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "66-71",
-          "snippet": "    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);\n    if !path_matches(target_file, path.unwrap_or_default()) {\n        return;\n    }\n    let has_edit_strings = tur.get(\"oldString\").is_some() || tur.get(\"newString\").is_some();\n    let structured_patch = parse_structured_patch(tur.get(\"structuredPatch\"));"
+          "snippet": "    let path = tur.get(\"filePath\").and_then(serde_json::Value::as_str);\n    if !path_matches(target_file, path.unwrap_or_default(), record_cwd) {\n        return;\n    }\n    let has_edit_strings = tur.get(\"oldString\").is_some() || tur.get(\"newString\").is_some();\n    let structured_patch = parse_structured_patch(tur.get(\"structuredPatch\"));"
         }
       ],
       "states": [
@@ -55342,7 +55342,7 @@
         {
           "path": "src/commands/recover/carriers.rs",
           "lines": "56-58",
-          "snippet": "    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default()) {"
+          "snippet": "    if let Some(file) = tur.get(\"file\").and_then(|v| v.as_object()) {\n        let path = file.get(\"filePath\").and_then(serde_json::Value::as_str);\n        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {"
         }
       ],
       "states": [
@@ -58018,7 +58018,7 @@
         {
           "path": "src/commands/recover/events.rs",
           "lines": "77-83",
-          "snippet": "        let path = input\n            .get(\"file_path\")\n            .and_then(serde_json::Value::as_str)\n            .unwrap_or_default();\n        if !path_matches(target_file, path) {\n            continue;\n        }"
+          "snippet": "        let path = input\n            .get(\"file_path\")\n            .and_then(serde_json::Value::as_str)\n            .unwrap_or_default();\n        if !path_matches(target_file, path, rec.cwd.as_deref()) {\n            continue;\n        }"
         }
       ],
       "states": [
@@ -64398,7 +64398,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "318-319",
+          "lines": "319-320",
           "snippet": "pub(crate) fn classify_integrity_error(content: &serde_json::Value) -> Option<IntegrityKind> {\n    let text = crate::model::tool_result_content_text(content);"
         }
       ],
@@ -82393,7 +82393,7 @@
       "code": [
         {
           "path": "src/commands/recover/carriers.rs",
-          "lines": "270-275",
+          "lines": "271-276",
           "snippet": "    // (7a) edited_text_file -> an external edit (hard boundary).\n    if atype == Some(\"edited_text_file\") {\n        let path = att\n            .get(\"filename\")\n            .or_else(|| att.get(\"filePath\"))\n            .and_then(serde_json::Value::as_str);"
         }
       ],
@@ -89494,7 +89494,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3584"
+          "lines": "3585"
         }
       ],
       "states": [

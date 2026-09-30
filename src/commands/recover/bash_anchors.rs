@@ -139,7 +139,9 @@ pub(crate) fn collect_turn_bash_anchors(
             if hits > 1 {
                 continue;
             }
-            if !path_matches(target_file, &resolved) && !path_matches(target_file, &operand) {
+            if !path_matches(target_file, &resolved, bu.cwd)
+                && !path_matches_as(target_file, &operand, &resolved, bu.cwd)
+            {
                 continue;
             }
             if append {
@@ -181,7 +183,9 @@ pub(crate) fn collect_turn_bash_anchors(
             cwd_at: CwdAt::Spawn,
         }
         .resolve(bu.cwd);
-        if !path_matches(target_file, &resolved) && !path_matches(target_file, &operand) {
+        if !path_matches(target_file, &resolved, bu.cwd)
+            && !path_matches_as(target_file, &operand, &resolved, bu.cwd)
+        {
             continue;
         }
         match read {

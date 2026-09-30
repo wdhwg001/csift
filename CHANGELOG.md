@@ -1427,10 +1427,12 @@ surface change bumps the PATCH.
   fallback matched every record path the argument ended, so a basename three files share
   replayed all three files' writes and edits into one buffer - on a fixture of three
   `lib.rs` files, the default restore printed one of them and called it complete, and
-  `--coverage` counted all six events. A target that matches more than one distinct
-  absolute path in scope is now refused before anything is replayed, in every mode, naming
-  each candidate and the count; the absolute path, or a longer suffix that names exactly
-  one, works as before. A `--files-from` line takes the same rule: its report row reads
+  `--coverage` counted all six events. A target that matches more than one distinct file
+  in scope is now refused before anything is replayed, in every mode, naming each
+  candidate and the count - a relative record path counts, as the file its record's shell
+  cwd resolves it to, so `other/lib.rs` beside `/p/m/lib.rs` is refused too; a candidate,
+  or a longer suffix that names exactly one file, works as before, and an absolute target
+  now also finds a relative record path that resolves to it. A `--files-from` line takes the same rule: its report row reads
   `ambiguous`, nothing is written for it, and the summary line counts it.
 - **`verbatim`'s compaction banner said the turns below it predate the summary.** The
   banner sits where the walk, going down the file, passes from turns that end before the

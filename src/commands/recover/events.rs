@@ -78,7 +78,7 @@ pub(crate) fn extract_input_fallback(
             .get("file_path")
             .and_then(serde_json::Value::as_str)
             .unwrap_or_default();
-        if !path_matches(target_file, path) {
+        if !path_matches(target_file, path, rec.cwd.as_deref()) {
             continue;
         }
         match name.as_str() {
@@ -167,14 +167,18 @@ pub(crate) fn extract_input_fallback(
     }
 }
 
-/// The `--file` target as the extractors match it, plus every FULL path it matched.
+/// The `--file` target as the extractors match it, plus every file it matched.
 ///
 /// A suffix target (`lib.rs`, `a/lib.rs`) names every record path it ends, so it can name
 /// several different files, and replaying their events together stitches one buffer out of
-/// several files' edits - content that never existed. So the target records each full path
-/// it matched and the driver refuses one that matched more than one before replaying. A
-/// relative record path is not recorded: it names no file on its own. One transcript's
-/// extraction runs on one thread, so the cell is never shared.
+/// several files' edits - content that never existed. So the target records each file it
+/// matched and the driver refuses one that matched more than one before replaying. EVERY
+/// matched path is a candidate, a relative one included: `other/lib.rs` and `/p/m/lib.rs`
+/// are two files as surely as two absolute paths are. A relative path is resolved against
+/// the shell cwd its own record carries ([`candidate`]), so the relative and the absolute
+/// spelling of ONE file are one candidate; with no cwd to resolve against it stays the raw
+/// string, and a single such path alone is not ambiguous. One transcript's extraction runs
+/// on one thread, so the cell is never shared.
 #[derive(Debug)]
 pub(crate) struct Target<'a> {
     file: Option<&'a str>,
@@ -200,15 +204,53 @@ impl<'a> Target<'a> {
     }
 }
 
-/// True when `path` matches the `--file` target (see [`names_file`]); a full path that
-/// matches is recorded on the target. No target matches nothing (handled by callers that
-/// gate on the mode).
-pub(crate) fn path_matches(target: &Target<'_>, path: &str) -> bool {
-    let hit = target.file.is_some_and(|t| names_file(t, path));
-    if hit && is_full_path(path) {
-        target.matched.borrow_mut().insert(path.to_string());
+/// True when the `--file` target names `path` (see [`names_file`]) as written or as the
+/// file it resolves to against `cwd`, the shell cwd of the record carrying it; a path that
+/// matches is recorded on the target as that resolved candidate. No target matches nothing
+/// (handled by callers that gate on the mode).
+pub(crate) fn path_matches(target: &Target<'_>, path: &str, cwd: Option<&str>) -> bool {
+    path_matches_as(target, path, path, cwd)
+}
+
+/// [`path_matches`] on `path`, recording `key` as the candidate: the bash extractors match a
+/// command's operand verbatim as a belt beside the operand they RESOLVED through the
+/// command's own `cd`s, and the resolved form is the file either spelling names - so the
+/// belt's match must not mint a second candidate for it.
+pub(crate) fn path_matches_as(
+    target: &Target<'_>,
+    path: &str,
+    key: &str,
+    cwd: Option<&str>,
+) -> bool {
+    // An empty path names no file - a carrier missing its path field reads as "" - and its
+    // resolved form would be the cwd itself, which a suffix target could end.
+    let Some(t) = target.file.filter(|_| !path.is_empty()) else {
+        return false;
+    };
+    // The target names the path as written OR the file it resolves to: the candidate a
+    // refusal prints for a relative path is the resolved one, so passing it back must find
+    // the same events.
+    let file = candidate(key, cwd);
+    let hit = names_file(t, path) || names_file(t, &file);
+    if hit {
+        target.matched.borrow_mut().insert(file);
     }
     hit
+}
+
+/// The file a matched record path names, as a candidate: a full path as written; a relative
+/// one joined to the record's absolute shell cwd (lexically, in the cwd's separator family);
+/// the raw string where there is no such cwd, or where the path leads with `$` or `~`, whose
+/// expansion the transcript does not record.
+pub(crate) fn candidate(path: &str, cwd: Option<&str>) -> String {
+    use crate::bash::mutations::{is_absolute_shell_path, join_shell_path};
+    if is_full_path(path) || path.starts_with(['$', '~']) {
+        return path.to_string();
+    }
+    match cwd.filter(|c| is_absolute_shell_path(c)) {
+        Some(c) => join_shell_path(c, &[path]),
+        None => path.to_string(),
+    }
 }
 
 /// True when `target` names `path`: an exact raw-string match, or a basename-suffix
@@ -249,7 +291,7 @@ pub(crate) fn extract_from_record(
     if let Some(snap) = rec.snapshot.as_ref() {
         if let Some(tfb) = snap.get("trackedFileBackups").and_then(|v| v.as_object()) {
             for (path, entry) in tfb {
-                if path_matches(target_file, path) {
+                if path_matches(target_file, path, rec.cwd.as_deref()) {
                     events.push(FileEvent {
                         line_no,
                         turn_index,
@@ -282,7 +324,7 @@ pub(crate) fn extract_from_record(
     // external-write inference name the exact interval it bounds instead of the whole gap
     // between two per-prompt snapshots.
     if let (Some(path), Some(backup)) = (rec.tracking_path.as_deref(), rec.backup.as_ref()) {
-        if path_matches(target_file, path) {
+        if path_matches(target_file, path, rec.cwd.as_deref()) {
             events.push(FileEvent {
                 line_no,
                 turn_index,
@@ -307,7 +349,15 @@ pub(crate) fn extract_from_record(
     // The raw blob is parsed to a full tree ON DEMAND (the model keeps it unparsed so
     // the scanning subcommands never pay for it; recover is the deep consumer).
     if let Some(att) = rec.attachment_value() {
-        extract_from_attachment(line_no, turn_index, &ts, att, target_file, events);
+        extract_from_attachment(
+            line_no,
+            turn_index,
+            &ts,
+            att,
+            rec.cwd.as_deref(),
+            target_file,
+            events,
+        );
     }
 
     // -- toolUseResult-bearing carriers: Read / Write / Edit / Bash-hint results --
@@ -338,7 +388,11 @@ pub(crate) fn extract_from_record(
                         .as_ref()
                         .and_then(|id| id_to_path.get(id))
                         .map(String::as_str);
-                    if path_matches(target_file, attributed.unwrap_or_default()) {
+                    if path_matches(
+                        target_file,
+                        attributed.unwrap_or_default(),
+                        rec.cwd.as_deref(),
+                    ) {
                         events.push(FileEvent {
                             line_no,
                             turn_index,
@@ -369,8 +423,9 @@ pub(crate) fn extract_from_record(
                             continue;
                         }
                         let (resolved, resolution) = bm.resolve(rec.cwd.as_deref());
-                        if path_matches(target_file, &resolved)
-                            || path_matches(target_file, &bm.path)
+                        let cwd = rec.cwd.as_deref();
+                        if path_matches(target_file, &resolved, cwd)
+                            || path_matches_as(target_file, &bm.path, &resolved, cwd)
                         {
                             events.push(FileEvent {
                                 line_no,

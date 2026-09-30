@@ -41,7 +41,7 @@ pub(crate) fn extract_from_tool_use_result(
                 } else {
                     p
                 };
-                if path_matches(target_file, &resolved) {
+                if path_matches(target_file, &resolved, record_cwd) {
                     events.push(FileEvent {
                         line_no,
                         turn_index,
@@ -55,7 +55,7 @@ pub(crate) fn extract_from_tool_use_result(
     // -- (1a) Read result: toolUseResult.file = {filePath, content, startLine, ...} --
     if let Some(file) = tur.get("file").and_then(|v| v.as_object()) {
         let path = file.get("filePath").and_then(serde_json::Value::as_str);
-        if path_matches(target_file, path.unwrap_or_default()) {
+        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {
             push_read_file_object(line_no, turn_index, ts, file, SnapSource::FullRead, events);
             return;
         }
@@ -64,7 +64,7 @@ pub(crate) fn extract_from_tool_use_result(
     // -- (2) Write result: {type:create|update, filePath, content, ...} --
     // -- (3) Edit result: {filePath, oldString, newString, structuredPatch, ...} (no type) --
     let path = tur.get("filePath").and_then(serde_json::Value::as_str);
-    if !path_matches(target_file, path.unwrap_or_default()) {
+    if !path_matches(target_file, path.unwrap_or_default(), record_cwd) {
         return;
     }
     let has_edit_strings = tur.get("oldString").is_some() || tur.get("newString").is_some();
@@ -262,6 +262,7 @@ pub(crate) fn extract_from_attachment(
     turn_index: usize,
     ts: &Option<String>,
     att: &serde_json::Value,
+    record_cwd: Option<&str>,
     target_file: &Target<'_>,
     events: &mut Vec<FileEvent>,
 ) {
@@ -273,7 +274,7 @@ pub(crate) fn extract_from_attachment(
             .get("filename")
             .or_else(|| att.get("filePath"))
             .and_then(serde_json::Value::as_str);
-        if path_matches(target_file, path.unwrap_or_default()) {
+        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {
             let snippet_text = att
                 .get("snippet")
                 .or_else(|| att.get("content"))
@@ -297,7 +298,7 @@ pub(crate) fn extract_from_attachment(
         .or_else(|| att.get("file"))
     {
         let path = file.get("filePath").and_then(serde_json::Value::as_str);
-        if path_matches(target_file, path.unwrap_or_default()) {
+        if path_matches(target_file, path.unwrap_or_default(), record_cwd) {
             if let Some(obj) = file.as_object() {
                 push_read_file_object(
                     line_no,

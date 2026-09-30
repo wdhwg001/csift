@@ -71,7 +71,7 @@ fn a_file_suffix_naming_several_files_is_refused_in_every_mode() {
             );
         }
         assert!(
-            out.stderr.contains("pass one of these absolute paths"),
+            out.stderr.contains("pass one of these paths"),
             "{}",
             out.stderr
         );
@@ -137,7 +137,7 @@ fn a_manifest_line_naming_several_files_is_reported_ambiguous_and_not_written() 
 /// What decides ambiguity is every file the scope NAMES, not only the ones with a replayable
 /// event: a subagent that merely read `/p/b/lib.rs` makes `lib.rs` name two files, in the
 /// batch as in the single-file mode. And a transcript whose events name the target only by a
-/// relative path still counts for the replay - it names no candidate, so nothing is refused.
+/// relative path still replays it - one relative path is one file, so nothing is refused.
 #[test]
 fn a_read_only_match_counts_for_ambiguity_and_a_relative_path_still_replays() {
     let h = Home::new();
@@ -199,4 +199,112 @@ fn a_read_only_match_counts_for_ambiguity_and_a_relative_path_still_replays() {
         "{report}"
     );
     assert!(!clean.stdout.contains("ambiguous"), "{}", clean.stdout);
+}
+
+/// One session in a project at `/Users/dev/Projects/da4`, every record carrying that shell
+/// cwd, writing then editing each `(path, first, second)` file.
+fn cwd_session(h: &Home, sess: &str, files: &[(&str, &str, &str)]) {
+    const CWD: &str = "/Users/dev/Projects/da4";
+    let mut lines = vec![format!(
+        r#"{{"type":"user","uuid":"u0","cwd":"{CWD}","timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"user","content":"write the files"}}}}"#
+    )];
+    for (i, (file, first, second)) in files.iter().enumerate() {
+        let s = 10 * (i + 1);
+        lines.push(format!(
+            r#"{{"type":"assistant","uuid":"w{i}","cwd":"{CWD}","timestamp":"2026-06-07T05:00:{s:02}.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"tw{i}","name":"Write","input":{{"file_path":"{file}","content":"{first}\n"}}}}]}}}}"#
+        ));
+        lines.push(format!(
+            r#"{{"type":"user","uuid":"rw{i}","cwd":"{CWD}","timestamp":"2026-06-07T05:00:{:02}.000Z","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"tw{i}","content":"File created successfully at: {file}"}}]}}}}"#,
+            s + 1
+        ));
+        lines.push(format!(
+            r#"{{"type":"assistant","uuid":"e{i}","cwd":"{CWD}","timestamp":"2026-06-07T05:00:{:02}.000Z","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"te{i}","name":"Edit","input":{{"file_path":"{file}","old_string":"{first}","new_string":"{second}"}}}}]}}}}"#,
+            s + 2
+        ));
+        lines.push(format!(
+            r#"{{"type":"user","uuid":"re{i}","cwd":"{CWD}","timestamp":"2026-06-07T05:00:{:02}.000Z","message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"te{i}","content":"The file {file} has been updated."}}]}}}}"#,
+            s + 3
+        ));
+    }
+    h.write(&format!("{ENC}/{sess}.jsonl"), &(lines.join("\n") + "\n"));
+}
+
+/// A RELATIVE record path is a candidate like any other: it names the file its record's
+/// shell cwd resolves it to. `other/lib.rs` beside `/p/m/lib.rs`, and `a/lib.rs` beside
+/// `b/lib.rs`, are two files each, so `--file lib.rs` is refused in both - where replaying
+/// them together printed one file's last edit and called it complete. The candidates the
+/// refusal names are resolved, and each one passed back replays its own file alone.
+#[test]
+fn a_suffix_naming_a_relative_record_path_beside_another_file_is_refused() {
+    let h = Home::new();
+    let mixed = "7a7b7c7d-1111-4222-8333-944455566601";
+    let both_relative = "7a7b7c7d-1111-4222-8333-944455566602";
+    cwd_session(
+        &h,
+        mixed,
+        &[("/p/m/lib.rs", "m1", "M2"), ("other/lib.rs", "o1", "O2")],
+    );
+    cwd_session(
+        &h,
+        both_relative,
+        &[("a/lib.rs", "ra1", "RA2"), ("b/lib.rs", "rb1", "RB2")],
+    );
+    for (sess, candidates) in [
+        (
+            mixed,
+            ["/Users/dev/Projects/da4/other/lib.rs", "/p/m/lib.rs"],
+        ),
+        (
+            both_relative,
+            [
+                "/Users/dev/Projects/da4/a/lib.rs",
+                "/Users/dev/Projects/da4/b/lib.rs",
+            ],
+        ),
+    ] {
+        for extra in [vec![], vec!["--coverage"]] {
+            let mut argv = vec!["recover", "", "--no-subagents", "--file", "lib.rs"];
+            let t = at(sess);
+            argv[1] = t.as_str();
+            argv.extend(extra.iter().copied());
+            let out = h.run(&argv);
+            assert!(!out.success, "{sess} {extra:?}: {}", out.stdout);
+            assert!(out.stdout.is_empty(), "{sess} {extra:?}: {}", out.stdout);
+            assert!(
+                out.stderr.contains("names 2 distinct files in scope"),
+                "{sess} {extra:?}: {}",
+                out.stderr
+            );
+            for c in candidates {
+                assert!(
+                    out.stderr.contains(&format!("  {c}\n")),
+                    "{sess} names {c}: {}",
+                    out.stderr
+                );
+            }
+        }
+    }
+    let one = |sess: &str, file: &str| -> String {
+        let out = h.run(&[
+            "recover",
+            at(sess).as_str(),
+            "--no-subagents",
+            "--file",
+            file,
+        ]);
+        assert!(out.success, "{file}: {}", out.stderr);
+        out.stdout
+    };
+    assert_eq!(one(mixed, "/p/m/lib.rs"), "M2\n");
+    assert_eq!(one(mixed, "other/lib.rs"), "O2\n");
+    assert_eq!(
+        one(mixed, "/Users/dev/Projects/da4/other/lib.rs"),
+        "O2\n",
+        "the resolved candidate passed back finds the relative record path"
+    );
+    assert_eq!(one(both_relative, "a/lib.rs"), "RA2\n");
+    assert_eq!(
+        one(both_relative, "/Users/dev/Projects/da4/b/lib.rs"),
+        "RB2\n"
+    );
 }

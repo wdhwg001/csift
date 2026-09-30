@@ -215,8 +215,8 @@ pub(crate) fn ambiguous_target(target: &str, names: &std::collections::BTreeSet<
     let list: Vec<String> = names.iter().map(|p| format!("  {p}")).collect();
     format!(
         "--file `{target}` names {} distinct files in scope, and replaying them together would \
-         stitch their edits into one buffer:\n{}\npass one of these absolute paths, or a \
-         longer suffix that names exactly one",
+         stitch their edits into one buffer:\n{}\npass one of these paths, or a longer \
+         suffix that names exactly one",
         names.len(),
         list.join("\n")
     )
