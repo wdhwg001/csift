@@ -49,7 +49,15 @@ fn render_sections_text(s: &Sections) {
             );
             println!("  reply    {}", p.reply_channel);
         }
-        None => println!("parent   none (a top-level session has no lane above it)"),
+        // The environment names the top-level session in every lane, so it cannot tell a
+        // top-level session (no parent) from a subagent reading its parent's id (whose parent
+        // is this session): the line says unknown the way the depth line does, and says what
+        // each case would be. A resolved lane with no parent is a top-level session.
+        None if s.exact => println!("parent   none (a top-level session has no lane above it)"),
+        None => println!(
+            "parent   unknown from the environment alone (a top-level session has none; a \
+             subagent's parent is this session)"
+        ),
     }
     println!("topology {}", topology_head(s));
     for lane in &s.subtree {

@@ -1523,6 +1523,12 @@ surface change bumps the PATCH.
   `Name@Team` is a form TaskStop takes, and SendMessage, which refuses any `to` carrying `@`,
   takes the bare name or the transcript id. `agents --help`'s paragraph on a teammate's two ids
   says the same: a form TaskStop takes, beside the bare name.
+- **`whoami`'s environment form no longer says a lane has no parent.** With no target the
+  lane comes from `$CLAUDE_CODE_SESSION_ID`, which names the top-level session in every lane,
+  and the `parent` line read `none (a top-level session has no lane above it)` while the
+  JSON parent was null and the depth line said unknown; read from a subagent the line was
+  false. It now reads `unknown from the environment alone (a top-level session has none; a
+  subagent's parent is this session)`; a target that resolves the lane keeps its parent.
 - **A zero match under `--turn` blamed the label filter for what the window left out.** An
   abandoned record - a recalled draft, a rewound turn, a record on an abandoned branch -
   belongs to no numbered turn, so a `--turn` window leaves it out, and the diagnosis probed

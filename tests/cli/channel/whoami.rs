@@ -128,11 +128,30 @@ fn a_top_level_target_shows_its_live_child_lanes_and_no_parent() {
     // The session's own lane is reached through the environment form, which resolves it.
     let out = h.run_with_env(&["whoami"], &[("CLAUDE_CODE_SESSION_ID", SESS)]);
     assert!(out.success, "stderr: {}", out.stderr);
+    // The environment names the top-level session in every lane, so from it alone the parent
+    // is unknown, the way the depth is: a subagent reading the same id has this session as
+    // its parent.
     assert!(
-        out.stdout
-            .contains("parent   none (a top-level session has no lane above it)"),
+        out.stdout.contains(
+            "parent   unknown from the environment alone (a top-level session has none; a \
+             subagent's parent is this session)"
+        ),
         "{}",
         out.stdout
+    );
+    assert!(!out.stdout.contains("parent   none"), "{}", out.stdout);
+    // A target resolves the lane, so it keeps the parent it resolved.
+    let resolved = h.run(&["whoami", &at(TEAMMATE)]);
+    assert!(resolved.success, "stderr: {}", resolved.stderr);
+    assert!(
+        resolved.stdout.contains(&format!("parent   {SESS}")),
+        "{}",
+        resolved.stdout
+    );
+    assert!(
+        !resolved.stdout.contains("parent   unknown"),
+        "{}",
+        resolved.stdout
     );
     assert!(
         out.stdout.contains("2 live child lane(s) in this session"),

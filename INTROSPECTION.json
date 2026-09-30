@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2565",
+          "lines": "2566",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -78841,7 +78841,7 @@
       "code": [
         {
           "path": "src/commands/live/channel/reach/render.rs",
-          "lines": "190-205",
+          "lines": "198-213",
           "snippet": "pub(crate) fn slot_line(slots: &ReachSlots) -> String {\n    if slots.per_event.is_empty() {\n        return \"none configured on any delivery event\".to_string();\n    }\n    slots\n        .per_event\n        .iter()\n        .map(|(event, ks)| {\n            format!(\n                \"{event} {}\",\n                ks.iter().map(u32::to_string).collect::<Vec<_>>().join(\",\")\n            )\n        })\n        .collect::<Vec<_>>()\n        .join(\"  \")\n}"
         }
       ],
@@ -89512,7 +89512,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3614"
+          "lines": "3615"
         }
       ],
       "states": [
