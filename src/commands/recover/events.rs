@@ -188,6 +188,8 @@ pub(crate) fn extract_input_fallback(
 #[derive(Debug)]
 pub(crate) struct Target<'a> {
     file: Option<&'a str>,
+    /// The target as it is compared: [`normalize_path`] of `file`.
+    norm: Option<String>,
     /// The transcript's original shell cwd, the base for a record path whose own record
     /// carries none.
     origin_cwd: Option<String>,
@@ -202,6 +204,7 @@ impl<'a> Target<'a> {
     pub(crate) fn new(file: Option<&'a str>) -> Self {
         Target {
             file,
+            norm: file.map(normalize_path),
             origin_cwd: None,
             exact: false,
             matched: std::cell::RefCell::default(),
@@ -255,7 +258,7 @@ pub(crate) fn path_matches_as(
 ) -> bool {
     // An empty path names no file - a carrier missing its path field reads as "" - and its
     // resolved form would be the cwd itself, which a suffix target could end.
-    let Some(t) = target.file.filter(|_| !path.is_empty()) else {
+    let Some(t) = target.norm.as_deref().filter(|_| !path.is_empty()) else {
         return false;
     };
     // A record with no cwd of its own (a file-history line) takes the transcript's.
@@ -269,7 +272,7 @@ pub(crate) fn path_matches_as(
     let hit = if target.exact {
         file == t
     } else {
-        names_file(t, path) || names_file(t, &file)
+        names_file(t, &normalize_path(path)) || names_file(t, &file)
     };
     if hit {
         target.matched.borrow_mut().insert(file);
@@ -292,16 +295,53 @@ pub(crate) fn original_cwd(records: &[(usize, Record)]) -> Option<&str> {
 /// The file a matched record path names, as a candidate: a full path as written; a relative
 /// one joined to the record's absolute shell cwd (lexically, in the cwd's separator family);
 /// the raw string where there is no such cwd, or where the path leads with `$` or `~`, whose
-/// expansion the transcript does not record.
+/// expansion the transcript does not record - each [`normalize_path`]ed, so two spellings of
+/// one file are one candidate.
 pub(crate) fn candidate(path: &str, cwd: Option<&str>) -> String {
     use crate::bash::mutations::{is_absolute_shell_path, join_shell_path};
     if is_full_path(path) || path.starts_with(['$', '~']) {
-        return path.to_string();
+        return normalize_path(path);
     }
     match cwd.filter(|c| is_absolute_shell_path(c)) {
-        Some(c) => join_shell_path(c, &[path]),
-        None => path.to_string(),
+        Some(c) => normalize_path(&join_shell_path(c, &[path])),
+        None => normalize_path(path),
     }
+}
+
+/// One spelling of a path, LEXICALLY, for the target and every record path alike: `.`
+/// segments are dropped and a run of separators collapses to its first character, so
+/// `./a/lib.rs` and `a/lib.rs`, or `/p//q` and `/p/q`, compare equal. A LEADING pair (`//`,
+/// `\\`) stays - POSIX leaves a leading `//` to the implementation and it is the Windows UNC
+/// shape - while three or more leading separators are one. Nothing that needs the filesystem
+/// is resolved: a `..` segment stays as written (a symlinked directory makes it name another
+/// place), and so does a symlink's other spelling. A relative path joined to its record's cwd
+/// has already been through [`join_shell_path`]'s lexical `..` rule, as a Bash operand is.
+///
+/// [`join_shell_path`]: crate::bash::mutations::join_shell_path
+pub(crate) fn normalize_path(p: &str) -> String {
+    let is_sep = |c: char| c == '/' || c == '\\';
+    let body = p.trim_start_matches(is_sep);
+    let lead = &p[..p.len() - body.len()];
+    let mut out = match lead.len() {
+        0 => String::new(),
+        2 => lead.to_string(),
+        _ => lead[..1].to_string(),
+    };
+    let mut rest = body;
+    while !rest.is_empty() {
+        let end = rest.find(is_sep).unwrap_or(rest.len());
+        let (seg, after) = rest.split_at(end);
+        let tail = after.trim_start_matches(is_sep);
+        if seg != "." {
+            out.push_str(seg);
+            out.extend(after.chars().next());
+        }
+        rest = tail;
+    }
+    if out.is_empty() && !p.is_empty() {
+        return ".".to_string();
+    }
+    out
 }
 
 /// True when `target` names `path`: an exact raw-string match, or a basename-suffix

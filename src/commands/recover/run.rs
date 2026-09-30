@@ -223,7 +223,7 @@ pub(crate) fn several_files(
     if names.len() < 2 {
         return Ok(None);
     }
-    if !names.contains(target) {
+    if !names.contains(normalize_path(target).as_str()) {
         bail!("{}", ambiguous_target(origin, target, &names));
     }
     Ok(Some(names.len()))

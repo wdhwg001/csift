@@ -244,11 +244,16 @@ pub struct RecoverArgs {
     /// history and drop the others'; pass one of the candidates, or a longer suffix that
     /// names exactly one. Every candidate the refusal prints replays when passed back: one
     /// that other candidates end with (a relative path from a transcript with no cwd)
-    /// replays that file alone, with a note on stderr. Paths
-    /// are compared as strings, so two spellings of ONE file (`/tmp/x` beside the
-    /// `/private/tmp/x` a symlink resolves to, or a path carrying `//`) are refused as two
-    /// files, and passing one spelling exactly replays that spelling's events alone - the
-    /// safe side of the rule: it never stitches, it can only read one spelling. REQUIRED
+    /// replays that file alone, with a note on stderr. Paths are compared LEXICALLY, the
+    /// target and every record path alike: `.` segments are dropped and a run of `/`
+    /// collapses to one (a leading `//` stays), so `./a/lib.rs` and `a/lib.rs`, or `/p//q`
+    /// and `/p/q`, are one file and any of its spellings replays its whole history. Nothing
+    /// that needs the filesystem is resolved: a `..` stays as written (except inside a
+    /// relative path joined to its record's cwd, which takes the shell join's lexical `..`,
+    /// as a Bash operand does), and `/tmp/x` beside the `/private/tmp/x` a symlink resolves
+    /// to are two files, refused as two - each passed back replays only the events recorded
+    /// under that spelling, which can read `complete` on content a write through the other
+    /// spelling replaced. REQUIRED
     /// for every mode (`--patches` / `--at` / `--coverage`). The MAGIC value `@plan`
     /// (bash-safe, no escaping) instead reconstructs the session-BOUND plan file: the
     /// path from the session's `plan_mode` attachment, so a deleted plan is recoverable

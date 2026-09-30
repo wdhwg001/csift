@@ -26832,7 +26832,7 @@
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "310-313",
+          "lines": "350-353",
           "snippet": "pub(crate) fn names_file(target: &str, path: &str) -> bool {\n    if target == path {\n        return true;\n    }"
         }
       ],
@@ -44900,7 +44900,7 @@
         },
         {
           "path": "src/commands/recover/events.rs",
-          "lines": "342-347",
+          "lines": "382-387",
           "snippet": "    if let Some(snap) = rec.snapshot.as_ref() {\n        if let Some(tfb) = snap.get(\"trackedFileBackups\").and_then(|v| v.as_object()) {\n            for (path, entry) in tfb {\n                if path_matches(target_file, path, rec.cwd.as_deref()) {\n                    events.push(FileEvent {\n                        line_no,"
         },
         {

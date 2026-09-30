@@ -9,5 +9,6 @@ mod modes;
 mod patches;
 mod signals;
 mod snapshots;
+mod spellings;
 mod survival;
 mod targets;

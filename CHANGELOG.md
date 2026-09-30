@@ -1503,8 +1503,16 @@ surface change bumps the PATCH.
   though candidates in different transcripts would replay one file's history and drop the
   others'; and it listed every candidate, one line each however many there were. The note now
   names the manifest line, the summary counts it beside the recovered files, the refusal
-  names both outcomes and lists the first ten candidates with a count of the rest, and
-  `recover --help` states that two spellings of one file are refused as two.
+  names both outcomes and lists the first ten candidates with a count of the rest.
+- **`recover --file` in one spelling of a file read only that spelling's events.** A
+  relative record path joined to its cwd was normalised and every other spelling compared
+  as a string, so after a write to `./a/lib.rs` and an edit through `a/lib.rs`,
+  `--file ./a/lib.rs` printed the first write's content and called it complete, and
+  `/p//q/lib.rs` beside `/p/q/lib.rs` was refused as two files. Paths now compare
+  lexically, the target and every record path alike: `.` segments are dropped and a run of
+  `/` collapses to one (a leading `//` stays), so any spelling replays the file's whole
+  history. A `..` segment and a symlink's other spelling are not resolved: those stay two
+  files, and `recover --help` says what each spelling then replays.
 - **The `agents` teammate hint no longer offers SendMessage's refusal as the reason TaskStop
   takes the routing id.** Its third line now states the two tools' facts apart: the routing id
   `Name@Team` is the form TaskStop takes, and SendMessage, which refuses any `to` carrying `@`,

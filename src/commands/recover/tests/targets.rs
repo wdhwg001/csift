@@ -162,3 +162,34 @@ fn an_exact_target_matches_only_the_file_it_spells() {
     assert!(path_matches(&abs, "a/lib.rs", Some("/w")));
     assert!(!path_matches(&abs, "a/lib.rs", None));
 }
+
+#[test]
+fn a_path_is_compared_in_one_lexical_spelling() {
+    for (raw, want) in [
+        ("./a/lib.rs", "a/lib.rs"),
+        ("a//lib.rs", "a/lib.rs"),
+        ("a/./b/./lib.rs", "a/b/lib.rs"),
+        ("/p//q/lib.rs", "/p/q/lib.rs"),
+        ("/p/./q/lib.rs", "/p/q/lib.rs"),
+        ("///p/q", "/p/q"),
+        // A leading pair stays: the implementation-defined `//`, the UNC `\\`.
+        ("//srv/q", "//srv/q"),
+        (r"\\srv\share\.\x", r"\\srv\share\x"),
+        (r"C:\a\.\b\\c", r"C:\a\b\c"),
+        // `..` needs the filesystem: kept as written.
+        ("/p/x/../q", "/p/x/../q"),
+        ("../lib.rs", "../lib.rs"),
+        ("~/./x", "~/x"),
+        (".", "."),
+        ("lib.rs", "lib.rs"),
+    ] {
+        assert_eq!(normalize_path(raw), want, "{raw}");
+    }
+    // The target and every candidate take it, so any spelling names the one file.
+    let t = Target::new(Some("./a//lib.rs"));
+    assert!(path_matches(&t, "/w/a/lib.rs", None));
+    assert!(path_matches(&t, "a/./lib.rs", Some("/w")));
+    let got: Vec<String> = t.into_matched().into_iter().collect();
+    assert_eq!(got, ["/w/a/lib.rs"]);
+    assert_eq!(candidate("/p//q/./lib.rs", None), "/p/q/lib.rs");
+}
