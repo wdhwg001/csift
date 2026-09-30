@@ -310,7 +310,13 @@ fn auq_answer_text_skips_non_tool_result_blocks() {
 #[test]
 fn auq_answer_under_user_present_but_pattern_does_not_match() {
     // is_auq_answer is true and auq_answer_text returns Some, but the regex does
-    // NOT match the answer -> the `matcher.is_match(&text)` FALSE arm: no hit.
+    // NOT match the answer -> the `matcher.is_match(&text)` FALSE arm: no hit. The
+    // carrier IS an answer only because the call index names the AskUserQuestion call its
+    // result answers; without it the `user` filter drops the carrier whatever the pattern.
+    let asked = rec(
+        r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"x","name":"AskUserQuestion","input":{}}]}}"#,
+    );
+    let calls = CallIndex::from_records([&asked]);
     let r = rec(
         r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"User has answered your questions: \"q\"=\"alpha\"."}]}}"#,
     );
@@ -325,9 +331,12 @@ fn auq_answer_under_user_present_but_pattern_does_not_match() {
         &m,
         false,
         EXCERPT_MAX,
-        &CallIndex::default(),
+        &calls,
         &HashMap::new(),
-        &ClassifyCtx::top_level(),
+        &ClassifyCtx {
+            calls: Some(&calls),
+            ..ClassifyCtx::top_level()
+        },
         &mut hits,
     );
     assert!(
