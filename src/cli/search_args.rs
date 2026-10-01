@@ -383,7 +383,10 @@ pub struct SearchArgs {
     ///: the same escape hatch as `show --raw` (fields csift does not render: usage,
     /// stop_reason, model, any new field), but FILTERED by the full search surface
     /// (PATTERN, `-t`/`-T`, time, turn, scope). stdout is a pure jsonl stream (pipe
-    /// into `jq`); scope/drop/malformed notes go to stderr. One line per matched RECORD (a
+    /// into `jq`); scope/drop/malformed notes go to stderr, and so do the compaction
+    /// crossing lines (`--cross-compactions`), because the scan's survival walk decides
+    /// which records are hits; a raw stream has no envelope, so it carries none of the
+    /// crossing JSON keys. One line per matched RECORD (a
     /// record hit under several labels emits once); a sidecar-merged record has no physical
     /// line and is omitted with a stderr note. `--resolve-persisted` still affects MATCHING
     /// only: the emitted line is always the original.

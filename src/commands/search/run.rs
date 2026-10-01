@@ -491,6 +491,14 @@ pub fn run_search(args: &SearchArgs, cross: CrossingBudget) -> Result<()> {
                 ));
             }
             note_malformed(&outcome, diagnosis.is_some());
+            // A raw SCAN builds the chain - the survival axis decides which records are
+            // hits - so it moves with the budget and discloses the crossing like every
+            // other mode that builds one. On stderr, the `--count-by` precedent: stdout
+            // here is a jsonl stream a consumer parses, and a raw stream has no envelope
+            // to carry the JSON keys.
+            for line in outcome.chain.crossing.lines() {
+                crate::text::stderr_line(format_args!("{line}"));
+            }
         }
         return Ok(());
     }

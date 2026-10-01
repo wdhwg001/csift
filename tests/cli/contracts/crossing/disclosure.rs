@@ -1,5 +1,5 @@
 //! What every SURFACE says about a crossing: the sweep over each one, the silence at
-//! budget 0, and the three modes whose answer is a datum rather than a report.
+//! budget 0, and the four modes whose answer is a datum rather than a report.
 
 use super::*;
 
@@ -317,6 +317,56 @@ fn a_raw_turn_window_discloses_on_stderr_and_a_raw_address_has_nothing_to_say() 
                 "{address:?} crossed nothing to find its lines, yet {stream} says so:\n{text}"
             );
         }
+    }
+}
+
+#[test]
+fn a_raw_scan_discloses_on_stderr_and_says_nothing_at_budget_zero() {
+    // `search --raw` is a SCAN: the survival walk decides which records are hits, so what it
+    // prints moves with the budget, and it says what the walk crossed. Its stdout is the
+    // matched records' own jsonl lines, so the lines ride stderr beside its accounting notes,
+    // the `--count-by` precedent. At budget 0 it crossed nothing on purpose and says nothing.
+    let h = crossing_home();
+    let t = at(XSESS);
+    let raw = |b: &str| {
+        let out = h.run(&[
+            "search",
+            "",
+            t.as_str(),
+            "--no-subagents",
+            "--raw",
+            "--cross-compactions",
+            b,
+        ]);
+        assert!(out.success, "budget {b} stderr: {}", out.stderr);
+        assert!(
+            out.stdout.starts_with('{') && out.stdout.lines().all(|l| l.starts_with('{')),
+            "budget {b}: stdout is the matched lines and nothing else:\n{}",
+            out.stdout
+        );
+        out
+    };
+    let one = raw("1");
+    assert!(
+        one.stderr.contains(
+            "(compaction crossing: 1 boundary(s) stepped over under \
+             --cross-compactions 1, exhausted; 1 above the chain floor were not)"
+        ),
+        "{}",
+        one.stderr
+    );
+    assert!(
+        one.stderr
+            .contains("to try them: --cross-compactions 2 (or all)"),
+        "{}",
+        one.stderr
+    );
+    let zero = raw("0");
+    for (stream, text) in [("stdout", &zero.stdout), ("stderr", &zero.stderr)] {
+        assert!(
+            !text.contains("compaction crossing") && !text.contains("chain floor"),
+            "budget 0 crossed nothing, yet {stream} says so:\n{text}"
+        );
     }
 }
 

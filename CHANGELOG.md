@@ -1617,6 +1617,13 @@ surface change bumps the PATCH.
   same helper keeps a note that cannot land after a stream that did - a `--raw` cap drop,
   a zero-match diagnosis, `verbatim`'s no-compaction note - from turning the run into an
   abort: it exits 0 with its whole stream. The root `--help`'s exit-code paragraph says so.
+- **`search --raw` says what the survival walk crossed.** A raw scan builds the chain - the
+  walk decides which records are hits - so what it prints moves with `--cross-compactions`,
+  yet it was the one scan mode that said nothing about the crossing on either stream. It
+  now prints the same one or two `(compaction crossing ...)` lines on stderr after its
+  stream, beside its sidecar, cap and malformed notes, the stream `--count-by` already uses;
+  stdout stays the matched lines alone, and at budget 0 nothing is printed. A raw stream has
+  no envelope, so no JSON key is added. `search --help` says so under `--raw`.
 
 ### Performance
 
