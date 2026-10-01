@@ -368,8 +368,9 @@ pub struct StatsArgs {
     pub until: Option<String>,
 
     /// Count ONLY records in this inclusive turn-index window: the shared range grammar
-    /// (`N` · `A..B` · `N..` · `..N` · `-k` from the end), 0-based on the transcript's genuine-turn
-    /// order (the same axis `search`/`files` use; discover indices from their output). Intersects
+    /// (`N` · `A..B` · `N..` · `..N` · `-k` from the end), 0-based on the transcript's turn
+    /// order, turn 0 holding the first opener's turn (the same axis `search`/`files` use; discover
+    /// indices from their output). Intersects
     /// (AND) with `--since`/`--until`, e.g. token burn of the last N turns is simply
     /// `csift stats @main --turn -N..` (no need to look up the current turn index).
     #[arg(

@@ -189,9 +189,11 @@ pub struct SearchArgs {
     #[arg(long)]
     pub multiline: bool,
 
-    /// Inclusive turn-index range in the shared grammar: `N` (one turn) · `A..B` · `N..` (to the end) · `..N` · `-k` from the end (`-3..` = the last 3) - 0-BASED: turn 0 is the pre-first-user
-    /// lead (the session's opening context), so `1..N` SKIPS it. A turn opens on a genuine
-    /// user message, an answered AskUserQuestion, or a plan-rejection-with-message.
+    /// Inclusive turn-index range in the shared grammar: `N` (one turn) · `A..B` · `N..` (to the end) · `..N` · `-k` from the end (`-3..` = the last 3) - 0-BASED: turn 0 is the first
+    /// opener's turn together with every record above it (the session's opening context), so `1..N`
+    /// drops the first human turn, not only that context. A turn opens on a genuine typed message, an
+    /// answered AskUserQuestion, a tool rejection carrying typed text, an inbound peer message, or a
+    /// `<task-notification>` pulse; a slash command with arguments carries `user.message` yet opens no turn.
     /// Discover turn indices from the `<id>·t<n>` exchange header in `csift search` text output, or the
     /// `turn_index` field in any `--format json` record. Intersects (AND) with `--since` /
     /// `--until`.

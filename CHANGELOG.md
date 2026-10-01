@@ -898,6 +898,15 @@ surface change bumps the PATCH.
   budget's: `6000 char(s) / 12000 UTF-16 unit(s), 2 chunk(s) of 9200 UTF-16 units`, where an
   ASCII body reads the same number twice. The JSON summary gains `message_utf16_units` and
   `chunk_budget_utf16_units` beside `message_chars`.
+- **The `--turn` help says what turn 0 holds.** The `search`, `files`, `recover` and
+  `verbatim` pages called turn 0 the pre-first-user lead and said `1..N` skips it, but the
+  grouper folds that lead into the first opener's turn: turn 0 holds the first human
+  message, so `1..N` drops the first human turn as well. The four pages now say so and name
+  the five turn openers (a typed message, an answered AskUserQuestion, a tool rejection
+  carrying typed text, an inbound peer message, a `<task-notification>` pulse) where they
+  named three, adding that a slash command with arguments opens no turn. `stats --turn`
+  says its axis is the turn order with turn 0 holding the first opener's turn, where it
+  said genuine-turn order.
 
 ### Fixed
 
