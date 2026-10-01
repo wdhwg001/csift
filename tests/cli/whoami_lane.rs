@@ -160,3 +160,34 @@ fn the_at_main_note_follows_a_resolution_and_never_a_refusal() {
     assert!(good.success, "{}", good.stderr);
     assert!(good.stderr.contains(note), "{}", good.stderr);
 }
+
+/// A note names the variable that ANSWERED. The Codex companion's mirror is read when Claude
+/// Code's own variable is unset, and a note naming the canonical one then points the reader at
+/// a variable that is empty. Every env-resolved note - `whoami`'s, `@main`'s and the channel's
+/// lane note - follows the one reader, so each is asked under each variable alone.
+#[test]
+fn an_env_note_names_the_variable_that_answered() {
+    let h = Home::new();
+    lane_fixture(&h);
+    for (var, other) in [
+        ("CODEX_COMPANION_SESSION_ID", "CLAUDE_CODE_SESSION_ID"),
+        ("CLAUDE_CODE_SESSION_ID", "CODEX_COMPANION_SESSION_ID"),
+    ] {
+        for (argv, note) in [
+            (vec!["whoami"], format!("resolved via env (${var})")),
+            (
+                vec!["list", "@main"],
+                format!("@main resolved the TOP-LEVEL session via env (${var})"),
+            ),
+            (vec!["msg"], format!("lane read from ${var},")),
+        ] {
+            let out = h.run_with_env(&argv, &[(var, SESS)]);
+            assert!(out.success, "{argv:?} under {var}: {}", out.stderr);
+            assert!(
+                out.stderr.contains(&note) && !out.stderr.contains(&format!("${other}")),
+                "{argv:?} under {var} alone names another variable:\n{}",
+                out.stderr
+            );
+        }
+    }
+}

@@ -46,12 +46,29 @@ impl From<bool> for SubagentScope {
 /// `@self` because CC withholds the per-subagent id from the Bash env - `@trap:<marker>`
 /// recovers it from the transcript instead.
 pub fn resolve_env_session() -> Result<String> {
+    resolve_env_session_named().map(|env| env.id)
+}
+
+/// [`resolve_env_session`] with the variable that answered, for a caller whose note names it.
+pub fn resolve_env_session_named() -> Result<EnvSession> {
     env_session()?.ok_or_else(|| {
         anyhow::anyhow!(
             "needs the calling session id, but CLAUDE_CODE_SESSION_ID is not set (running \
              outside Claude Code, or an old build). Pass an explicit `@<uuid>` target instead."
         )
     })
+}
+
+/// A session id read from the environment, with the variable it was read from. The two
+/// variables are not one source: the alias is set by the Codex companion, not by Claude Code,
+/// so a note that says where the id came from names the one that answered rather than the
+/// canonical name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnvSession {
+    /// The session uuid, trimmed.
+    pub id: String,
+    /// The variable that carried it: one of [`SESSION_ENV_VARS`].
+    pub var: &'static str,
 }
 
 /// The session-id variables, in the order they are read: Claude Code's own, then the alias the
@@ -61,12 +78,13 @@ pub fn resolve_env_session() -> Result<String> {
 pub const SESSION_ENV_VARS: [&str; 2] = ["CLAUDE_CODE_SESSION_ID", "CODEX_COMPANION_SESSION_ID"];
 
 /// The calling session id from the environment: `Ok(None)` when no variable is set (or each is
-/// blank), the trimmed value when it is a session uuid, and an ERROR naming the value when it is
+/// blank), the trimmed value and the variable that carried it when it is a session uuid, and an
+/// ERROR naming the value when it is
 /// anything else. Claude Code writes the calling session's own jsonl basename there, a uuid on
 /// every build, so a value of another shape was set by something else. Reading it as a session
 /// answers for a session that does not exist, and treating it as unset would hide that the
 /// environment disagrees with itself; both are the guess section 3.8 forbids.
-pub fn env_session() -> Result<Option<String>> {
+pub fn env_session() -> Result<Option<EnvSession>> {
     for var in SESSION_ENV_VARS {
         let Ok(raw) = std::env::var(var) else {
             continue;
@@ -76,7 +94,10 @@ pub fn env_session() -> Result<Option<String>> {
             continue;
         }
         if crate::path::is_uuid(value) {
-            return Ok(Some(value.to_string()));
+            return Ok(Some(EnvSession {
+                id: value.to_string(),
+                var,
+            }));
         }
         let shown: String = value.chars().take(64).collect();
         let more = if value.chars().count() > 64 {

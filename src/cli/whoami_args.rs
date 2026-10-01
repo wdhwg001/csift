@@ -48,7 +48,10 @@ use super::*;
           The canonical env var CLAUDE_CODE_SESSION_ID (CC sets it per Bash-tool process; \
         its value IS the calling session's jsonl basename). If absent, csift falls back to \
         CODEX_COMPANION_SESSION_ID (the Codex companion plugin's alias). If NEITHER is set, \
-        whoami errors with guidance to pass an `@<uuid>` target; it never guesses by mtime.\n\n\
+        whoami errors with guidance to pass an `@<uuid>` target; it never guesses by mtime. \
+        The stderr note an env resolution prints (`resolved via env ($<VAR>)` here, the same \
+        on `@main` and on `msg`/`ack`'s lane note) names the variable that ANSWERED, so it reads \
+        $CODEX_COMPANION_SESSION_ID when that alias carried the id.\n\n\
         SUBAGENT CAVEAT\n  \
           What the env var names depends on HOW the subagent was spawned and has CHANGED \
         across CC versions: current CC hands an Agent-tool subagent the PARENT session's id \

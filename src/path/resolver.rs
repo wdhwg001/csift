@@ -240,14 +240,17 @@ fn collect_targets(paths: &[std::path::PathBuf]) -> Result<Targets> {
                     // resolve_env_session: @trap calls that helper on a correct path. The
                     // variable is read FIRST: an unset or malformed one resolved nothing, and a
                     // note saying it did would stand above the refusal that says it did not.
-                    let sid = resolve_env_session()?;
+                    // The note names the variable that answered (the Codex mirror when
+                    // Claude Code's own is unset).
+                    let env = resolve_env_session_named()?;
                     crate::text::stderr_line(format_args!(
-                        "csift: note: @main resolved the TOP-LEVEL session via env. If you \
-                         are a subagent this is NOT your transcript (a subagent's env \
+                        "csift: note: @main resolved the TOP-LEVEL session via env (${}). \
+                         If you are a subagent this is NOT your transcript (a subagent's env \
                          carries the parent's id); a first-try `@trap:<marker>` hit names \
-                         yours."
+                         yours.",
+                        env.var
                     ));
-                    session_ids.push(sid);
+                    session_ids.push(env.id);
                     session_target = true;
                 }
                 // `@trap:<marker>` - the SELF identifier. The caller (an in-process subagent

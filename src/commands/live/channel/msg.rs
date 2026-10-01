@@ -112,15 +112,18 @@ fn lane_for(flag: Option<&str>, external_hint: &str) -> Result<LaneCtx> {
     if let Some(target) = flag {
         return lane_from_target(target);
     }
-    let Some(session) = crate::path::env_session()? else {
+    let Some(env) = crate::path::env_session()? else {
         bail!("{external_hint}");
     };
+    let session = env.id;
     // Unconditional, like every other env-resolved lane in csift: the environment names the
     // TOP-LEVEL session in EVERY lane, so a subagent that says nothing would silently read
-    // its parent's channel.
+    // its parent's channel. It names the variable that answered, which is the Codex mirror
+    // when Claude Code's own is unset.
     eprintln!(
-        "csift: lane read from $CLAUDE_CODE_SESSION_ID, which names the TOP-LEVEL session \
-         {session} in every lane - inside a subagent pass `--lane @<your agent id>`"
+        "csift: lane read from ${}, which names the TOP-LEVEL session \
+         {session} in every lane - inside a subagent pass `--lane @<your agent id>`",
+        env.var
     );
     lane_from_target(&format!("@{session}"))
 }

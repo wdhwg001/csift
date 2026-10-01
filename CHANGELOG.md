@@ -1624,6 +1624,11 @@ surface change bumps the PATCH.
   stream, beside its sidecar, cap and malformed notes, the stream `--count-by` already uses;
   stdout stays the matched lines alone, and at budget 0 nothing is printed. A raw stream has
   no envelope, so no JSON key is added. `search --help` says so under `--raw`.
+- **An env note names the variable that answered.** With `CLAUDE_CODE_SESSION_ID` unset and
+  the Codex companion's `CODEX_COMPANION_SESSION_ID` set, `whoami`, `@main` and the `msg` /
+  `ack` lane resolve from the alias as documented, but their stderr notes said the id came
+  from `$CLAUDE_CODE_SESSION_ID`, a variable that was empty. Each note now names the one
+  that carried the id, and `@main`'s note names a variable at all. `whoami --help` says so.
 
 ### Performance
 

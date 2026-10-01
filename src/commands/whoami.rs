@@ -49,7 +49,7 @@ or grep a unique recent line you wrote to disambiguate.";
 /// when set to anything but a session uuid (see [`crate::path::env_session`], the one reader
 /// every env-resolved surface shares).
 pub fn detect_session_id() -> Result<Option<String>> {
-    crate::path::env_session()
+    Ok(crate::path::env_session()?.map(|env| env.id))
 }
 
 /// The resolved identity of the calling session.
@@ -100,7 +100,7 @@ fn is_lane_target(token: &str) -> bool {
 
 /// `whoami` (env form): the calling session id from `$CLAUDE_CODE_SESSION_ID` + its jsonl path.
 fn run_whoami_env(args: &WhoamiArgs) -> Result<()> {
-    let Some(session_id) = detect_session_id()? else {
+    let Some(env) = crate::path::env_session()? else {
         // Outside Claude Code there is no lane to name, and guessing one is the documented
         // trap - so the channel answer (what a non-lane CAN do) goes to stdout and the
         // identity question still fails loudly.
@@ -108,16 +108,20 @@ fn run_whoami_env(args: &WhoamiArgs) -> Result<()> {
         bail!("{AMBIGUOUS_GUIDANCE}");
     };
 
+    let session_id = env.id;
     let path = locate_transcript(&session_id);
 
     // Lane honesty: the env names the TOP-LEVEL session in EVERY lane (current CC
     // hands a subagent its parent's id), so env-only resolution cannot know whether the
-    // CALLER is that session. Say so on stderr; the unknowable JSON fields are null.
+    // CALLER is that session. Say so on stderr; the unknowable JSON fields are null. The
+    // note names the variable that ANSWERED: the Codex mirror is read when Claude Code's
+    // own is unset, and naming the canonical one then points at a variable that is empty.
     eprintln!(
-        "csift: note: resolved via env ($CLAUDE_CODE_SESSION_ID), which names the TOP-LEVEL \
+        "csift: note: resolved via env (${}), which names the TOP-LEVEL \
          session in every lane - from a subagent this is the PARENT's id, not yours. Lane \
          fields are null under env-only resolution; a first-try `whoami @trap:<marker>` hit \
-         proves your true lane."
+         proves your true lane.",
+        env.var
     );
 
     let me = WhoAmI { session_id, path };
