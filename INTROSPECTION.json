@@ -14141,7 +14141,7 @@
       "code": [
         {
           "path": "src/commands/turns/build.rs",
-          "lines": "285-291",
+          "lines": "294-300",
           "snippet": "/// Extract dedup fingerprints from a summary body: the section 6 \"All user messages\" bullets\n/// and the section 9 verbatim last-assistant quote (the only verbatim turns a summary holds).\n/// Each fingerprint is `normalize_line(text).to_lowercase()` truncated to the first\n/// [`DEDUP_PREFIX`] chars. Conservative: when the structured sections are not found,\n/// every `- ` bullet line in the body is fingerprinted (a superset - still strict per\n/// line). Robust to summaries that omit the exact headers.\npub(crate) fn summary_fingerprints(body: &str) -> Vec<String> {"
         },
         {
@@ -16264,7 +16264,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "A pending AskUserQuestion or ExitPlanMode is normally, but NOT always, absent from the transcript while it waits. The assistant record carrying the tool_use block is built and yielded at block completion with a fresh uuid and the emit timestamp; the in-flight persist frontier withholds it only while its stop_reason is null; and message_delta fills usage, stop_reason and stop_details in place on every record of the turn BEFORE any tool runs, so from that instant the record is eligible to be written. Persistence is an effect keyed on the identity of the conversation array, and the store setter returns the state unchanged when the array is the same object, so an eligible record is written at the FIRST subsequent change of that array. While a dialog blocks, the blocked tool produces neither progress nor result and usually nothing else appends, so the record stays unwritten until the answer; but any other append - a hook message landing, an away recap, an unattended-activity or swarm notice, an artifact watch, a remote bridge command, a UI log line, a turn-event note - flushes it mid-wait. The corpus carries both shapes: of 137 AskUserQuestion tool_use ids in transcripts all 137 have their tool_result in the same file, 98 waited longer than 120 seconds, and in 2 of those (stamped 2.1.199 and 2.1.228) queue-operation lines stamped inside the wait sit physically AFTER the ask, so the ask was already on disk while the dialog was up - those lines are written straight to the file at enqueue time rather than through the conversation array, which is what makes their position a usable write instant. Both early cases carry two questions. The count IS tested, but only where the dialog draws and submits and where a notification is labelled: a single question whose answer is one option submits on the selection instead of advancing, the question strip drops its left arrow at one question, a rewrite that changes how many questions there are is refused before drawing, a count past the cap makes the validation-steer builder return nothing, and a push or bridge label appends a (+N more) tail above one question. None of those sites touches the conversation array or the recorder, and the tool's own call returns its data in one step with no yield, emitting nothing per question - so nothing in the count decides whether the record is written; what decides it is whether the array changes during the wait. The correlation between two questions and an early flush is measured, not explained. Consequently a tool_use on disk does not prove its dialog is closed, and its absence does not prove no dialog is open.",
-          "depends": "csift cannot render a pending-question state from the native transcript: the unanswered window is recoverable only from the hook-written sidecar, whose unresolved pendings `search`/`show`/`verbatim`/`list` merge as if native (a pending marker classifies `agent.tool.use`, renders `(elicitation sidecar)` in place of a line number, and every surface that merged one prints `with elicitation sidecar`). A `status` that inferred 'blocked on a question' from the transcript alone would be fabricating. The corrected statement bites one csift rule: the ghost-pending guard (src/commands/elicitation.rs) drops a sidecar pending whose key appears on a native record as a `tool_use` block id OR a `tool_result` tool_use_id, on the premise that a native tool_use proves closure. Under the early-flush shape that premise is false and a still-pending marker can be dropped while the dialog is up; only the `tool_result` carrier is sound proof of closure.",
+          "depends": "csift cannot render a pending-question state from the native transcript: the unanswered window is recoverable only from the hook-written sidecar, whose unresolved pendings `search`/`show`/`verbatim`/`list` merge as if native (a pending marker classifies `agent.tool.use`, renders `(elicitation sidecar)` in place of a line number, and every surface that merged one prints `with elicitation sidecar`); `verbatim` renders a pending question as its turn's ASSISTANT unit (`role: \"assistant\"`), because the pending line stands for the assistant's own `tool_use` and a unit's role is the role of the record it renders. A `status` that inferred 'blocked on a question' from the transcript alone would be fabricating. The corrected statement bites one csift rule: the ghost-pending guard (src/commands/elicitation.rs) drops a sidecar pending whose key appears on a native record as a `tool_use` block id OR a `tool_result` tool_use_id, on the premise that a native tool_use proves closure. Under the early-flush shape that premise is false and a still-pending marker can be dropped while the dialog is up; only the `tool_result` carrier is sound proof of closure.",
           "instrument": "Static: in every top-level transcript join each AskUserQuestion `tool_use` block id to a `tool_result` carrier with the same tool_use_id in the same file; for every pair whose wait exceeds 120 seconds, count the lines that sit physically BETWEEN the two records and are stamped inside the wait, keeping only `queue-operation` lines, which are appended straight to the file at enqueue time rather than through the conversation array. One row per ask/answer pair. A mid-wait line positioned after the ask proves the ask was already on disk. Records of other types are not admissible here: an attachment stamped inside the wait can equally be one built mid-wait and written in the answer-time flush, since file order is write order while timestamps are build times. Live: hold a dialog open at least thirty seconds and read the transcript tail from another terminal, then again after answering. Binary: enumerate every occurrence of `.questions` and every branch on the destructured questions array's length, and check each site against the enumerated set of sites that change the conversation array.",
           "probe": {
             "kind": "corpus",
@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2572",
+          "lines": "2573",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -19829,7 +19829,7 @@
         },
         {
           "path": "src/cli/verbatim_args.rs",
-          "lines": "373-376",
+          "lines": "376-379",
           "snippet": "    /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH\n    /// hook's `additionalContext` at 10,000 UTF-16 code units (over-cap is replaced by a\n    /// file-path + short preview, i.e. the body is effectively LOST to the model), so one hook\n    /// per slice keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same"
         },
         {
@@ -33652,7 +33652,7 @@
       "code": [
         {
           "path": "src/cli/verbatim_args.rs",
-          "lines": "373-376",
+          "lines": "376-379",
           "snippet": "    /// fanning a >10K reconstruction across several SessionStart hooks: Claude Code caps EACH\n    /// hook's `additionalContext` at 10,000 UTF-16 code units (over-cap is replaced by a\n    /// file-path + short preview, i.e. the body is effectively LOST to the model), so one hook\n    /// per slice keeps every injected chunk under the wall. Slicing is DETERMINISTIC (same"
         },
         {
@@ -82031,7 +82031,7 @@
         },
         {
           "path": "src/commands/turns/units.rs",
-          "lines": "205-209",
+          "lines": "213-217",
           "snippet": "    /// prompt recalled and re-typed, a turn the operator rewound past. They are NEVER\n    /// replayed: the compaction summariser's input is the in-memory message array, so it\n    /// never saw them either (claim CMP-020), and replaying them would put text into the\n    /// reconstruction that no model ever read. They are counted and pointed at instead.\n    pub(crate) abandoned_openers: Vec<usize>,"
         }
       ],
@@ -89513,7 +89513,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3658"
+          "lines": "3659"
         }
       ],
       "states": [

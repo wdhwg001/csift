@@ -244,7 +244,7 @@ pub(crate) fn turn_latest_line(t: &TurnSlice) -> usize {
     // A pending elicitation-sidecar unit (section 3.10) has no physical line (line_no 0) yet IS the
     // latest activity - what the session is currently blocked on - so it ranks as most-recent
     // (usize::MAX) for recency-first selection rather than sorting as the oldest.
-    if t.user.as_ref().is_some_and(|u| u.from_sidecar) {
+    if t.is_sidecar_pending() {
         return usize::MAX;
     }
     let u = t.user.as_ref().map(|x| x.line_no).unwrap_or(0);

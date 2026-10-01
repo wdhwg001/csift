@@ -27,11 +27,9 @@ pub(crate) fn count_sides(plan: &SessionPlan, cfg: &RichnessCfg) -> (usize, usiz
 /// `with elicitation sidecar` note (text) / the JSON header flag, so a consumer knows the
 /// output includes hook-backfilled records.
 pub(crate) fn plan_has_sidecar(plan: &SessionPlan) -> bool {
-    plan.selected.iter().any(|sel| {
-        find_turn(plan, sel.turn_index)
-            .and_then(|t| t.user.as_ref())
-            .is_some_and(|u| u.from_sidecar)
-    })
+    plan.selected
+        .iter()
+        .any(|sel| find_turn(plan, sel.turn_index).is_some_and(TurnSlice::is_sidecar_pending))
 }
 
 /// The fan-out scope of an in-scope-session set. `--budget` is applied PER session, so a

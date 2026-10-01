@@ -209,6 +209,9 @@ use super::*;
           `line` is the unit's jsonl line, the key every command's rows use for it, and it is\n  \
           null exactly when `source` reads `elicitation-sidecar` (a pending unit merged from\n  \
           the sidecar, which has no physical line; `source` is null on every other unit);\n  \
+          such a unit's `role` is `assistant` and its text header reads `ASSISTANT`, because\n  \
+          the pending line stands for the assistant's AskUserQuestion / ExitPlanMode call,\n  \
+          a question still waiting for the person's answer, never for words the person said;\n  \
           `survival` is `live`, or `pre-cut` for a unit ABOVE a compaction cut Claude Code's\n  \
           own loader stops at - never `abandoned`, since those turns are counted rather than\n  \
           replayed);\n  \

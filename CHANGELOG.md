@@ -1636,6 +1636,15 @@ surface change bumps the PATCH.
   `ack` lane resolve from the alias as documented, but their stderr notes said the id came
   from `$CLAUDE_CODE_SESSION_ID`, a variable that was empty. Each note now names the one
   that carried the id, and `@main`'s note names a variable at all. `whoami --help` says so.
+- **`verbatim` renders a pending sidecar question as the assistant's.** A pending
+  AskUserQuestion or ExitPlanMode merged from the elicitation sidecar was emitted as
+  `▽ (elicitation sidecar)  USER` with JSON `role: "user"`, so the assistant's question read
+  as words the person said - and a hook that re-injects `verbatim`'s reconstruction after a
+  compaction carried that into the model's context. The pending line stands for the
+  assistant record Claude Code writes once the question resolves, so the unit now sits on
+  the turn's assistant side: `△ (elicitation sidecar)  ASSISTANT`, `role: "assistant"`,
+  the body still naming the tool and the question. The header's user/assistant unit split
+  counts it as an assistant unit. `verbatim --help` says so.
 
 ### Performance
 

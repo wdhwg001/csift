@@ -8,6 +8,7 @@ mod compaction;
 mod contracts;
 mod duplicates;
 mod elicitation;
+mod elicitation_verbatim;
 mod files;
 mod harness;
 mod image;

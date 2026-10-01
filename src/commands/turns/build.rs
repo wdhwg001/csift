@@ -175,11 +175,15 @@ pub(crate) fn build(
     // -- Elicitation-sidecar pending units (section 3.10) --
     // Each unresolved-pending elicitation becomes its OWN turn unit, appended AFTER the native
     // turns (a pending elicitation is the LATEST activity - it is what the session is currently
-    // blocked on). It is rendered as the USER side (the question/plan/elicitation put TO the
-    // user, awaiting the answer), with `from_sidecar` so the header shows `(elicitation
-    // sidecar)` instead of a fabricated `Lnnnn`. `compactions_before` is 0 (it post-dates every
-    // summary). These never dedup against a summary (a summary cannot quote a not-yet-answered
-    // elicitation).
+    // blocked on). A unit's role is the role of the record it renders, and the pending line is
+    // shaped like the ASSISTANT record Claude Code writes once the question resolves (an
+    // AskUserQuestion/ExitPlanMode `tool_use`), so it is the turn's AGENT side, with no user
+    // opener: the question is the assistant's, still waiting for the person's answer. Rendered
+    // as the person's, a hook re-injecting this reconstruction after a compaction would hand
+    // the model its own question as something the person said. `from_sidecar` makes the
+    // header show `(elicitation sidecar)` instead of a fabricated `Lnnnn`.
+    // `compactions_before` is 0 (it post-dates every summary). These never dedup against a
+    // summary (a summary cannot quote a not-yet-answered elicitation).
     for rec in sidecar {
         let Some(text) = crate::commands::elicitation::pending_text(rec) else {
             continue;
@@ -187,10 +191,15 @@ pub(crate) fn build(
         let turn_index = slices.len();
         slices.push(TurnSlice {
             turn_index,
-            user: Some(make_unit(0, Role::User, &text, rec, "live")),
+            user: None,
             tool_calls: 0,
             image_ids: Vec::new(),
-            agents: Vec::new(),
+            agents: vec![AgentMsg {
+                unit: make_unit(0, Role::Assistant, &text, rec, "live"),
+                pos: AgentPos::Last,
+                preceding_tool_calls: 0,
+                preceding_failed: 0,
+            }],
             compactions_before: 0,
             is_automation: false,
             automation: None,

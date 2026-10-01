@@ -166,6 +166,14 @@ impl TurnSlice {
         self.agents.last().map(|a| &a.unit)
     }
 
+    /// True for a turn merged from the elicitation sidecar (section 3.10): a pending
+    /// question whose unit sits on the AGENT side, since the record it stands for is the
+    /// assistant's. Read off either side, so a reader of the flag never has to know which.
+    pub(crate) fn is_sidecar_pending(&self) -> bool {
+        self.user.as_ref().is_some_and(|u| u.from_sidecar)
+            || self.assistant_eot().is_some_and(|a| a.from_sidecar)
+    }
+
     /// Mutable EOT-anchor accessor (dedup flips `also_in_summary` on it).
     pub(crate) fn assistant_eot_mut(&mut self) -> Option<&mut TurnUnit> {
         self.agents.last_mut().map(|a| &mut a.unit)
