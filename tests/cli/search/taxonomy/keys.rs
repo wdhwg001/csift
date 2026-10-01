@@ -65,15 +65,19 @@ fn row(h: &Home, line: &str) -> serde_json::Value {
 #[test]
 fn the_exposed_keys_render_their_tags_in_the_label_zone() {
     let h = keys_home();
-    let out = h.run(&[
-        "search",
-        "zzkeys",
-        &at(SESS),
-        "-t",
-        "agent.*",
-        "-t",
-        "user.*",
-    ]);
+    // The quota's reset instant renders in the local zone, so the zone is pinned.
+    let out = h.run_with_env(
+        &[
+            "search",
+            "zzkeys",
+            &at(SESS),
+            "-t",
+            "agent.*",
+            "-t",
+            "user.*",
+        ],
+        &[("TZ", "UTC")],
+    );
     assert!(out.success, "{}", out.stderr);
     // The SPECIFIC attribution only: a skill outranks its plugin and the MCP pair, and
     // the agent name is on the wire rather than in the zone.
@@ -89,8 +93,8 @@ fn the_exposed_keys_render_their_tags_in_the_label_zone() {
     );
     assert!(
         out.stdout.contains(
-            "[api failure rate_limit status 429 quota five_hour truncated after output \
-             aborted mid-stream]"
+            "[api failure rate_limit status 429 quota five_hour resets 2026-09-21 14:13:20 \
+             UTC(UTC+0) truncated after output aborted mid-stream]"
         ),
         "the failure names every half it has:\n{}",
         out.stdout
@@ -119,10 +123,14 @@ fn the_exposed_keys_render_their_tags_in_the_label_zone() {
 #[test]
 fn a_quota_only_failure_names_its_quota_and_no_floor_word() {
     let h = keys_home();
-    let out = h.run(&["search", "zzkeys quota only", &at(SESS), "-t", "agent.*"]);
+    let out = h.run_with_env(
+        &["search", "zzkeys quota only", &at(SESS), "-t", "agent.*"],
+        &[("TZ", "UTC")],
+    );
     assert!(out.success, "{}", out.stderr);
     assert!(
-        out.stdout.contains("[api failure quota weekly]"),
+        out.stdout
+            .contains("[api failure quota weekly resets 2026-09-21 14:13:21 UTC(UTC+0)]"),
         "the quota is what the record said:\n{}",
         out.stdout
     );
@@ -135,6 +143,14 @@ fn a_quota_only_failure_names_its_quota_and_no_floor_word() {
     let q = &r["api_failure"]["quota"];
     assert_eq!(q["limit_type"], "weekly");
     assert_eq!(q["resets_at"], 1_790_000_001u64);
+    // The harness's epoch seconds stay as written; the pair law adds the same instant as
+    // `_utc` and `_local` beside them, and the offset suffix is whatever this host's zone is.
+    assert_eq!(q["resets_at_utc"], "2026-09-21T14:13:21Z");
+    let local = q["resets_at_local"].as_str().unwrap_or_default();
+    assert!(
+        local.starts_with("2026-09-2") && local.len() == "2026-09-21T14:13:21+00:00".len(),
+        "{q}"
+    );
     assert_eq!(r["api_failure"]["error"], serde_json::Value::Null);
 }
 

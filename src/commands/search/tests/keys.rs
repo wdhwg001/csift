@@ -139,24 +139,33 @@ fn the_api_failure_tag_names_what_the_record_said() {
         r#"{"type":"assistant","uuid":"a-2","isApiErrorMessage":true,"error":"rate_limit","apiErrorStatus":429,"quotaLimits":{"rateLimitType":"five_hour","resetsAt":1790000000},"truncatedAfterOutput":true,"isAbortedMidStream":true}"#,
         Some(Class::AgentMessagePlain),
     );
+    let when = crate::timez::format_timestamp(Some("2026-09-21T14:13:20Z"));
     assert_eq!(
         full,
-        vec![
-            "[api failure rate_limit status 429 quota five_hour truncated after output \
-             aborted mid-stream]"
-                .to_string()
-        ]
+        vec![format!(
+            "[api failure rate_limit status 429 quota five_hour resets {when} truncated \
+             after output aborted mid-stream]"
+        )]
     );
 
     let (quota_only, json) = projections(
         r#"{"type":"assistant","uuid":"a-3","isApiErrorMessage":true,"quotaLimits":{"rateLimitType":"weekly","resetsAt":1790000001}}"#,
         Some(Class::AgentMessagePlain),
     );
-    assert_eq!(quota_only, vec!["[api failure quota weekly]".to_string()]);
+    let when = crate::timez::format_timestamp(Some("2026-09-21T14:13:21Z"));
+    assert_eq!(
+        quota_only,
+        vec![format!("[api failure quota weekly resets {when}]")]
+    );
     let obj = json.first().expect("an api_failure object");
+    let local = crate::timez::local_iso("2026-09-21T14:13:21Z").unwrap_or_default();
     assert!(
-        obj.contains("\"limit_type\":\"weekly\"") && obj.contains("\"resets_at\":1790000001"),
-        "the quota is summarised to its two members: {obj}"
+        obj.contains("\"limit_type\":\"weekly\"")
+            && obj.contains("\"resets_at\":1790000001")
+            && obj.contains("\"resets_at_utc\":\"2026-09-21T14:13:21Z\"")
+            && obj.contains(&format!("\"resets_at_local\":\"{local}\"")),
+        "the quota is summarised to its two members, the reset as the harness wrote it \
+         and as the timestamp pair: {obj}"
     );
     assert!(
         obj.contains("\"error\":null") && obj.contains("\"status\":null"),

@@ -401,6 +401,13 @@ surface change bumps the PATCH.
   already told a lane caller to `pass --from @<your lane id> for an exact sender` while
   `whoami` rejected the flag. `--from` takes `csift send`'s grammar and only goes with
   `--to`, so a subagent that names itself gets the answer a send from that lane gets.
+- **A quota's reset instant joins the timestamp pair.** A rate-limited assistant record's
+  `api_failure.quota` carried `resets_at` as the harness writes it, bare epoch seconds - the
+  one instant on any csift surface with no `_utc` / `_local` pair and no unit. It now
+  carries `resets_at_utc` and `resets_at_local` beside the kept number, and the label zone
+  reads `quota <window> resets <local instant>` in the one canonical local form, where it
+  read `quota <window>` and left the instant to JSON. `search --help`'s exposed-keys
+  section and `show --help`'s key table name both forms and why both ride.
 
 ### Changed
 

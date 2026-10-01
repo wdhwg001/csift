@@ -108,6 +108,16 @@ pub fn local_iso(raw: &str) -> Option<String> {
     )
 }
 
+/// An epoch-SECONDS instant as the ISO8601 UTC string every `<name>_utc` key carries, so a
+/// key the harness writes as a bare number can join the timestamp pair law: the result feeds
+/// [`local_iso`] for the `_local` twin and [`format_timestamp`] for the text form. `None`
+/// for a value jiff cannot hold (past year 9999), which a caller renders as the raw number.
+#[must_use]
+pub fn utc_from_epoch_secs(secs: u64) -> Option<String> {
+    let secs = i64::try_from(secs).ok()?;
+    Some(jiff::Timestamp::from_second(secs).ok()?.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,5 +221,19 @@ mod tests {
         assert_eq!(format_timestamp(None), "—");
         let some = format_timestamp(Some("2026-06-07T05:00:00Z"));
         assert!(some.contains("2026-06-07"));
+    }
+
+    #[test]
+    fn epoch_seconds_join_the_utc_form_and_a_value_past_the_calendar_is_none() {
+        assert_eq!(
+            utc_from_epoch_secs(1_790_000_000).as_deref(),
+            Some("2026-09-21T14:13:20Z")
+        );
+        assert_eq!(
+            utc_from_epoch_secs(0).as_deref(),
+            Some("1970-01-01T00:00:00Z")
+        );
+        assert_eq!(utc_from_epoch_secs(999_999_999_999_999), None);
+        assert_eq!(utc_from_epoch_secs(u64::MAX), None);
     }
 }

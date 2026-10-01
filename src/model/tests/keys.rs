@@ -149,7 +149,11 @@ fn a_quota_only_failure_builds_and_names_its_quota() {
         r#"{"type":"assistant","uuid":"a-7","isApiErrorMessage":true,"quotaLimits":{"rateLimitType":"weekly","resetsAt":1790000001,"status":"exceeded"}}"#,
     );
     let f = quota_only.api_failure().expect("a quota says something");
-    assert_eq!(f.headline().as_deref(), Some("quota weekly"));
+    let when = crate::timez::format_timestamp(Some("2026-09-21T14:13:21Z"));
+    assert_eq!(
+        f.headline().as_deref(),
+        Some(format!("quota weekly resets {when}").as_str())
+    );
     assert_eq!(f.error, None);
     assert_eq!(f.status, None);
     // The object is narrowed at deserialization: the other eight measured keys are gone.
@@ -188,14 +192,32 @@ fn the_headline_names_every_part_the_record_gave_in_one_order() {
 }
 
 /// A quota with a reset instant and NO window still says something, and the headline says
-/// the bare word rather than inventing a window name.
+/// the bare word plus the instant rather than inventing a window name.
 #[test]
 fn a_quota_with_no_window_renders_the_bare_word() {
     let r = parse(
         r#"{"type":"assistant","uuid":"a-10","isApiErrorMessage":true,"quotaLimits":{"resetsAt":1790000002}}"#,
     );
     let f = r.api_failure().expect("a reset instant says something");
-    assert_eq!(f.headline().as_deref(), Some("quota"));
+    let when = crate::timez::format_timestamp(Some("2026-09-21T14:13:22Z"));
+    assert_eq!(
+        f.headline().as_deref(),
+        Some(format!("quota resets {when}").as_str())
+    );
+}
+
+/// A reset no calendar holds (past year 9999) is not dropped and not fabricated: the
+/// headline keeps the harness's number and names its unit.
+#[test]
+fn a_reset_past_the_calendar_keeps_its_number() {
+    let r = parse(
+        r#"{"type":"assistant","uuid":"a-11","isApiErrorMessage":true,"quotaLimits":{"rateLimitType":"weekly","resetsAt":999999999999999}}"#,
+    );
+    let f = r.api_failure().expect("a quota says something");
+    assert_eq!(
+        f.headline().as_deref(),
+        Some("quota weekly resets at epoch second 999999999999999")
+    );
 }
 
 /// `toolUseID` reads like an API tool_use id and is not one, so it is read on the ONE

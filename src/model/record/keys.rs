@@ -357,12 +357,25 @@ impl ApiFailure {
             parts.push(format!("status {s}"));
         }
         if let Some(q) = &self.quota {
-            // Which WINDOW was hit is the half a reader acts on; the reset instant is an
-            // epoch second, which reads as noise in a label zone and rides JSON instead.
-            match q.limit_type.as_deref() {
-                Some(t) => parts.push(format!("quota {t}")),
-                None => parts.push("quota".to_string()),
+            // Which WINDOW was hit, then when it reopens. The harness writes the reset as
+            // bare epoch SECONDS; the label zone renders it in the one canonical local text
+            // form (`timez`), because a number with no unit is the only instant a reader
+            // would otherwise have to convert by hand. A value no calendar holds stays the
+            // number it is, named as epoch seconds.
+            let mut part = match q.limit_type.as_deref() {
+                Some(t) => format!("quota {t}"),
+                None => "quota".to_string(),
+            };
+            if let Some(secs) = q.resets_at {
+                match crate::timez::utc_from_epoch_secs(secs) {
+                    Some(utc) => part.push_str(&format!(
+                        " resets {}",
+                        crate::timez::format_timestamp(Some(&utc))
+                    )),
+                    None => part.push_str(&format!(" resets at epoch second {secs}")),
+                }
             }
+            parts.push(part);
         }
         if self.truncated_after_output {
             parts.push("truncated after output".to_string());

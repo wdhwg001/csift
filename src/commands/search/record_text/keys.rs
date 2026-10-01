@@ -198,10 +198,18 @@ impl Fact {
                 serde_json::json!({
                     "error": f.error,
                     "status": f.status,
-                    "quota": f.quota.as_ref().map(|q| serde_json::json!({
-                        "limit_type": q.limit_type,
-                        "resets_at": q.resets_at,
-                    })),
+                    // `resets_at` is the harness's own value, epoch SECONDS, kept for a
+                    // consumer keyed on it; the `_utc` / `_local` pair beside it is the
+                    // same instant under the timestamp pair law every other instant obeys.
+                    "quota": f.quota.as_ref().map(|q| {
+                        let utc = q.resets_at.and_then(crate::timez::utc_from_epoch_secs);
+                        serde_json::json!({
+                            "limit_type": q.limit_type,
+                            "resets_at": q.resets_at,
+                            "resets_at_utc": utc,
+                            "resets_at_local": utc.as_deref().and_then(crate::timez::local_iso),
+                        })
+                    }),
                     "truncated_after_output": f.truncated_after_output,
                     "aborted_mid_stream": f.aborted_mid_stream,
                 }),

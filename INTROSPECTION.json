@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2571",
+          "lines": "2572",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -89157,7 +89157,7 @@
         {
           "path": "src/model/record/keys.rs",
           "snippet": "        f.headline().is_some().then_some(f)",
-          "lines": "450"
+          "lines": "463"
         }
       ],
       "states": [
@@ -89166,7 +89166,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "When an API call fails, Claude Code fabricates an assistant record in its place through ONE factory. The failure entry passes `isApiErrorMessage:!0` plus `apiError`, `apiErrorIsTransient`, `quotaLimits`, `error`, `errorDetails` and `truncatedAfterOutput` into the record builder, which writes all of them as TOP-LEVEL keys beside `requestId:void 0`, `isVirtual` and a `message` whose `id` comes from the same generator as the record's own `uuid`. So the flag is the discriminator of the whole set: on two projects roots 987 and 1,078 records carry `isApiErrorMessage`, every one of them `type:\"assistant\"`, and every one of the 925 and 998 that carry a STRING `error` names a failure kind. `apiErrorStatus` (864 and 916 carriers) and `quotaLimits` (127 on the live root, 0 on the frozen one, lowest version 2.1.259) ride the same records; `isAbortedMidStream` (9 and 5) and `truncatedAfterOutput` (1 and 0) are the two partial-response flags.",
-          "depends": "csift builds ONE `api_failure` object from the set and gates it TWICE - on the flag, which is the factory's own discriminator, and on the failure SAYING something. The second gate exists because five members reading four nulls and a `false` answer no question, while the two `false`s read as a positive `no` where the record simply did not say. It changes no live record: 925 of 925 and 998 of 998 flag carriers name at least one part. The label-zone headline and the gate read the SAME list of parts, so a record that named only its quota cannot render a headline with no content in it.",
+          "depends": "csift builds ONE `api_failure` object from the set and gates it TWICE - on the flag, which is the factory's own discriminator, and on the failure SAYING something. The second gate exists because five members reading four nulls and a `false` answer no question, while the two `false`s read as a positive `no` where the record simply did not say. It changes no live record: 925 of 925 and 998 of 998 flag carriers name at least one part. The label-zone headline and the gate read the SAME list of parts, so a record that named only its quota cannot render a headline with no content in it. The quota object's `resetsAt` is projected three ways: verbatim as `resets_at`, the harness's own epoch SECONDS, for a consumer keyed on the number; as `resets_at_utc` plus `resets_at_local`, the timestamp pair every other csift instant carries; and in the label zone as `resets <local instant>` through the shared `timez` renderer. The seconds reading is what the conversion rests on: a milliseconds value would land three orders of magnitude later, so a changed unit would show as a reset centuries away rather than as a plausible wrong instant.",
           "instrument": "Corpus: over each root count the carriers of `isApiErrorMessage`, `error`, `apiErrorStatus`, `quotaLimits`, `truncatedAfterOutput` and `isAbortedMidStream` top-level with their `type` breakdowns and value shapes; for every record with `isApiErrorMessage` exactly `true`, evaluate the five-part test (a STRING `error`, or `apiErrorStatus`, or `quotaLimits`, or either flag true) and count true against false; report the `error` string value histogram and the `quotaLimits` key sets. Binary: byte-search the verified build for `function zo({content:e,apiError:n,apiErrorIsTransient:r,quotaLimits:o,error:d,` and `requestId:void 0,apiError:r,apiErrorIsTransient:o,quotaLimits:d,error:f,` and re-slice each at its offset. Two projects roots. A root is read as every `*.jsonl` file under it - the top-level transcripts and the `<uuid>/subagents/**` sidecar ones - excluding the basenames `journal.jsonl` and `elicitations.jsonl` and anything under a `csift-channel/` directory; a line is read as one JSON object, and a key is top-level when it is a member of that object and message-level when it is a member of its `message` object. The enclosing `.claude` directory is NOT the root: it carries `history.jsonl` and four plugin `*.jsonl` files beside `projects/`, and reading from there admits a plugin's own event log and csift's own elicitation sidecar into the population. Root 1 is a LIVE root, so every count over it is a WHOLE-ROOT reading at its instant - the transcript tree of the session taking the reading included - and is normally re-read ABOVE itself, because the root is appended to while it is walked - normally rather than always, since a transcript can be rewritten in place on a rewind or a compaction and a line count can then fall. The reading that is about Claude Code is the same rule with that tree excluded, and it reads lower rather than higher; this state's residue gives both. Root 2 is a FROZEN snapshot that reproduces exactly: 10,299 files and 2,312,350 lines. The two overlap in origin and are not independent populations; a count is quoted per root, never summed.",
           "probe": {
             "kind": "corpus",
@@ -89207,7 +89207,8 @@
           },
           "residue": [
             "The live root's counts predate the named file set and are re-taken before they are quoted again: reading the enclosing `.claude` directory instead of the projects root admits 23 further string `error` carriers whose values are `TimeoutError` (16) and `HTTP 429` (7), which are a sidecar's words and not a Claude Code failure kind. The frozen root's counts are unaffected.",
-            "An earlier reading this pass kept rather than dropped, with the scope those numbers were taken under: Root 1 is a LIVE root, so the quoted counts are a WHOLE-ROOT reading at their instant, the transcript tree of the session that took them included: at that reading it held 9,806 `*.jsonl` files and 1,797,567 lines whole-root. A later whole-root reading under the same file set holds 10,111 files and 1,938,816 lines, because the root is appended to while it is walked and a whole-root count is therefore normally re-read above itself, though not always, a transcript being rewritten in place on a rewind or a compaction; the same rule with the observing session's own transcript and sidecar tree excluded holds 8,796 files and 1,378,383 lines, which is BELOW the quoted pair and is the population that is about Claude Code rather than about the reading. The root 2 figures quoted there, 10,618 files and 2,333,486 lines, are the ENCLOSING `.claude` directory's rather than the projects root's: that walk adds `history.jsonl` and four plugin `*.jsonl` files sitting beside `projects/`, and it keeps the 283 `journal.jsonl` and 31 `elicitations.jsonl` files this state's own file set excludes - 319 files and 21,136 lines in all. Under this state's file set the frozen snapshot holds 10,299 files and 2,312,350 lines, and 10,613 before the two basename exclusions. No count this state reads moves with the scope on the FROZEN root: not one of those 319 files carries an `error` key at all. The LIVE root is where the wider walk moves this state's counts, by the 23 string carriers the earlier-reading line already on this state names. Counting rule: A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included; between them those 319 extra files carry 42 distinct top-level keys."
+            "An earlier reading this pass kept rather than dropped, with the scope those numbers were taken under: Root 1 is a LIVE root, so the quoted counts are a WHOLE-ROOT reading at their instant, the transcript tree of the session that took them included: at that reading it held 9,806 `*.jsonl` files and 1,797,567 lines whole-root. A later whole-root reading under the same file set holds 10,111 files and 1,938,816 lines, because the root is appended to while it is walked and a whole-root count is therefore normally re-read above itself, though not always, a transcript being rewritten in place on a rewind or a compaction; the same rule with the observing session's own transcript and sidecar tree excluded holds 8,796 files and 1,378,383 lines, which is BELOW the quoted pair and is the population that is about Claude Code rather than about the reading. The root 2 figures quoted there, 10,618 files and 2,333,486 lines, are the ENCLOSING `.claude` directory's rather than the projects root's: that walk adds `history.jsonl` and four plugin `*.jsonl` files sitting beside `projects/`, and it keeps the 283 `journal.jsonl` and 31 `elicitations.jsonl` files this state's own file set excludes - 319 files and 21,136 lines in all. Under this state's file set the frozen snapshot holds 10,299 files and 2,312,350 lines, and 10,613 before the two basename exclusions. No count this state reads moves with the scope on the FROZEN root: not one of those 319 files carries an `error` key at all. The LIVE root is where the wider walk moves this state's counts, by the 23 string carriers the earlier-reading line already on this state names. Counting rule: A line counts once for a key when `json.loads` of the line yields an object carrying that key as a TOP-LEVEL member, so a byte occurrence inside a payload string or a nested object never counts; a line that does not parse counts under no key. Files are walked with `os.walk` over the whole root, `subagents/` trees included; between them those 319 extra files carry 42 distinct top-level keys.",
+            "The `resetsAt` unit, read for the timestamp pair csift projects from it: over the live projects root (every `*.jsonl`, top-level and `subagents/**`, excluding `journal.jsonl`, `elicitations.jsonl` and anything under `csift-channel/`; one observation per line whose top-level `quotaLimits` is an object, read with `json.loads`), 303 objects carry `resetsAt`, all 303 an integer and none of another type or absent, over 2 key sets, and every one lies between 1.5e9 and 2.1e9, the range an epoch-SECONDS reading of the present gives. A WHOLE-ROOT reading at its instant, the measuring session's own tree included; it postdates the 127 the receipt quotes because the root is appended to while it is walked."
           ]
         }
       ]
@@ -89269,7 +89270,7 @@
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "        return Some(for_edge(\n            EdgeKind::Interrupted,\n            Basis::Key,\n            Some(id),\n            None,\n            ctx,\n        ));",
-          "lines": "357-363"
+          "lines": "365-371"
         }
       ],
       "states": [
@@ -89358,12 +89359,12 @@
         {
           "path": "src/model/record/keys.rs",
           "snippet": "const HOOK_RUN_SUBTYPE: &str = \"stop_hook_summary\";",
-          "lines": "390"
+          "lines": "403"
         },
         {
           "path": "src/commands/search/record_text/keys.rs",
           "snippet": "        return Some(HitFact::ForUnknown {",
-          "lines": "372"
+          "lines": "380"
         }
       ],
       "states": [
@@ -89512,7 +89513,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3654"
+          "lines": "3658"
         }
       ],
       "states": [
@@ -89567,7 +89568,7 @@
         },
         {
           "path": "src/commands/search/record_text/keys.rs",
-          "lines": "327-334",
+          "lines": "335-342",
           "snippet": "    if let Some(p) = crate::commands::image::record_pdf_pages(rec) {\n        push(Fact::PdfPages {\n            first: p.first,\n            last: p.last(),\n            count: p.count,\n            path: p.path,\n        });\n    }"
         }
       ],
@@ -90726,12 +90727,12 @@
         },
         {
           "path": "src/model/record/keys.rs",
-          "lines": "500-506",
+          "lines": "513-519",
           "snippet": "    pub fn stop_details(&self) -> Option<&StopDetails> {\n        self.message\n            .as_ref()?\n            .stop_details\n            .as_deref()\n            .filter(|s| s.says_something())\n    }"
         },
         {
           "path": "src/commands/search/record_text/keys.rs",
-          "lines": "288",
+          "lines": "296",
           "snippet": "    if let Some(s) = rec.stop_details() {"
         }
       ],
@@ -90834,7 +90835,7 @@
         },
         {
           "path": "src/model/record/keys.rs",
-          "lines": "483-486",
+          "lines": "496-499",
           "snippet": "    pub fn is_turn_companion(&self) -> bool {\n        self.exposed_keys()\n            .is_some_and(|k| k.turn_companion == Some(true))\n    }"
         },
         {
