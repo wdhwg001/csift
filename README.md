@@ -204,6 +204,8 @@ cargo install --path .        # builds the optimized binary and puts `csift` on 
 npx skills add wdhwg001/csift
 ```
 
+From a clone, link the skill directory instead: `ln -s "$PWD/skills/csift" ~/.claude/skills/csift`.
+
 ## Quickstart
 
 `csift <command> [TARGET] [flags]`. A **target** is a positional `@<uuid>` (a session), an `@<agent-hex>` (a subagent), a project path, or `.` (this cwd); omit it to scan every project.
@@ -262,7 +264,7 @@ When Claude Code compacts, it regenerates a dense summary: kilobytes standing in
 
 `csift verbatim` keeps the other axis: the verbatim **User↔Agent exchange**, what you actually said and what the agent actually reported back when it finished, with the hundreds of tool calls in between collapsed to a count. For the recent window that's tens of KB of full-fidelity dialogue where the summary kept a line or two. Not just your directive, but the agent's _"validated against HEAD, the premise holds, here's the evidence"_ report-back, which a task-findings selection simply doesn't carry.
 
-It doesn't replace the summary. It extends the post-compaction context with the recent conversation at full fidelity, budget-bounded and newest-first: it won't reach the oldest turns, and your never-compacted Plan file still owns the plan. Wire it into a `SessionStart(compact)` hook (see [SKILL.md](SKILL.md)) and every compaction arrives with the recent verbatim conversation attached.
+It doesn't replace the summary. It extends the post-compaction context with the recent conversation at full fidelity, budget-bounded and newest-first: it won't reach the oldest turns, and your never-compacted Plan file still owns the plan. Wire it into a `SessionStart(compact)` hook (the skill ships one, [`compact-slice.sh`](skills/csift/scripts/compact-slice.sh), with its settings fragment in [hooks.md](skills/csift/references/hooks.md)) and every compaction arrives with the recent verbatim conversation attached.
 
 ## How it works
 
@@ -303,7 +305,7 @@ On cadence: Claude Code is conservative with its own jsonl, and a break of the f
 
 There is none, in the human sense. This repository is written and maintained entirely by Claude Code, and the three reference files are the corpus the maintaining agent works from:
 
-- **[SKILL.md](SKILL.md)**: the usage reference an agent loads to operate csift.
+- **[skills/csift/](skills/csift/SKILL.md)**: the skill an agent loads to operate csift: a short `SKILL.md` that routes, one reference file per topic, and three hook scripts.
 - **[SPEC.md](SPEC.md)**: design intent, record-model semantics, and the measurements behind the deep features.
 - **[AGENTS.md](AGENTS.md)**: the repo operating manual. Architecture, jsonl domain knowledge, the quality gate.
 

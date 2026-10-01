@@ -1,5 +1,5 @@
-//! The REPO DOCS as a surface: what `SKILL.md` and its siblings must say about the
-//! binary, checked against the binary.
+//! The REPO DOCS as a surface: what the skill (`skills/csift/`) and its siblings must say
+//! about the binary, checked against the binary.
 //!
 //! Split from `docs.rs`, which guards the RENDERED HELP. The two answer different
 //! questions and fail for different reasons: a help guard breaks when a flag or a
@@ -9,23 +9,33 @@
 #[allow(unused_imports)]
 use super::*;
 
-/// SKILL.md's surface stamp must match the crate version - forces the LLM-facing
+/// The skill's surface stamp must match the crate version - forces the LLM-facing
 /// skill to be (at least) OPENED on every release, so the "re-read this file on an
 /// unexpected error" recovery path always lands on current truth.
+///
+/// The stamp is the body's `Surface: csift <version>` line, spelled the way
+/// `csift --version` prints the version, because comparing the two is the reader's whole
+/// use of it. It is held in `SKILL.md` itself rather than anywhere in the folder: the body
+/// is the file a model always loads, so it is the only place the staleness check is sure
+/// to be read.
 #[test]
 fn skill_stamp_matches_crate_version() {
-    let skill = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/SKILL.md"))
-        .expect("SKILL.md at the repo root");
-    let want = format!("v{}", env!("CARGO_PKG_VERSION"));
+    let skill = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/skills/csift/SKILL.md"
+    ))
+    .expect("skills/csift/SKILL.md");
+    let want = format!("Surface: csift {}", env!("CARGO_PKG_VERSION"));
     assert!(
         skill.contains(&want),
-        "SKILL.md must carry the surface stamp `{want}` (found none) - update the \
-             stamp (and the surface docs) with every version bump"
+        "skills/csift/SKILL.md must carry the surface stamp `{want}` (found none) - update \
+             the stamp (and the surface docs) with every version bump"
     );
 }
 
-/// The four repo docs must never resurrect a token this cleanup removed. SPEC's
-/// `>`-quoted change LEDGER lines are exempt (they record the renames themselves).
+/// The repo docs - the skill folder, AGENTS, SPEC and README - must never resurrect a token
+/// this cleanup removed. SPEC's `>`-quoted change LEDGER lines are exempt (they record the
+/// renames themselves).
 #[test]
 fn docs_do_not_resurrect_removed_tokens() {
     let deny: &[&str] = &[
@@ -35,9 +45,24 @@ fn docs_do_not_resurrect_removed_tokens() {
         "--line A-B",
         "category=",
     ];
-    for doc in ["SKILL.md", "AGENTS.md", "SPEC.md", "README.md"] {
-        let path = format!("{}/{doc}", env!("CARGO_MANIFEST_DIR"));
-        let body = std::fs::read_to_string(&path).expect("repo doc");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut docs: Vec<String> = vec!["skills/csift/SKILL.md".to_string()];
+    let mut refs: Vec<String> = std::fs::read_dir(root.join("skills/csift/references"))
+        .expect("skills/csift/references")
+        .flatten()
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| n.ends_with(".md"))
+        .map(|n| format!("skills/csift/references/{n}"))
+        .collect();
+    refs.sort();
+    assert!(
+        !refs.is_empty(),
+        "the skill's references/ read found no .md"
+    );
+    docs.extend(refs);
+    docs.extend(["AGENTS.md", "SPEC.md", "README.md"].map(String::from));
+    for doc in &docs {
+        let body = std::fs::read_to_string(root.join(doc)).expect("repo doc");
         for (i, line) in body.lines().enumerate() {
             if line.starts_with('>') {
                 continue; // SPEC change-ledger lines legitimately name old spellings
@@ -53,82 +78,68 @@ fn docs_do_not_resurrect_removed_tokens() {
     }
 }
 
-/// SKILL.md section 10 is the ONE address a stale caller lands on, so every retired
-/// selector has a ROW there naming the successors that selector's own error prints.
+/// The skill's `## Retired spellings` section (`references/labels.md`) is the ONE address a
+/// stale caller lands on, so it names EVERY retired selector the binary refuses.
 ///
-/// The error text and the manual are two copies of one mapping, written for two readers,
-/// and nothing held them together: section 10 sent a reader from
-/// `harness.schedule.continuation` to the four schedule leaves while the binary says
-/// `harness.resume.prompt` (the record comes from the resume LOADER, never the
-/// scheduler), listed seven `harness.meta` successors where the table has ten, and mapped
-/// `tool` to `agent.tool.use` where the table says the `agent.tool` CATEGORY. Three of
-/// five rows wrong, and every one of them sends a caller to a selector that does not
-/// carry their records.
+/// What the section states, and so what this holds it to: each retired spelling by name -
+/// `harness.meta` once, with "and its leaves" standing for every `harness.meta.*` path - and
+/// that the refusal names the successors, with the instruction to follow the error. The
+/// SUCCESSOR MAP itself is not in the skill. It lived there as a second copy of
+/// [`crate::cli::selectors::RETIRED_SELECTORS`], and a per-row test was the only thing
+/// holding the two together: three of five rows once sent a reader to a selector that does
+/// not carry their records. The rewritten skill keeps one copy, the error text the table
+/// renders, so there is no second mapping left to drift and nothing per-row to pin here.
 ///
-/// PER ROW, not per section, and that is the whole strength of it: successor paths repeat
-/// across rows (`harness.schedule.tick` is its own row's answer AND one of the ten
-/// `harness.meta` splits), so a section-wide containment check passes on a row that names
-/// the WRONG successor as long as some other row happens to name the right one. Mutating
-/// the `harness.meta.loop` row to `harness.schedule.WRONG` left a section-wide version of
-/// this test green; the per-row form fails it.
-///
-/// The successor check is per TOKEN rather than on the whole string - the table joins its
-/// successors with ` - ` and parenthesises a gloss, while the manual sets each in
-/// backticks and may reword the gloss for a reader, so pinning the joined string would
-/// pin the wording rather than the mapping.
+/// BOTH DIRECTIONS still hold, on the spelling: a retired selector the section omits is a
+/// refusal a reader cannot place, and a `harness.meta...` path the section names that the
+/// table does not retire is a spelling a reader will type and meet as an UNKNOWN selector
+/// instead.
 #[test]
-fn skill_section_10_names_every_retired_selector_and_its_successors() {
-    let skill = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/SKILL.md"))
-        .expect("SKILL.md at the repo root");
-    let start = skill
-        .find("## 10. Retired spellings")
-        .expect("SKILL.md carries the retirement section");
-    let end = skill[start..]
-        .find("\n## 11.")
-        .map_or(skill.len(), |i| start + i);
-    let section = &skill[start..end];
+fn skill_retired_spellings_name_every_retired_selector() {
+    let labels = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/skills/csift/references/labels.md"
+    ))
+    .expect("skills/csift/references/labels.md");
+    let start = labels
+        .find("## Retired spellings")
+        .expect("references/labels.md carries the retirement section");
+    let end = labels[start + 1..]
+        .find("\n## ")
+        .map_or(labels.len(), |i| start + 1 + i);
+    let section = &labels[start..end];
 
-    // `| `<typed>` | <what happened to it> |` - the row is the unit, because a successor
-    // path can appear in more than one row.
-    let row_for = |selector: &str| -> Option<&str> {
-        section.lines().find_map(|l| {
-            let rest = l.strip_prefix("| `")?;
-            let (typed, tail) = rest.split_once('`')?;
-            (typed == selector).then_some(tail)
-        })
-    };
-
-    for (selector, _reason, successors) in crate::cli::selectors::RETIRED_SELECTORS {
-        let row = row_for(selector)
-            .unwrap_or_else(|| panic!("SKILL section 10 has no row for retired `{selector}`"));
-        // A successor entry is `path` or `path (a gloss)`; the PATH is what a reader
-        // retypes, so that is what has to be in THIS row.
-        for entry in successors.split(" \u{b7} ") {
-            let path = entry.split(" (").next().unwrap_or(entry).trim();
-            assert!(
-                row.contains(path),
-                "SKILL section 10's `{selector}` row does not name its successor {path}\n  row: {row}"
-            );
-        }
+    assert!(
+        section.contains("successors named"),
+        "the retirement section no longer tells a reader the refusal names the successors - \
+         the skill carries no successor map, so that sentence is the reader's only pointer"
+    );
+    let meta_family = section.contains("`harness.meta` and its leaves");
+    for (selector, _reason, _successors) in crate::cli::selectors::RETIRED_SELECTORS {
+        let named = section.contains(&format!("`{selector}`"))
+            || (meta_family && selector.starts_with("harness.meta."));
+        assert!(
+            named,
+            "the skill's retirement section does not name the retired selector `{selector}`"
+        );
     }
-    // The section is the WHOLE map, so a reader meets no selector it cannot place: every
-    // backticked `harness.meta...` path in a row head is one the table actually retires.
-    for line in section.lines().filter(|l| l.starts_with("| `harness.meta")) {
-        let typed = line
-            .trim_start_matches("| `")
-            .split('`')
-            .next()
-            .unwrap_or_default();
+    // Every backticked `harness.meta...` spelling the section sets is one the table retires.
+    for typed in section
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .filter(|t| t.starts_with("harness.meta"))
+    {
         assert!(
             crate::cli::selectors::RETIRED_SELECTORS
                 .iter()
                 .any(|(s, _, _)| *s == typed),
-            "SKILL section 10 retires `{typed}`, which the table does not"
+            "the skill's retirement section names `{typed}`, which the table does not retire"
         );
     }
 }
 
-/// Every `[`-led marker word csift READS OFF A CLAUDE CODE RECORD is quoted in `SKILL.md`.
+/// Every `[`-led marker word csift READS OFF A CLAUDE CODE RECORD is quoted in the skill.
 ///
 /// SCOPE, stated exactly, because the name reads wider than the test is: this guards the
 /// HARNESS's own bracketed words - the two interrupt markers, the bracketed enforce and
@@ -140,6 +151,10 @@ fn skill_section_10_names_every_retired_selector_and_its_successors() {
 /// The transparency law is why both exist: csift may never speak a language the jsonl does
 /// not, so a reader who meets a bracketed word on screen can look it up and then go find it
 /// in the raw line.
+///
+/// "The skill" is the FOLDER - `SKILL.md` plus every `references/*.md` - because the markers
+/// are named where their leaves are documented (all eight in `references/shapes.md`, the
+/// shape table's rows), and a reader following the routes reaches them there.
 ///
 /// The set is WALKED out of that module rather than listed here, because a list here would
 /// be a second copy drifting at the same rate as the prose it guards; a new harness marker
@@ -154,8 +169,7 @@ fn skill_section_10_names_every_retired_selector_and_its_successors() {
 #[test]
 fn skill_names_every_bracketed_harness_marker() {
     let markers = include_str!("../../model/markers.rs");
-    let skill = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/SKILL.md"))
-        .expect("SKILL.md at the repo root");
+    let skill = super::skill_folder_text();
 
     let mut found: Vec<String> = Vec::new();
     for line in markers.lines() {
@@ -192,19 +206,19 @@ fn skill_names_every_bracketed_harness_marker() {
     // the three bracketed enforce and retry sentinels, the notification frame and the two
     // image references, and nothing else. Adding a bracketed harness marker to
     // `model::markers` means raising this number IN THE SAME EDIT that documents the marker
-    // in SKILL.md - the arithmetic is the reminder.
+    // in the skill - the arithmetic is the reminder.
     assert_eq!(
         found.len(),
         8,
         "model/markers.rs carries {} bracketed literals, not 8: {found:?}. If you ADDED a \
-         harness marker, document it in SKILL.md and raise this count; if the extraction \
+         harness marker, document it in the skill and raise this count; if the extraction \
          broke, fix the walk",
         found.len()
     );
     for marker in &found {
         assert!(
             skill.contains(marker.as_str()),
-            "SKILL.md quotes no `{marker}` - csift matches that marker word on a record and \
+            "the skill quotes no `{marker}` - csift matches that marker word on a record and \
              the manual never names it, so a reader meets it on screen with nowhere to look \
              it up"
         );
@@ -215,9 +229,9 @@ fn skill_names_every_bracketed_harness_marker() {
 ///
 /// The eight slugs are a closed enum a consumer branches on, and they live in three
 /// places: [`FloorCause`], the global `--cross-compactions` doc (rendered on all eighteen
-/// help pages) and `SKILL.md` section 9.2. Nothing held the three together: the help
-/// carried the KEY on seven pages and the value domain on none, which is how a reader
-/// ends up guessing at a field the wire hands them.
+/// help pages) and the skill's floor-cause table (`references/survival.md`). Nothing held
+/// the three together: the help carried the KEY on seven pages and the value domain on
+/// none, which is how a reader ends up guessing at a field the wire hands them.
 ///
 /// BOTH DIRECTIONS, because they are two different failures. A slug the help OMITS is a
 /// value a reader meets on the wire and cannot look up. A dashed token the help sets in

@@ -15528,7 +15528,7 @@
           "from_basis": "verified",
           "to": null,
           "behavior": "An answered AskUserQuestion carrier's `toolUseResult` is built by the tool's own call() in a single literal: `{questions:r,answers:o,...f?.trim()&&{response:f},...d&&{annotations:d},..._&&{afkTimeoutMs:_}}` (2.1.258 @164277926). So TWO keys are always present - `questions[]` (the echoed ordered array) and `answers{}` (keyed by the verbatim question string, defaulted to `{}` when the answerer supplied none) - and THREE are conditional, each spread behind its own truthiness test: `annotations{}` (per question `{notes?, preview?}`, written by the dialog only when a full preview or non-blank notes exist, @181436165), `response` (freeform text the answerer typed instead of selecting) and `afkTimeoutMs` (set only when the dialog auto-resolved on idle). `chosenOption`, `answer` and `selected` do not exist: `chosenOption` has zero byte occurrences in the binary and the output schema declares only those five members (@164273940). Neither conditional key is new at 2.1.258. Byte-substring sweep of the two describe strings across the cached native build ladder: the `response` describe string (`Freeform text the user typed instead of selecting ...`) is absent at every build through 2.1.152 and present at 2.1.160 and every later build read, while `afkTimeoutMs` is absent through 2.1.197 and present from 2.1.198 on. On disk, over 121 answered carriers (counting rule: one `type:\"user\"` record whose `toolUseResult` object carries both `questions` and `answers`): the key sets are (annotations, answers, questions) 117, (afkTimeoutMs, annotations, answers, questions) 3 and (answers, questions) 1 - annotations absent on 1 of 121, `response` unseen in this corpus, and `chosenOption` / `answer` / `selected` on 0.",
-          "depends": "csift never reads the inline synthesized tool_result string for an answer: `auq_exchange` (src/model/exchange.rs) parses `toolUseResult` once on an actual answered-AUQ carrier and zips `questions[]` against `answers{}`, surfacing each option as a (label, description) pair and reading the user's real message out of `annotations` when the answer is the `(notes only)` placeholder. That is required because the inline string is not TRUNCATED but lossy by omission: over the same 121 carriers (counting rule: one row per entry of a question's `options` array, matched as a substring of the carrier's rendered tool_result text) it retains 0 of 459 option descriptions and, of the 387 option labels that were not chosen, only 9 - 7 of those 9 overlapping a chosen label's text - while all 72 chosen labels survive; it also skips any question with neither an answer nor notes. The answer-boundary predicate accepts a non-blank `response` as well as a non-empty `answers` map (src/model/predicates.rs), so an answer written by something other than the TUI dialog still opens a turn. The five field names are what SKILL.md's wrong-assumption table pins; a rename of any of them would break both the boundary test and the render.",
+          "depends": "csift never reads the inline synthesized tool_result string for an answer: `auq_exchange` (src/model/exchange.rs) parses `toolUseResult` once on an actual answered-AUQ carrier and zips `questions[]` against `answers{}`, surfacing each option as a (label, description) pair and reading the user's real message out of `annotations` when the answer is the `(notes only)` placeholder. That is required because the inline string is not TRUNCATED but lossy by omission: over the same 121 carriers (counting rule: one row per entry of a question's `options` array, matched as a substring of the carrier's rendered tool_result text) it retains 0 of 459 option descriptions and, of the 387 option labels that were not chosen, only 9 - 7 of those 9 overlapping a chosen label's text - while all 72 chosen labels survive; it also skips any question with neither an answer nor notes. The answer-boundary predicate accepts a non-blank `response` as well as a non-empty `answers` map (src/model/predicates.rs), so an answer written by something other than the TUI dialog still opens a turn. The field names (`answers`, `questions`, `annotations`, `response`) are what the skill's `user.answer` shape row (skills/csift/references/shapes.md) pins; a rename of any of them would break both the boundary test and the render.",
           "instrument": "`csift search \"\" <target> -t user.answer --format json | jq -r .hits[].line`, then `csift show <target> --line <n> --raw | jq '.toolUseResult | keys'`: `answers` and `questions` are present on every carrier, `annotations` on all but one in this corpus, `afkTimeoutMs` only where the dialog auto-resolved on idle, and `response` on none. Counting rule: keys of ONE record's toolUseResult object; for the corpus census, one row per `type:\"user\"` record whose toolUseResult carries both `questions` and `answers`, journal and elicitation sidecar files excluded.",
           "probe": {
             "kind": "csift",
@@ -17777,9 +17777,9 @@
       "area": "elicitation",
       "code": [
         {
-          "path": "SKILL.md",
-          "lines": "1299-1304",
-          "snippet": "case \"$ev\" in\n  PreToolUse)  case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"pending\";; esac ;;\n  PostToolUse|PostToolUseFailure) case \"$tool\" in AskUserQuestion|ExitPlanMode) kind=\"$tool\"; phase=\"resolved\";; esac ;;\n  Elicitation)       kind=\"mcp-elicitation\"; phase=\"pending\" ;;\n  ElicitationResult) kind=\"mcp-elicitation\"; phase=\"resolved\" ;;\nesac"
+          "path": "skills/csift/scripts/elicitation-marker.sh",
+          "lines": "34-41",
+          "snippet": "case \"$event\" in\n  PreToolUse)\n    case \"$tool_name\" in AskUserQuestion|ExitPlanMode) kind=$tool_name; phase=pending ;; esac ;;\n  PostToolUse|PostToolUseFailure)\n    case \"$tool_name\" in AskUserQuestion|ExitPlanMode) kind=$tool_name; phase=resolved ;; esac ;;\n  Elicitation) kind=mcp-elicitation; phase=pending ;;\n  ElicitationResult) kind=mcp-elicitation; phase=resolved ;;\nesac"
         }
       ],
       "states": [
@@ -17992,7 +17992,7 @@
         },
         {
           "path": "SPEC.md",
-          "lines": "2574",
+          "lines": "2575",
           "snippet": "AskUserQuestion/ExitPlanMode are main-thread-only, and a subagent's MCP elicitation surfaces under its top-level session (agent-blind \u2014 the Elicitation hook carries no `agent_id`)"
         }
       ],
@@ -18204,14 +18204,14 @@
       "area": "elicitation",
       "code": [
         {
-          "path": "SKILL.md",
-          "lines": "1297",
-          "snippet": "ev=$(jq -r '.hook_event_name//empty' <<<\"$in\" 2>/dev/null); tool=$(jq -r '.tool_name//empty' <<<\"$in\" 2>/dev/null)"
+          "path": "skills/csift/scripts/elicitation-marker.sh",
+          "lines": "25-31",
+          "snippet": "input=$(cat 2>/dev/null) || exit 0\n[ -n \"$input\" ] || exit 0\n\nfield() { printf '%s' \"$input\" | jq -r \"$1 // empty\" 2>/dev/null; }\n\nevent=$(field '.hook_event_name') || exit 0\ntool_name=$(field '.tool_name') || exit 0"
         },
         {
-          "path": "SKILL.md",
-          "lines": "1306-1307",
-          "snippet": "tp=$(jq -r '.transcript_path//empty' <<<\"$in\" 2>/dev/null); sid=$(jq -r '.session_id//empty' <<<\"$in\" 2>/dev/null)\nkey=$(jq -r '.tool_use_id // .elicitation_id // .mcp_server_name // \"unknown\"' <<<\"$in\" 2>/dev/null)"
+          "path": "skills/csift/scripts/elicitation-marker.sh",
+          "lines": "52-58",
+          "snippet": "eid=\"\"\nif [ \"$kind\" = \"mcp-elicitation\" ]; then\n  eid=$(field '.elicitation_id') || exit 0\n  key=$(field '.elicitation_id // .mcp_server_name') || exit 0\nelse\n  key=$(field '.tool_use_id') || exit 0\nfi"
         },
         {
           "path": "src/model/record.rs",
@@ -19123,13 +19123,13 @@
       "area": "elicitation",
       "code": [
         {
-          "path": "SKILL.md",
-          "lines": "1263",
+          "path": "skills/csift/scripts/compact-slice.sh",
+          "lines": "43",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
-          "path": "SKILL.md",
-          "lines": "1285",
+          "path": "skills/csift/scripts/taskstop-teammate.sh",
+          "lines": "82",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -19293,13 +19293,13 @@
           "snippet": "        if self.hook_additional_context_text().is_some() {\n            self.push_hook_classes(&mut out);\n            return out;\n        }"
         },
         {
-          "path": "SKILL.md",
-          "lines": "1263",
+          "path": "skills/csift/scripts/compact-slice.sh",
+          "lines": "43",
           "snippet": "$chunk\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$c}}'"
         },
         {
-          "path": "SKILL.md",
-          "lines": "1285",
+          "path": "skills/csift/scripts/taskstop-teammate.sh",
+          "lines": "82",
           "snippet": "jq -n --arg c \"$ctx\" '{hookSpecificOutput:{hookEventName:\"PostToolUseFailure\",additionalContext:$c}}'"
         }
       ],
@@ -19475,9 +19475,9 @@
       "area": "elicitation",
       "code": [
         {
-          "path": "SKILL.md",
-          "lines": "1329",
-          "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
+          "path": "skills/csift/references/hooks.md",
+          "lines": "90-94",
+          "snippet": "  \"PreToolUse\": [{\"matcher\": \"AskUserQuestion|ExitPlanMode\", \"hooks\": [{\"type\": \"command\", \"command\": \"bash '/ABSOLUTE/PATH/scripts/elicitation-marker.sh'\"}]}],\n  \"PostToolUse\": [{\"matcher\": \"AskUserQuestion|ExitPlanMode\", \"hooks\": [{\"type\": \"command\", \"command\": \"bash '/ABSOLUTE/PATH/scripts/elicitation-marker.sh'\"}]}],\n  \"PostToolUseFailure\": [{\"matcher\": \"AskUserQuestion|ExitPlanMode\", \"hooks\": [{\"type\": \"command\", \"command\": \"bash '/ABSOLUTE/PATH/scripts/elicitation-marker.sh'\"}]}],\n  \"Elicitation\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"bash '/ABSOLUTE/PATH/scripts/elicitation-marker.sh'\"}]}],\n  \"ElicitationResult\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"bash '/ABSOLUTE/PATH/scripts/elicitation-marker.sh'\"}]}]"
         },
         {
           "path": "src/commands/session/rows.rs",
@@ -19496,7 +19496,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "A hook matcher is consulted for 23 hook events, not two, and what it is tested against varies by event. The runtime switch _Xn (2.1.258 @165829264) returns tool_name for PreToolUse / PostToolUse / PostToolUseFailure / PermissionRequest / PermissionDenied, command_name for UserPromptExpansion, source for SessionStart / ConfigChange / DirectoryAdded, trigger for Setup / PreCompact / PostCompact, a normalised to_model for PreModelSwitch / PostModelSwitch, notification_type for Notification, reason for SessionEnd, error for StopFailure, agent_type for SubagentStart / SubagentStop, load_reason for InstructionsLoaded, a path derivation for FileChanged, and - for the two MCP elicitation events - mcp_server_name. Three further events (TeammateIdle, TaskCreated, TaskCompleted) hit an explicit bare return;, so they have no matched field and the filter is skipped for them. Elicitation and ElicitationResult therefore DO take a matcher, and it selects which MCP server the hook fires for. 21 is a different number: it is the size of Wje, the LENIENT-GRAMMAR set (@165830254), which excludes StopFailure and FileChanged - both matched, both parsed with the strict grammar. The grammar is Cnr (@165828787): /^[a-zA-Z0-9_|, -]+$/ split on /[|,]/ with each part trimmed for a lenient event, /^[a-zA-Z0-9_|]+$/ split on | only otherwise. An absent or empty matcher matches everything, and so do * and .*, but by two different mechanisms: Kwt short-circuits on an empty matcher and on * (if(!n||n===\"*\")return!0, @165831574), whereas .* fails BOTH grammar character classes, so Cnr returns undefined and .* matches through the new RegExp(n) fallback further down that same function. Only SXn's reporting flag treats all three alike: ht=!je.matcher||je.matcher===\"*\"||je.matcher===\".*\" fed to matcherIsMatchAll (@165845802). An event whose matched field is undefined also always matches, because SXn's filter expression is v ? hooks.filter(h => !h.matcher || Kwt(v, ...)) : hooks (@165845284).",
-          "depends": "csift's registration recipe remains correct in practice for a different reason than stated: registering Elicitation and ElicitationResult with NO matcher matches every MCP server, which is what the SKILL.md recipe wants - a matcher would narrow it to one server and silently stop writing the sidecar for the rest. The claim that those events take no matcher at all is what is wrong. Two knock-on cautions for the recipe: because both elicitation events sit in the lenient set, a matcher containing a colon fails the character class, so Cnr returns undefined and Kwt falls through to new RegExp(n), where the colon is an ordinary literal - such a matcher still matches rather than disabling the hook, so the live check the old instrument proposed would not show what it expected; and a matcher of .* reaches the same regex fallback rather than the * short-circuit, with the same match-everything result.",
+          "depends": "csift's registration recipe remains correct in practice for a different reason than stated: registering Elicitation and ElicitationResult with NO matcher matches every MCP server, which is what the skill's elicitation-marker.sh fragment (skills/csift/references/hooks.md) wants - a matcher would narrow it to one server and silently stop writing the sidecar for the rest. The claim that those events take no matcher at all is what is wrong. Two knock-on cautions for the recipe: because both elicitation events sit in the lenient set, a matcher containing a colon fails the character class, so Cnr returns undefined and Kwt falls through to new RegExp(n), where the colon is an ordinary literal - such a matcher still matches rather than disabling the hook, so the live check the old instrument proposed would not show what it expected; and a matcher of .* reaches the same regex fallback rather than the * short-circuit, with the same match-everything result.",
           "instrument": "resolve the Claude Code binary (`bin=$(command -v claude)`; follow symlinks with `readlink -f`) and `strings -n 40 \"$bin\" | grep -oE 'if\\(e!==\"PostToolUse\"&&e!==\"PostToolUseFailure\"\\)return!1;.{0,200}'`: the early return is followed by the `/^[a-zA-Z0-9_|, -]+$/` test and the `.split(/[|,]/)` with a trim per part. Counting rule: exact literal presence of the regex and of the split expression (one match each). Live check: register the elicitation recipe with a matcher containing a colon and confirm the sidecar is never created.",
           "probe": {
             "kind": "live",
@@ -19728,14 +19728,9 @@
       "area": "elicitation",
       "code": [
         {
-          "path": "SKILL.md",
-          "lines": "1265",
-          "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
-        },
-        {
-          "path": "SKILL.md",
-          "lines": "1329",
-          "snippet": "Register 5 events (one script, absolute path): `PreToolUse`+`PostToolUse`+`PostToolUseFailure` matcher `\"AskUserQuestion|ExitPlanMode\"`; `Elicitation`+`ElicitationResult` (no matcher)."
+          "path": "skills/csift/references/hooks.md",
+          "lines": "17",
+          "snippet": "`${CLAUDE_SKILL_DIR}` is a skill-content variable, not one a settings hook expands (UNTESTED), so write the absolute path into the fragment"
         }
       ],
       "states": [
@@ -19813,14 +19808,14 @@
       "area": "elicitation",
       "code": [
         {
-          "path": "SKILL.md",
-          "lines": "786",
-          "snippet": "- **Slicing** (hook injection, \u226410000-char cap): `--slices N --slice i --window W` gives fixed-fleet chunks of whole turns; out-of-range prints nothing and exits 0, which is a hook affordance. Text-only. \u00a724 recipe 1 is the working script."
+          "path": "skills/csift/references/verbatim.md",
+          "lines": "54",
+          "snippet": "at most `--window` characters (default 10000; Claude Code caps a hook's `additionalContext` at 10,000 UTF-16 units"
         },
         {
-          "path": "SKILL.md",
-          "lines": "1265",
-          "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
+          "path": "skills/csift/references/hooks.md",
+          "lines": "55",
+          "snippet": "so a slice runs past 9,000 and stays under Claude Code's 10,000-unit cap for a hook's additional context"
         },
         {
           "path": "src/commands/turns/run.rs",
@@ -19844,7 +19839,7 @@
           "from_basis": "verified",
           "to": null,
           "behavior": "10000 characters is a THRESHOLD, not a hard cap, and crossing it does not silently truncate. Every injected hook payload passes through ipe, which opens if(e.length<=o)return e; with {threshold:o=NQn} (2.1.258 @165809812) and NQn=1e4 (@160361495). Above the threshold the harness persists the payload to a tool-results/hook-<id>-<n>-<source> file beside the transcript and injects a <persisted-output> pointer carrying the true size and a preview ($3 writes the file, Npe renders the pointer, @160363597); only if persisting fails does it truncate, and then it appends [Hook <source> truncated at 10000 chars - persist-to-disk failed: <error>] (@165809932). Both outcomes are self-disclosing. Nothing bypasses ipe: the only two additionalContexts producers in the binary are both ipe-wrapped (@165853162 callback path, @165871972 command/script/http path), and systemMessage, initialUserMessage and hook stdout go through it too. The threshold is enforced per ELEMENT of the injected content array, not per record: corpus census over 88795 hook_additional_context attachment records (counting rule: one record per type:\"attachment\" line whose attachment.type is hook_additional_context; an element is one string of its content array) finds 0 elements above 10000 characters, a maximum single element of 9929, 262 records carrying a multi-element array, and a maximum joined length of 145242 - so a large joined payload is several sub-threshold chunks, never one over-threshold element. 133 elements carry a Full output saved to: pointer, the persist branch's own signature.",
-          "depends": "The failure mode the claim names - exceeding the cap re-injects clipped turns as if whole - does not occur at 2.1.258: neither over-threshold path is silent. verbatim --window 9000 remains a reasonable default (it keeps each slice inside the threshold and so avoids the pointer indirection entirely), but it is a tidiness choice, not a fidelity guard, and the multi-element arrays in this corpus are that recipe's own signature. SKILL.md lines 372 and 534 still describe the threshold as a hard 10K cap and should be corrected to the persist-then-pointer behaviour.",
+          "depends": "The failure mode the claim names - exceeding the cap re-injects clipped turns as if whole - does not occur at 2.1.258: neither over-threshold path is silent. verbatim --window 9000 remains a reasonable default (it keeps each slice inside the threshold and so avoids the pointer indirection entirely), but it is a tidiness choice, not a fidelity guard, and the multi-element arrays in this corpus are that recipe's own signature. The skill's `--slice` paragraph (skills/csift/references/verbatim.md) and its compact-slice.sh section (skills/csift/references/hooks.md) still describe the threshold as a 10,000-unit cap and should be corrected to the persist-then-pointer behaviour.",
           "instrument": "Return an `additionalContext` of exactly 10,001 characters from a `SessionStart` hook, then read what landed: `csift search \"\" @<session> -t harness.hook.context --format json --no-truncate | jq '.text|length'`. Counting rule: characters of the injected attachment payload compared against the characters the hook printed; a shortfall at 10,000 is the cap. A static corpus cannot settle this - it needs a live hook.",
           "probe": {
             "kind": "csift",
@@ -35170,14 +35165,14 @@
       "area": "misc",
       "code": [
         {
-          "path": "SKILL.md",
-          "lines": "1257",
-          "snippet": "in=$(cat); [ \"$(jq -r '.source//empty' <<<\"$in\")\" = compact ] || exit 0"
+          "path": "skills/csift/scripts/compact-slice.sh",
+          "lines": "28-29",
+          "snippet": "source=$(printf '%s' \"$input\" | jq -r '.source // empty' 2>/dev/null) || exit 0\n[ \"$source\" = \"compact\" ] || exit 0"
         },
         {
-          "path": "SKILL.md",
-          "lines": "1265",
-          "snippet": "Register N times: `{\"matcher\":\"compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"/ABS/csift-turns-slice.sh i\"}]}`, i=1..N. Absolute path (a relative command resolves against the hook child's cwd, not the skill's install dir; `$CLAUDE_PROJECT_DIR` is set for every hook child, global registrations included, so it is not the reason); `--window 9000` stays under the 10K additionalContext cap."
+          "path": "skills/csift/references/hooks.md",
+          "lines": "58",
+          "snippet": "{\"hooks\": {\"SessionStart\": [{\"matcher\": \"compact\", \"hooks\": ["
         }
       ],
       "states": [
@@ -62704,7 +62699,7 @@
           "from_basis": "located",
           "to": null,
           "behavior": "The parent's record of a subagent return is not the child's own conclusion, but not because of truncation: on the synchronous path Claude Code 2.1.258 APPENDS a continuation footer after the child's own content. The completed branch reads as one statement sequence (163935036 onward): empty content is replaced by the literal \"(Subagent completed but returned no output.)\"; the optional section split runs only when `Wue()` is on, and its splitter's own guard returns `{notes:[],body:e.slice(),tail:[]}` on any count or sha256 mismatch (162290500), so it cannot shorten a body; the footer is then skipped only under a three-part conjunction, `if(e.agentType&&xqt.has(e.agentType)&&!o)` (163935208), where `xqt` is `new Set([\"Explore\",\"Plan\"])` (159196241, inside the constant run at 159196023) and `o` is the worktree suffix bound a few statements earlier (163934871) as the worktreePath line plus an optional worktreeBranch line when `e.worktreePath` is set and the empty string otherwise - so an Explore or Plan child WITH a worktree path falls through the exemption and does get the footer, and the direction the code licenses is the converse: a sync return LACKING the footer implies the Explore/Plan branch. Otherwise the footer `agentId: ${e.agentId} (use SendMessage with to: '${e.agentId}', summary: '<5-10 word recap>' to continue this agent)${o}` plus a `<usage>` block is either concatenated onto the single collapsed text block or pushed as an extra block (163935300, 163935546) - the child's blocks are kept either way. A SECOND, distinct template carries the same field on the async path: `agentId: <id> (internal ID - do not mention to user. Use SendMessage with to: ...)` (163933727). Corpus, one row per tool_result block over the projects root: 1063 tool_results contain the string `agentId: `, of which 368 carry only the sync continuation footer, 518 only the async launch-ack line, 11 both and 166 neither (Read or Bash output that merely quotes the string). Of the 379 carrying the sync footer, 69 have a head under 40 characters and those heads reproduce the sign-off pattern - Complete. 15, Done. 14, Complete. No further action. 4, DONE 3, Standing by. 3, and a tail of similar phrasings - and that terse text is the child's own final words, not a harness truncation of a longer answer: the substantive report sits in an earlier message of the same child transcript. The operational rule is unchanged: read the child's own words with `csift show @<agent-id> --turn -1..`.",
-          "depends": "csift tags every return with its resolution source (`returned_message_source`: sync-tool-result, async-child-tail or workflow-journal, src/subagent/spawn.rs:260-266) and points at the child's own final words (`show @<agent-id> --turn -1..`); a sync return is the ORCHESTRATOR's record - the child's own terse sign-off plus, unless the child was an Explore or Plan agent without a worktree, the harness's appended continuation footer - so reading `returned_message` as the agent's conclusion misreads a sign-off, not a truncation. The `--help` text already carries that wording (src/cli/agents_args.rs:122-128: the harness appends, it never truncates). Two producer-side shapes are cheaper explanations than any truncation story and belong in the same reading: a sync return with no footer means an Explore or Plan agentType with no worktree rather than a lost body, and an empty return renders as the harness's own \"(Subagent completed but returned no output.)\" literal. One csift doc figure still states the footer share over both templates at once (SKILL.md, `813 of 919 returns carry the footer, 172 have a head under 40 chars`), which counts async launch-acks together with sync returns and so overstates the sync share.",
+          "depends": "csift tags every return with its resolution source (`returned_message_source`: sync-tool-result, async-child-tail or workflow-journal, src/subagent/spawn.rs:260-266) and points at the child's own final words (`show @<agent-id> --turn -1..`); a sync return is the ORCHESTRATOR's record - the child's own terse sign-off plus, unless the child was an Explore or Plan agent without a worktree, the harness's appended continuation footer - so reading `returned_message` as the agent's conclusion misreads a sign-off, not a truncation. The `--help` text already carries that wording (src/cli/agents_args.rs:122-128: the harness appends, it never truncates). Two producer-side shapes are cheaper explanations than any truncation story and belong in the same reading: a sync return with no footer means an Explore or Plan agentType with no worktree rather than a lost body, and an empty return renders as the harness's own \"(Subagent completed but returned no output.)\" literal.",
           "instrument": "Parse every *.jsonl under the projects root and collect every tool_result block whose joined text contains `agentId: `; classify each by which verbatim template head follows the id - `(use SendMessage with to:` for the sync continuation footer, `(internal ID - do not mention to user` for the async launch-ack - and measure the head before the first sync-footer match. Then read one terse-return child's own last turn with `csift show @<agent-id> --turn -1..`. Counting rule: one row per tool_result block; a block matching both templates counts in the both bucket and in the sync head measurement.",
           "probe": {
             "kind": "csift",
@@ -85511,7 +85506,7 @@
         },
         {
           "path": "src/model/inventory.rs",
-          "lines": "323-336",
+          "lines": "324-337",
           "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"async_hook_response_batch\",\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"goal_status\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_drop\",\n    \"thinking_stripped\",\n];"
         }
       ],
@@ -85868,7 +85863,7 @@
       "code": [
         {
           "path": "src/model/inventory.rs",
-          "lines": "323-336",
+          "lines": "324-337",
           "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"async_hook_response_batch\",\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"goal_status\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_drop\",\n    \"thinking_stripped\",\n];"
         },
         {
@@ -88281,7 +88276,7 @@
       "code": [
         {
           "path": "src/model/inventory.rs",
-          "lines": "323-336",
+          "lines": "324-337",
           "snippet": "pub(crate) const NEVER_CONVERTS: &[&str] = &[\n    \"async_hook_response_batch\",\n    \"batching_reminder_sent\",\n    \"command_permissions\",\n    \"deferred_tools_record\",\n    \"goal_status\",\n    \"hook_cancelled\",\n    \"hook_non_blocking_error\",\n    \"hook_system_message\",\n    \"prompt_snapshot\",\n    \"structured_output\",\n    \"thinking_drop\",\n    \"thinking_stripped\",\n];"
         },
         {
@@ -89513,7 +89508,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3660"
+          "lines": "3661"
         }
       ],
       "states": [
@@ -91091,7 +91086,7 @@
         },
         {
           "path": "src/model/inventory.rs",
-          "lines": "334-336",
+          "lines": "335-337",
           "snippet": "    \"thinking_drop\",\n    \"thinking_stripped\",\n];"
         },
         {

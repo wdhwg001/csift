@@ -155,10 +155,11 @@ impl FloorCause {
     /// Every variant, so the closed set is WALKABLE.
     ///
     /// `floor_cause` is a closed enum a consumer branches on, and its eight slugs are
-    /// copied into the root `--help` (rendered on all 18 pages) and into `SKILL.md`
-    /// section 9.2. Three copies and nothing held them together, which is the same shape
-    /// as the retired-selector drift. This is the one a test can iterate, and
-    /// `cli::tests::manuals` reads the rendered help against it in both directions.
+    /// copied into the root `--help` (rendered on all 18 pages) and into the skill's
+    /// floor-cause table (`skills/csift/references/survival.md`). Three copies and nothing
+    /// held them together, which is the same shape as the retired-selector drift. This is
+    /// the one a test can iterate, and `cli::tests::manuals` reads the rendered help
+    /// against it in both directions.
     ///
     /// `cfg(test)` because the DOCS are its only reader: production reaches a cause
     /// through the value it computed, never by walking the set, and an unconditional

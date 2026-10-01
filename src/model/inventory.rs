@@ -10,9 +10,10 @@
 //!
 //! Why a table rather than the code: the classify engine answers "what is THIS record",
 //! and no caller can ask it "what shapes exist and which are unmodeled". SPEC section 5
-//! renders this table, `SKILL.md`'s transparency tables render it, and the drift tests
-//! beside it pin it against [`Class::ALL`] in both directions - so a leaf added without a
-//! shape, or a shape added without a treatment, fails here rather than shipping silent.
+//! renders this table, the skill's transparency tables render it (`labels.md` and
+//! `shapes.md` under `skills/csift/references/`), and the drift tests beside it pin it
+//! against [`Class::ALL`] in both directions - so a leaf added without a shape, or a shape
+//! added without a treatment, fails here rather than shipping silent.
 //!
 //! It is a RECORD of the mapping, never a second implementation of it: the classify
 //! family tables stay the one place a record's leaf is decided, and a unit test walks

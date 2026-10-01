@@ -308,9 +308,11 @@ pub(crate) fn parse_label_selector(s: &str) -> Result<String, String> {
 /// which release retired it changes nothing, while the reason carries to the next
 /// spelling they guess.
 ///
-/// A TABLE rather than a match, so the set is WALKABLE. `SKILL.md` section 10 is the one
-/// place a stale caller is sent to, and the only way to keep it from drifting away from
-/// these strings is a test that iterates them - which a match arm cannot offer.
+/// A TABLE rather than a match, so the set is WALKABLE. The skill's `## Retired spellings`
+/// section (`skills/csift/references/labels.md`) is the one place a stale caller is sent
+/// to; it names every spelling below and leaves the successors to the error this table
+/// renders, and the only way to keep it from drifting away from these strings is a test
+/// that iterates them - which a match arm cannot offer.
 pub(crate) const RETIRED_SELECTORS: &[(&str, &str, &str)] = &[
     (
         "thinking",
@@ -402,8 +404,8 @@ pub(crate) const RETIRED_SELECTORS: &[(&str, &str, &str)] = &[
 /// else `None`.
 ///
 /// A lookup over [`RETIRED_SELECTORS`] rather than a match, so the set stays WALKABLE:
-/// the table is what `SKILL.md` section 10 is held to, and a match arm could not be
-/// iterated. Linear over a table this size, on a path that only runs when a caller
+/// the table is what the skill's retirement section is held to, and a match arm could not
+/// be iterated. Linear over a table this size, on a path that only runs when a caller
 /// already typed a spelling csift refuses.
 fn retired_successors(selector: &str) -> Option<(&'static str, &'static str)> {
     RETIRED_SELECTORS

@@ -457,6 +457,17 @@ surface change bumps the PATCH.
   test that pins them still holds in both directions. One header line moved: the shape
   table's third column was the same escape-hatch command on all 73 rows, so it is stated once
   above the table and the drift test's literal moves with it.
+- **The skill is a directory, `skills/csift/`, and the root `SKILL.md` is gone.** A body,
+  `skills/csift/SKILL.md`, routes by question and states the laws, targets and core read
+  paths; fifteen `references/*.md` hold the topics and their tables, opened when the body
+  routes there; three hook scripts ship in `scripts/` with their executable bit
+  (`compact-slice.sh` re-injects clipped turns after a compaction, `taskstop-teammate.sh`
+  redirects a failed TaskStop aimed at a teammate, `elicitation-marker.sh` records pending
+  questions to the sidecar). The body is 5,876 tokens by the create-skill validator's o200k
+  count, under its 6,000-token refactor gate, and the references total 67,046, read on
+  demand. The Surface line reads `Surface: csift 0.13.0`, as `csift --version` prints it.
+  Install from a clone with `ln -s "$PWD/skills/csift" ~/.claude/skills/csift`. The drift
+  tests that pinned the old file pin the reference that owns each table now.
 - **The survival walk now CROSSES a compaction boundary, under a budget, and every surface
   says what it crossed.** Claude Code's loader reads `parentUuid` only, so it stops at a
   `compact_boundary` and the whole history above the cut leaves the conversation; csift

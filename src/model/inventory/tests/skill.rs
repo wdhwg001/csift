@@ -1,4 +1,8 @@
-//! `SKILL.md`'s two transparency tables against the leaf space they describe.
+//! The skill's two transparency tables against the leaf space they describe.
+//!
+//! The skill is the directory `skills/csift/`, and its body routes while its references
+//! hold the tables: the IDENTITY table is `references/labels.md`'s leaf table, the SHAPE
+//! table `references/shapes.md`'s. Each table is read from the file that carries it.
 //!
 //! The tables are the LLM manual's answer to "what is this label and where did it come
 //! from", one row per leaf in each, and there is no way to derive them - a row is prose a
@@ -14,11 +18,43 @@
 
 use super::*;
 
-/// The SKILL manual, read once.
+/// The skill's body, `skills/csift/SKILL.md`.
 fn skill() -> String {
-    std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/SKILL.md"))
-        .expect("SKILL.md at the repo root")
+    std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/skills/csift/SKILL.md"
+    ))
+    .expect("skills/csift/SKILL.md")
 }
+
+/// The reference that carries the IDENTITY table (leaf, what, gate, the two audiences).
+fn labels_reference() -> String {
+    std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/skills/csift/references/labels.md"
+    ))
+    .expect("skills/csift/references/labels.md")
+}
+
+/// The reference that carries the SHAPE table (leaf, on disk).
+fn shapes_reference() -> String {
+    std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/skills/csift/references/shapes.md"
+    ))
+    .expect("skills/csift/references/shapes.md")
+}
+
+/// The identity table's head. Its two audience columns are named for the reader: what the
+/// table once called `LLM sees` / `human sees` it calls `model receives` / `person sees`,
+/// and `what` became `what it is, and what its unit prints`. The columns mean what they
+/// meant; only the words moved, and the head is matched whole so a further rename fails
+/// here rather than reading as a missing table.
+const IDENTITY_HEAD: &str =
+    "| leaf | what it is, and what its unit prints | gate | model receives | person sees |";
+
+/// The shape table's head.
+const SHAPE_HEAD: &str = "| leaf | on disk |";
 
 /// The leaf path in the FIRST cell of every row of the table that opens with `head`.
 ///
@@ -29,7 +65,7 @@ fn skill() -> String {
 fn leaf_column(md: &str, head: &str) -> Vec<String> {
     let start = md
         .find(head)
-        .unwrap_or_else(|| panic!("SKILL.md carries no table headed {head:?}"));
+        .unwrap_or_else(|| panic!("the skill carries no table headed {head:?}"));
     let mut out = Vec::new();
     for line in md[start..].lines().skip(1) {
         if !line.starts_with('|') {
@@ -55,11 +91,10 @@ fn leaf_column(md: &str, head: &str) -> Vec<String> {
 /// one question with nothing saying which is current.
 #[test]
 fn both_skill_tables_list_every_leaf_exactly_once() {
-    let md = skill();
     let want: Vec<&str> = Class::ALL.iter().map(|c| c.path()).collect();
-    for head in [
-        "| leaf | what | gate | LLM sees | human sees |",
-        "| leaf | on disk |",
+    for (md, head) in [
+        (labels_reference(), IDENTITY_HEAD),
+        (shapes_reference(), SHAPE_HEAD),
     ] {
         let got = leaf_column(&md, head);
         let mut sorted = got.clone();
@@ -97,13 +132,15 @@ fn both_skill_tables_list_every_leaf_exactly_once() {
     }
 }
 
-/// The file's own HEAD occurs once, which is what names the duplication directly.
+/// The skill's own HEAD occurs once, which is what names the duplication directly.
 ///
 /// The identity table's duplicate copy carried the whole head of the file with it, front
-/// matter included, so a reader who opened SKILL.md met its opening twice. The table
+/// matter included, so a reader who opened the skill met its opening twice. The table
 /// assertion above catches that too, by way of the leaves the copy repeated; this one says
 /// WHERE, so a failure reads as "the head is in the file twice" rather than as a list of
-/// duplicated rows.
+/// duplicated rows. The tables now sit in two references, so the count runs over the body
+/// AND those two files: a pick that pastes the body's opening into a table's file is the
+/// same defect one directory down.
 ///
 /// The probe is the front matter itself - the opening `---`, its keys and its closing
 /// `---` - rather than a count of `---` lines, because the manual uses that rule between
@@ -114,11 +151,13 @@ fn the_skill_manual_head_occurs_once() {
     assert!(md.starts_with("---\n"), "the file opens with front matter");
     let close = md[4..].find("\n---\n").expect("the front matter closes") + 4;
     let head = &md[..close + 5];
+    let count = md.matches(head).count()
+        + labels_reference().matches(head).count()
+        + shapes_reference().matches(head).count();
     assert_eq!(
-        md.matches(head).count(),
-        1,
-        "SKILL.md carries its own head more than once - a pick duplicated the file's \
-         opening into the body"
+        count, 1,
+        "the skill carries its own head more than once (SKILL.md, references/labels.md and \
+         references/shapes.md counted) - a pick duplicated the file's opening"
     );
 }
 
@@ -131,21 +170,26 @@ fn the_skill_manual_head_occurs_once() {
 ///
 /// The check is CONTAINMENT rather than equality, and that is a property of the cell
 /// rather than a concession: a cell is prose, it factors a shared prefix across several
-/// values (`attachment.type:"skill_listing" · "agent_listing_delta" · ...`) and it adds the
-/// sentence a shape needs beside it. Equality would pin the wording and fail on every
-/// rewrite. So the assertion is per INVENTORY ROW - one row, one shape, one leaf - and it
-/// accepts the three spellings the table itself uses, measured over all of it rather than
-/// guessed:
+/// values (attachment types `task_status`, `goal_status`, ...) and it adds the sentence a
+/// shape needs beside it. Equality would pin the wording and fail on every rewrite. So the
+/// assertion is per INVENTORY ROW - one row, one shape, one leaf - and it accepts the
+/// spellings the table itself uses, measured over all of it rather than guessed:
 ///
-/// - the QUOTED value, which is how the four FIELD axes write a shape
-///   (`type:"permission-mode"`, `attachment.type:"goal_status"`);
-/// - `template:<value>`, which is how the TEMPLATE axis writes one, unquoted because a
-///   template name is csift's own name for a text shape and not a value on the line;
-/// - the whole `Entry::disk()` string, which is what a row whose mark on disk is not a
-///   value needs (the fired scheduler prompt, whose mark is the PARENT LINK).
+/// - a FIELD-axis value, QUOTED (`type:"permission-mode"`, a block's `{type:"thinking"}`)
+///   or BACKTICKED bare where the table lists values after their field (`subtype`
+///   `model_refusal_fallback`, attachment type `goal_status`);
+/// - a TEMPLATE by its opening TEXT, which is how the table writes one: a backticked span
+///   the template's specimen (`specimens::TEMPLATE_SPECIMENS`) opens with
+///   (`<local-command-caveat>`, `# Autonomous loop tick`). The table once wrote
+///   `template:<name>`, csift's own name for the shape; the reader-facing table names the
+///   text a reader can grep the raw line for instead, and the specimen is what maps one to
+///   the other, so the pin is on the same shape;
+/// - a template keyed on a FIELD rather than on text: a relay by its `origin.kind` value
+///   (the cell names `origin.kind` and the specimen's kind), and the fired scheduler prompt
+///   by its PARENT LINK (the cell names `parentUuid` and `scheduled_task_fire`).
 #[test]
 fn every_shape_that_carries_a_leaf_is_named_in_that_leaf_row() {
-    let md = skill();
+    let md = shapes_reference();
     let cells = shape_cells(&md);
     assert!(
         cells.len() == Class::ALL.len(),
@@ -164,9 +208,13 @@ fn every_shape_that_carries_a_leaf_is_named_in_that_leaf_row() {
             .find(|(l, _)| l == leaf.path())
             .map(|(_, c)| c.as_str())
             .unwrap_or_default();
-        let named = cell.contains(&format!("\"{}\"", r.value()))
-            || cell.contains(&format!("template:{}", r.value()))
-            || cell.contains(&r.disk());
+        let named = match r.shape {
+            Shape::IsMetaFamily(family) => template_named(cell, family),
+            _ => {
+                cell.contains(&format!("\"{}\"", r.value()))
+                    || cell.contains(&format!("`{}`", r.value()))
+            }
+        };
         if !named {
             unnamed.push(format!("{} <- {}", leaf.path(), r.disk()));
         }
@@ -177,17 +225,50 @@ fn every_shape_that_carries_a_leaf_is_named_in_that_leaf_row() {
     );
     assert!(
         unnamed.is_empty(),
-        "shapes the inventory carries and SKILL's shape table does not name:\n  {}",
+        "shapes the inventory carries and the skill's shape table (references/shapes.md) does \
+         not name:\n  {}",
         unnamed.join("\n  ")
     );
 }
 
+/// Whether a shape cell names the isMeta template `family`, in one of the three spellings
+/// the doc above lists. A family with no specimen line and no parent-link mark reads as
+/// unnamed, which fails loudly rather than passing on nothing.
+fn template_named(cell: &str, family: &str) -> bool {
+    if family == "schedule-fire" {
+        return cell.contains("`parentUuid`") && cell.contains("`scheduled_task_fire`");
+    }
+    let Some((_, line)) = crate::model::specimens::TEMPLATE_SPECIMENS
+        .iter()
+        .find(|(f, _)| *f == family)
+    else {
+        return false;
+    };
+    let rec: serde_json::Value = serde_json::from_str(line).expect("a template specimen parses");
+    if let Some(kind) = rec["origin"]["kind"].as_str() {
+        if cell.contains("origin.kind")
+            && (cell.contains(&format!("`{kind}`")) || cell.contains(&format!("\"{kind}\"")))
+        {
+            return true;
+        }
+    }
+    let content = &rec["message"]["content"];
+    let text = content
+        .as_str()
+        .or_else(|| content[0]["text"].as_str())
+        .unwrap_or_default();
+    cell.split('`')
+        .skip(1)
+        .step_by(2)
+        .any(|span| span.chars().count() >= 4 && text.starts_with(span))
+}
+
 /// `(leaf, shape cell)` for every row of the shape table.
 fn shape_cells(md: &str) -> Vec<(String, String)> {
-    let head = "| leaf | on disk |";
+    let head = SHAPE_HEAD;
     let start = md
         .find(head)
-        .unwrap_or_else(|| panic!("SKILL.md carries no table headed {head:?}"));
+        .unwrap_or_else(|| panic!("references/shapes.md carries no table headed {head:?}"));
     let mut out = Vec::new();
     for line in md[start..].lines().skip(2) {
         if !line.starts_with('|') {

@@ -1,9 +1,11 @@
-//! What csift WRITES into the search/show LABEL ZONE, checked against `SKILL.md`.
+//! What csift WRITES into the search/show LABEL ZONE, checked against the skill
+//! (`skills/csift/`).
 //!
 //! The sibling `manuals.rs` guards the other direction: what a repo DOC says about the
 //! binary, by reading the doc. This file reads the SOURCE TREE, because the label zone's
 //! tags are csift's own words - a reader meets them on screen and has nowhere but the
-//! manual to look them up, and `SKILL.md` section 7.4 promises the set is closed.
+//! manual to look them up, and the skill's `references/labels.md` promises "every tag a unit
+//! prints" (its title), so the set is closed.
 //!
 //! The walk is over the label-zone render sources rather than over `src/` whole, because
 //! only these files build a tag a `search` or `show` unit carries. A NEW file under any of
@@ -41,8 +43,8 @@ const SOURCES: &[&str] = &[
 const DYNAMIC_HEADS: &[(&str, &str)] = &[
     (
         "[{line_type}]",
-        "a bookkeeping head with no fields - SKILL 7.4 states the rule and the 7.2 rows name \
-         every one of the eighteen line types",
+        "a bookkeeping head with no fields - references/labels.md states the rule under its \
+         leaf table and the `harness.bookkeeping` rows name every one of the eighteen line types",
     ),
     (
         "[{line_type} {}]",
@@ -50,20 +52,22 @@ const DYNAMIC_HEADS: &[(&str, &str)] = &[
     ),
     (
         "[{op}]{nd}",
-        "`user.queued` opens with the queue OPERATION word - SKILL's `user.queued` 7.2 row \
-         names the four observed values including the `queued` fallback",
+        "`user.queued` opens with the queue OPERATION word - the `user.queued` row of \
+         references/labels.md names the observed values including the `queued` fallback",
     ),
     (
         "[{op} · {reason}]{nd}",
-        "the same word carrying the `remove` reason - that 7.2 row spells `[remove · <reason>]`",
+        "the same word carrying the `remove` reason - that row spells `[remove · <reason>]`",
     ),
     (
         "[{source}]",
-        "the attachment body source, `[rendered]` or `[payload]` - SKILL 7.2's intro and 7.4",
+        "the attachment body source, `[rendered]` or `[payload]` - references/labels.md, How a \
+         unit's text is built",
     ),
     (
         "[{state}]{nd}",
-        "the resume placeholder's pairing, `[paired]` or `[unpaired]` - its own 7.2 row",
+        "the resume placeholder's pairing, `[paired]` or `[unpaired]` - its own row of \
+         references/labels.md",
     ),
     (
         "[{}]",
@@ -78,8 +82,8 @@ const DYNAMIC_HEADS: &[(&str, &str)] = &[
         "[{} {}: {}]",
         "NOT a label-zone tag: `render.rs`'s image suffix, which ends a `search` hit line \
          AFTER the excerpt and reads `[1 image: #265]` / `[3 images: ...]`. The COUNT leads, \
-         so no head word exists; SKILL 7.4 names it as the one `search` bracket outside the \
-         zone and 13.3 gives the form",
+         so no head word exists; references/search.md's Text output table names it as the \
+         bracket at the end of a hit line and gives the form",
     ),
 ];
 
@@ -228,15 +232,20 @@ fn marker_head(src: &str, lit: &str) -> Option<String> {
     (used && !lit.is_empty() && !lit.starts_with('[')).then(|| head_word(lit))
 }
 
-/// Every bracket HEAD WORD the search/show label zone can print is named in `SKILL.md`.
+/// Every bracket HEAD WORD the search/show label zone can print is named in the skill.
 ///
-/// Section 7.4 tells a reader the label-zone set is CLOSED and that a tag the file does not
-/// name means their copy is stale. That is a promise, and this is what keeps it: a head word
-/// the manual does not carry is a word a reader meets on screen with nowhere to look it up.
+/// `references/labels.md` tells a reader it holds every tag a unit prints, so the label-zone
+/// set is CLOSED. That is a promise, and this is what keeps it: a head word the manual does
+/// not carry is a word a reader meets on screen with nowhere to look it up.
+///
+/// "The skill" is the FOLDER - `SKILL.md` plus every `references/*.md` joined - because a tag
+/// is named in the reference that owns its leaf (the tag table in `references/labels.md`, a
+/// family's head in its leaf row, a provenance tag in `references/provenance.md`), and a tag
+/// named in any of them is one a reader following the routes can find.
 ///
 /// HEAD WORDS rather than whole tags, because almost every tag interpolates - `[for: <kind>
 /// L<n>]`, `[root L12 +3]`, `[api-error status=...]`. The head is the part a reader can grep
-/// for and the part a rename moves, so matching `[<head>` in `SKILL.md` survives every
+/// for and the part a rename moves, so matching `[<head>` in the skill survives every
 /// placeholder while still failing on a renamed or deleted tag.
 ///
 /// A green run means the sweep REACHED every head and found each one documented, and those
@@ -252,8 +261,7 @@ fn marker_head(src: &str, lit: &str) -> Option<String> {
 /// sweep can enforce.
 #[test]
 fn skill_names_every_label_zone_head() {
-    let skill = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/SKILL.md"))
-        .expect("SKILL.md at the repo root");
+    let skill = super::skill_folder_text();
 
     let mut heads: Vec<(String, String)> = Vec::new();
     let mut dynamic: Vec<(String, String)> = Vec::new();
@@ -315,15 +323,15 @@ fn skill_names_every_label_zone_head() {
     for (head, file) in &heads {
         assert!(
             skill.contains(&format!("[{head}")),
-            "SKILL.md names no label-zone tag `[{head}` (built in {file}). Document it in the \
-             row or paragraph that OWNS it - section 7.4 promises a reader the set is closed"
+            "the skill names no label-zone tag `[{head}` (built in {file}). Document it in the \
+             row or paragraph that OWNS it - references/labels.md promises a reader every tag"
         );
     }
     for (tag, file) in &dynamic {
         assert!(
             DYNAMIC_HEADS.iter().any(|(lit, _)| tag == lit),
             "{file} builds `{tag}`, a tag whose head is a runtime value. It cannot be swept, \
-             so add THAT EXACT literal to DYNAMIC_HEADS with its own reason and where SKILL \
+             so add THAT EXACT literal to DYNAMIC_HEADS with its own reason and where the skill \
              documents its values. An existing entry that merely starts the same way does not \
              cover it - the match is equality, so one entry means one construct"
         );
