@@ -328,3 +328,26 @@ fn the_unbounded_scan_warning_is_for_an_empty_pattern_alone() {
         filtered.stderr
     );
 }
+
+/// A uuid-shaped PATTERN with no session target is searched as text across the whole scope,
+/// and the advisory says how to scope the search TO that session instead. With a target the
+/// question is already scoped, so the advisory stays silent.
+#[test]
+fn a_uuid_pattern_is_advised_only_when_no_session_is_targeted() {
+    let h = Home::new();
+    let sess = "2b2b2b2b-3c3c-4d4d-8e8e-9f9f9f9f9f9f";
+    h.write(
+        &format!("-Users-dev-uuidnote/{sess}.jsonl"),
+        concat!(
+            r#"{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{"role":"user","content":"look at 2b2b2b2b-3c3c-4d4d-8e8e-9f9f9f9f9f9f"}}"#,
+            "\n",
+        ),
+    );
+    let note = "searching for this uuid as TEXT across the scope";
+    let open = h.run(&["search", sess]);
+    assert!(open.success, "{}", open.stderr);
+    assert!(open.stderr.contains(note), "{}", open.stderr);
+    let scoped = h.run(&["search", sess, &at(sess)]);
+    assert!(scoped.success, "{}", scoped.stderr);
+    assert!(!scoped.stderr.contains(note), "{}", scoped.stderr);
+}

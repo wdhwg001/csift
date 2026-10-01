@@ -416,3 +416,32 @@ fn shown_user_and_assistant_cover_all_combinations() {
     assert!(shows_assistant(SelSides::Both) && shows_assistant(SelSides::AssistantOnly));
     assert!(!shows_assistant(SelSides::UserOnly));
 }
+
+/// The recency key every selection ranks by: the later of a turn's user line and its last
+/// agent line, and a turn merged from the elicitation sidecar ABOVE every native line on
+/// either side, since it is what the session is blocked on now and has no line of its own.
+#[test]
+fn turn_latest_line_reads_both_sides_and_ranks_a_sidecar_pending_turn_newest() {
+    assert_eq!(
+        turn_latest_line(&mk_turn(3, Some("ü"), Some("é"), 0, 0)),
+        35
+    );
+    assert_eq!(turn_latest_line(&mk_turn(3, Some("ü"), None, 0, 0)), 31);
+    assert_eq!(turn_latest_line(&mk_turn(3, None, None, 0, 0)), 0);
+
+    let mut agent_side = mk_turn(4, None, Some("question 🙂"), 0, 0);
+    if let Some(a) = agent_side.agents.last_mut() {
+        a.unit.line_no = 0;
+        a.unit.from_sidecar = true;
+    }
+    assert!(agent_side.is_sidecar_pending());
+    assert_eq!(turn_latest_line(&agent_side), usize::MAX);
+
+    let mut user_side = mk_turn(4, Some("question 🙂"), None, 0, 0);
+    if let Some(u) = user_side.user.as_mut() {
+        u.line_no = 0;
+        u.from_sidecar = true;
+    }
+    assert!(user_side.is_sidecar_pending());
+    assert_eq!(turn_latest_line(&user_side), usize::MAX);
+}
