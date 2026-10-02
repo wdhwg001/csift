@@ -165,7 +165,7 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
     k(Family::Keys, "user_feedback"),
     k(
         Family::Keys,
-        "api_failure:{error status quota{limit_type resets_at resets_at_utc resets_at_local} \
+        "api_failure:{error status quota{limit_type resets_at_utc resets_at_local} \
          truncated_after_output aborted_mid_stream}",
     ),
     // The two OBJECT-VALUED keys of this family sit together, ahead of the scalar joins,

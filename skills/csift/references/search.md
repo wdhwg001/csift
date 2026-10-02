@@ -144,7 +144,7 @@ These ride every `search` hit and `show` row whose record names them, whatever i
 | `api_block_index` | assistant units | which content block of that response |
 | `tool_ends_turn` | `agent.tool.result` | the turn stopped at this tool |
 | `user_feedback` | a refused call's result | the person's refusal text, whole, newlines kept |
-| `api_failure{error, status, quota{limit_type, resets_at, resets_at_utc, resets_at_local}, truncated_after_output, aborted_mid_stream}` | the stand-in unit a failed call left | why the call failed; `resets_at` is the harness's own value in epoch SECONDS, and `resets_at_utc` and `resets_at_local` are the same instant as the usual pair (measured: `csift show @<uuid> --line 52996 --format json` gave `1788440400`, `2026-09-03T13:00:00Z` and `2026-09-03T23:00:00+10:00`) |
+| `api_failure{error, status, quota{limit_type, resets_at_utc, resets_at_local}, truncated_after_output, aborted_mid_stream}` | the stand-in unit a failed call left | why the call failed; `resets_at_utc` and `resets_at_local` are the quota's reset instant, which the harness writes in epoch seconds, as the usual pair (measured: `csift show @<uuid> --line 52996 --format json` gave `2026-09-03T13:00:00Z` and `2026-09-03T23:00:00+10:00` for a `resetsAt` of `1788440400`) |
 | `stop_details{type, category, explanation, fallback_has_prefill_claim}`, `stop_reason` | any unit whose record's `message.stop_details` names a member | the API's own account of why it stopped |
 | `pdf_pages{first, last, count, path}` | the result of a `Read` that passed `pages` | which pages of which document (references/image.md) |
 | `interrupted_message_id` | an interrupt | the API message it cut short, also a `for` edge |

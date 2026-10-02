@@ -405,13 +405,13 @@ surface change bumps the PATCH.
   carrying both key sets make up one stream. With no positional the sender is still assumed to be
   the top-level session, and the stderr note now says to name your own lane as the
   positional.
-- **A quota's reset instant joins the timestamp pair.** A rate-limited assistant record's
-  `api_failure.quota` carried `resets_at` as the harness writes it, bare epoch seconds - the
-  one instant on any csift surface with no `_utc` / `_local` pair and no unit. It now
-  carries `resets_at_utc` and `resets_at_local` beside the kept number, and the label zone
+- **A quota's reset instant rides as the timestamp pair.** A rate-limited assistant
+  record's `api_failure.quota` carried `resets_at` as the harness writes it, bare epoch
+  seconds - the one instant on any csift surface with no `_utc` / `_local` pair and no unit.
+  It now carries `resets_at_utc` and `resets_at_local` in its place, and the label zone
   reads `quota <window> resets <local instant>` in the one canonical local form, where it
   read `quota <window>` and left the instant to JSON. `search --help`'s exposed-keys
-  section and `show --help`'s key table name both forms and why both ride.
+  section and `show --help`'s key table name the pair.
 
 ### Changed
 

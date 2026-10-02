@@ -142,9 +142,9 @@ fn a_quota_only_failure_names_its_quota_and_no_floor_word() {
     let r = row(&h, "4");
     let q = &r["api_failure"]["quota"];
     assert_eq!(q["limit_type"], "weekly");
-    assert_eq!(q["resets_at"], 1_790_000_001u64);
-    // The harness's epoch seconds stay as written; the pair law adds the same instant as
-    // `_utc` and `_local` beside them, and the offset suffix is whatever this host's zone is.
+    // The harness's epoch seconds ride as the pair alone: no bare number beside it, and the
+    // offset suffix is whatever this host's zone is.
+    assert!(q.get("resets_at").is_none(), "{q}");
     assert_eq!(q["resets_at_utc"], "2026-09-21T14:13:21Z");
     let local = q["resets_at_local"].as_str().unwrap_or_default();
     assert!(

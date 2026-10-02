@@ -30,14 +30,14 @@ pub(crate) const SECTION: &str =
      JSON alone. `tool_ends_turn` renders `[ends turn]`. `user_feedback` renders \
      `[feedback: <first 60 characters, on one line>]` and carries the whole text on the wire. The \
      API-failure set rides one `api_failure` object {error, status, quota{limit_type, \
-     resets_at, resets_at_utc, resets_at_local}, truncated_after_output, aborted_mid_stream} \
+     resets_at_utc, resets_at_local}, truncated_after_output, aborted_mid_stream} \
      and renders `[api failure <kind> status <n> quota <window> resets <local instant> \
      truncated after output aborted mid-stream]`, each half only when the record names it - \
      a quota naming only its reset instant renders `quota resets <local instant>` - and a \
      record naming none of them carries no object at all, so the tag can name no floor \
-     word. `resets_at` is the harness's own value, epoch SECONDS, kept for a consumer keyed \
-     on it; `resets_at_utc` and `resets_at_local` are the same instant as the `_utc` / \
-     `_local` pair every other instant carries. \
+     word. `resets_at_utc` and `resets_at_local` are the quota's reset instant, which the \
+     harness writes as epoch seconds, as the `_utc` / `_local` pair every other instant \
+     carries. \
      `stop_reason` and `stop_details` {type, category, explanation, \
      fallback_has_prefill_claim} ride a record whose `message.stop_details` names at least \
      one member - the API's own account of why it stopped the response, which reads \

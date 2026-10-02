@@ -161,11 +161,11 @@ fn the_api_failure_tag_names_what_the_record_said() {
     let local = crate::timez::local_iso("2026-09-21T14:13:21Z").unwrap_or_default();
     assert!(
         obj.contains("\"limit_type\":\"weekly\"")
-            && obj.contains("\"resets_at\":1790000001")
+            && !obj.contains("\"resets_at\":")
             && obj.contains("\"resets_at_utc\":\"2026-09-21T14:13:21Z\"")
             && obj.contains(&format!("\"resets_at_local\":\"{local}\"")),
-        "the quota is summarised to its two members, the reset as the harness wrote it \
-         and as the timestamp pair: {obj}"
+        "the quota is summarised to its two members, the reset as the timestamp pair and \
+         never as the bare epoch number: {obj}"
     );
     assert!(
         obj.contains("\"error\":null") && obj.contains("\"status\":null"),
