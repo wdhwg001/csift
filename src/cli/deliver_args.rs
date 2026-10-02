@@ -37,16 +37,19 @@ fn parse_slot(s: &str) -> Result<u32, String> {
 #[command(
     about = "Hook entry Claude Code calls through the installed hook. By hand, run only --recipe",
     long_about = "Delivers whatever the csift channel holds for THIS lane, at the hook point Claude\n\
-        Code just fired. stdin is the hook input JSON. stdout is either one hook-output object\n\
-        or nothing at all.\n\n\
+        Code just fired. A lane is one running Claude Code conversation, the top-level session\n\
+        or one subagent, each with its own transcript. stdin is the hook input JSON. stdout is\n\
+        either one hook-output object or nothing at all.\n\n\
         You do not run this command yourself. It is the line you paste into settings.json,\n\
         once per slot, on each delivery event, and `csift deliver --recipe` prints that block\n\
         ready to paste. csift never writes a settings file, so arming the channel is your\n\
         edit.\n\n\
         WHAT ONE INVOCATION DOES\n  \
-          1. Reads the hook payload, and refuses a shape it cannot place (an empty\n     \
-             `transcript_path`, or a `session_id` that is not a uuid, which is the\n     \
-             served/remote call shape).\n  \
+          1. Reads the hook payload, and refuses a shape it cannot place, an empty\n     \
+             `transcript_path` or a `session_id` that is not a uuid. A hook fired for a\n     \
+             served or remote caller carries exactly that shape\n     \
+             (`session_id:\"served:<caller>\"` beside an empty `transcript_path`) and names\n     \
+             no lane csift can find.\n  \
           2. Refreshes this lane's armed marker, so a sender can see that delivery hooks\n     \
              really run here.\n  \
           3. On one of the eight delivery events, emits ONE chunk of what is waiting.\n\n\
@@ -70,12 +73,14 @@ fn parse_slot(s: &str) -> Result<u32, String> {
           the vehicle), and never twice for one message.\n\n\
         RE-ENTRY\n  \
           SessionStart with `source=compact` offers an un-acked message once more, because\n  \
-          the compaction threw away the context the first delivery landed in.\n  \
-          `source=resume` and SubagentStart are where a message that had no lane to land in\n  \
-          finally lands.\n\n\
+          the compaction threw away the context the first delivery landed in. A message\n  \
+          queued while its lane was not running is delivered when the lane runs again, at\n  \
+          SessionStart with `source=resume` for a session or, for a steer message, at\n  \
+          SubagentStart for a subagent.\n\n\
         WHAT IT WRITES\n  \
-          It writes only the csift-owned sidecar directory `<session>/csift-channel/`, which\n  \
-          holds the per-lane ledger (what was emitted, held, expired or redelivered) and the\n  \
+          It writes only csift's own `csift-channel/` directory inside the session's sidecar\n  \
+          directory (the `<session-id>/` folder beside its transcript). That directory holds\n  \
+          the per-lane ledger (what was emitted, held, expired or redelivered) and the\n  \
           per-lane armed marker. It never writes a transcript, a settings file, or anything\n  \
           the harness owns.",
     after_help = "EXAMPLES\n  \
@@ -94,8 +99,8 @@ fn parse_slot(s: &str) -> Result<u32, String> {
           prints its chunk on stderr instead and exits 2, which is how a Stop hook blocks a\n  \
           turn from ending. Every other outcome exits 0.\n\n\
         SEEING WHAT HAPPENED\n  \
-          The ledger is intent, and the receiver's own transcript is fact. Search the fact\n  \
-          with\n    \
+          The ledger records what csift emitted. The receiver's own transcript holds what\n  \
+          actually arrived, and this search finds it.\n    \
             csift search '<message id>' @<lane> -t harness.hook.context\n\n\
         SEE ALSO\n  \
           csift send @<lane> \"…\"      queue a message this hook will carry\n  \

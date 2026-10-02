@@ -27,27 +27,36 @@ impl SendMode {
 #[derive(Args, Debug)]
 #[command(
     about = "Queue a message for one Claude Code lane, and say what will carry it",
-    long_about = "csift send queues a message for ONE Claude Code lane (a top-level session, an\n\
-        unnamed subagent, a teammate or a workflow lane). The sender is another lane or any\n\
+    long_about = "csift send queues a message for ONE Claude Code lane. A lane is one running\n\
+        Claude Code conversation with its own transcript, whether a top-level session, an\n\
+        unnamed subagent, a teammate or a workflow lane. The sender is another lane or any\n\
         process outside Claude Code.\n\n\
         WHY IT EXISTS\n  \
           The official channel is structurally absent for some receivers.\n    \
             - A running workflow lane cannot be reached by the send tool at all.\n    \
             - An unnamed subagent cannot reach its parent subagent.\n    \
-            - Nothing reaches an idle top-level session that published no socket.\n    \
+            - No official tool reaches an idle top-level session that has no messaging\n      \
+              socket (the local socket a session opens for messages from other sessions,\n      \
+              named in its registry row).\n    \
             - A sender outside Claude Code holds no tool to call.\n  \
           csift's channel is a set of files csift owns under the receiving session's sidecar\n  \
-          directory. A `csift deliver` hook the USER installed carries them into the lane.\n  \
-          csift never installs a hook and never writes a transcript.\n\n\
+          directory, the `<session-id>/` folder beside its transcript. A `csift deliver` hook\n  \
+          the USER installed carries them into the lane. csift never installs a hook and never\n  \
+          writes a transcript.\n\n\
         WHAT IT WRITES\n  \
           It writes three files, all under `<session>/csift-channel/`. They are the message\n  \
           source, the receiver's inbox line and the sender's outbox line. Nothing else on disk\n  \
           is touched.\n\n\
         THE VERDICT (one per send, printed first)\n  \
           OK             queued, and a named hook point will carry it\n  \
-          FULL           queued, but the message needs more slots than the receiver has\n  \
+          FULL           queued, but the message needs more delivery slots than the\n                 \
+                         receiver has. A slot is one `csift deliver` hook line in the\n                 \
+                         receiver's settings, and each carries one chunk per event\n                 \
+                         (CONFIGURED vs ARMED below).\n  \
           MAY-FAIL       queued, with the risk named (hooks configured but never armed, a\n                 \
-                         policy switch, a frozen lane, an unprovable gate)\n  \
+                         managed policy that switches hooks off, a lane frozen on an\n                 \
+                         unanswered tool call, a Claude Code feature gate csift cannot\n                 \
+                         confirm from disk)\n  \
           UNPREDICTABLE  queued, but csift cannot say WHEN. The receiver is not alive, is\n                 \
                          headless, or has no delivery hook at all.\n  \
           REFUSED        nothing was queued, and the reason is printed (a stopped-by-user\n                 \
@@ -65,13 +74,13 @@ impl SendMode {
           says nothing about it.",
     after_help = "EXAMPLES\n  \
           csift send @<agent-id> \"stop after the current file\"      # steer a running subagent\n  \
-          csift send @Relay@harbor \"status?\" --mode queue           # a teammate, at its next turn boundary\n  \
+          csift send @<Name>@<Team> \"status?\" --mode queue          # a teammate, at its next turn boundary\n  \
           csift send @<uuid> -f note.md --ttl 2d                     # a body from a file, alive for 2 days\n  \
           echo \"ship it\" | csift send @<agent-id> --from @main       # a body on stdin, an exact sender\n  \
           csift send @<agent-id> \"continue\" --resume                 # respawn a completed lane (an ACTION)\n  \
           csift send @<uuid> \"ping\" --from ci-runner --format json   # from outside Claude Code\n\n\
         JSON (--format json)\n  \
-          The envelope's `{\"kind\":\"header\"}` line, then ONE `send` row:\n    \
+          The header line {\"kind\":\"header\", command:\"send\"}, then ONE `send` row:\n    \
             {\"kind\":\"send\", id, verdict, channel, mode,\n     \
              receiver:{lane, routing_id, session, kind, state, version, configured_slots,\n               \
                        armed_slots},\n     \
@@ -80,8 +89,13 @@ impl SendMode {
           then the summary line:\n    \
             {\"kind\":\"summary\", queued, chunks, message_chars, message_utf16_units,\n     \
              chunk_budget_utf16_units, relation, cross_project, ttl_secs, official_floor_met}\n  \
-          The chunk budget is counted in UTF-16 code units, the unit Claude Code's inline cap\n  \
-          measures, so an emoji is one char and two units.\n\n\
+          `prediction` is the sentence the text receipt prints, ending with which event will\n  \
+          carry part 1 and how many chunks fit there. `relation` is the sender's standing to\n  \
+          the receiver (parent, child, sibling, cross-session, cross-project, external or\n  \
+          unknown). `official_floor_met` is true when the receiver runs Claude Code 2.1.198 or\n  \
+          later, the floor for any official send path. The chunk budget is counted in UTF-16\n  \
+          code units, the unit Claude Code's inline cap measures, so an emoji is one char and\n  \
+          two units.\n\n\
         THE SETTINGS LINE\n  \
           The gate verdicts, the slot census and every hook risk above come off ONE fold of the\n  \
           receiver's settings cascade. The receipt's `settings` line therefore names\n    \
@@ -90,14 +104,14 @@ impl SendMode {
             - any file that was there but unreadable,\n    \
             - the inputs that change the outcome and leave nothing on disk at all (a settings\n      \
               file or inline JSON handed to Claude Code on its command line, a restricted\n      \
-              source set, the trust dialog, MDM).\n  \
-          A verdict is checkable only when its sources are named.\n\n\
+              source set, the trust dialog, an MDM (mobile device management) policy, which\n      \
+              csift does not read).\n\n\
         CONFIGURED vs ARMED\n  \
           `configured_slots` counts the `csift deliver` slot hook entries installed in the\n  \
           receiver's settings cascade. `armed_slots` counts the slots that have actually RUN in\n  \
-          that lane. Configuration is not arming, because a receiver process can predate the\n  \
-          settings edit. A message queued for a lane with no armed slot is queued honestly and\n  \
-          not delivered.\n\n\
+          that lane. They differ, for example, when the receiver process started before the\n  \
+          settings edit. A message queued for a lane with no armed slot is queued honestly and not\n  \
+          delivered.\n\n\
         THE SENDER\n  \
           Inside Claude Code the caller is a LANE. The environment names only the top-level\n  \
           session, so without `--from @<lane>` the send is attributed to the session, and\n  \
@@ -132,8 +146,9 @@ pub struct SendArgs {
     #[arg(verbatim_doc_comment, long, value_enum, default_value_t = SendMode::Steer)]
     pub mode: SendMode,
 
-    /// How long the message stays deliverable, in the site-wide duration grammar
-    /// (`30s` `10m` `12h` `2d` `1w` `3mo` `1y`). Default 12h.
+    /// How long the message stays deliverable, as `N<unit>` in the seven relative time units
+    /// csift's WHEN arguments take (`30s` `10m` `12h` `2d` `1w` `3mo` `1y`, a month being 30
+    /// days and a year 365). Default 12h.
     #[arg(verbatim_doc_comment, long, value_name = "DUR", default_value = "12h")]
     pub ttl: String,
 
