@@ -16,7 +16,11 @@
 //!
 //! A `LazyLock<String>` rather than a const: Rust concatenates string LITERALS at compile
 //! time and named consts not at all, so the join happens once on first use of the help.
+//!
+//! [`about::SEARCH_LONG_ABOUT`] is the page's `long_about`, the description clap prints
+//! above the usage line. It is no part of the join; it sits here as the same page's prose.
 
+mod about;
 mod attachments;
 mod bookkeeping;
 mod injections;
@@ -25,6 +29,8 @@ mod keys;
 mod outro;
 mod system;
 mod thinking;
+
+pub(crate) use about::SEARCH_LONG_ABOUT;
 
 /// The six family sections in the taxonomy's family order - the TAIL of the body, one
 /// column-0 region each.

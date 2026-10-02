@@ -32205,7 +32205,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "420-425",
+          "lines": "352-357",
           "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The leaf it gated has a name: select it with\n    /// `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -49339,7 +49339,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "420-425",
+          "lines": "352-357",
           "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The leaf it gated has a name: select it with\n    /// `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -49756,7 +49756,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "270-272",
+          "lines": "202-204",
           "snippet": "    /// pending under any selector) \u00b7 `model` (per assistant model, the raw `message.model`\n    /// value; Claude Code's own `<synthetic>` placeholder, a CC-fabricated stand-in\n    /// assistant record such as an API-error notice, is reported verbatim) \u00b7 `attachment`"
         }
       ],
@@ -80691,7 +80691,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "133-135",
+          "lines": "65-67",
           "snippet": "    /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A\n    /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE\n    /// (`-t user`) or CATEGORY selects the leaves the model RECEIVES - on the first of THREE"
         }
       ],
