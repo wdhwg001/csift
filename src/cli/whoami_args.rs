@@ -24,12 +24,13 @@ orchestrated workflow subagent (an OMC Workflow `agent()`, for example) holds th
 id too. So on current builds, plain `whoami` run from a subagent resolves the root session.\n\
 Older builds handed a built-in Task subagent its own id. To tell which one you were given,\n\
 feed the id to `csift agents --agent <id> --format json`. A returned node carries the root\n\
-in `parent_session_id`, so one call settles it. The error `no subagent matched` means the id is already\n\
-top-level, so use it directly. Scanning `csift agents .` or `csift list .` on the project\n\
-path also finds the parent uuid. The env form's identity row carries `is_subagent`,\n\
-`parent_session_id` and `depth` as null. The `@trap:<marker>` form emits one identity row\n\
-per node of the upstream chain instead, self first and the top-level root last, so a\n\
-subagent reads `is_subagent` and `parent_session_id` with no `agents` round trip.",
+in `parent_session_id`, so one call settles it. The error `no subagent matched` means\n\
+the id is already top-level, so use it directly. Scanning `csift agents .` or\n\
+`csift list .` on the project path also finds the parent uuid. The env form's identity row\n\
+carries `is_subagent`, `parent_session_id` and `depth` as null. The `@trap:<marker>` form\n\
+emits one identity row per node of the upstream chain instead, self first and the\n\
+top-level root last, so a subagent reads `is_subagent` and `parent_session_id` with no\n\
+`agents` round trip.",
     after_help = "SESSION-ID SOURCE\n  \
 csift reads CLAUDE_CODE_SESSION_ID, which Claude Code sets in every Bash-tool process. Its\n  \
 value is the calling session's jsonl basename. When it is absent, csift falls back to\n  \
@@ -44,10 +45,10 @@ For a definitive answer that does not depend on the environment, run\n  \
 csift maps it to your subagent's hex id and walks the upstream chain to the top-level\n  \
 root. The JSON is one `identity` row per node of that chain.\n  \
 Timing differs by lane. A subagent's transcript is written per content block, so its\n  \
-command is on disk at dispatch and a first try resolves. The main conversation's record lands about 1 to\n  \
-3.4 s after dispatch, as an async flush of the completed message. A first use from the top\n  \
-level races that flush and normally misses. From the main thread use `@main`, which has no\n  \
-race, or re-run the same command with the same marker.\n  \
+command is on disk at dispatch and a first try resolves. The main conversation's record\n  \
+lands about 1 to 3.4 s after dispatch, as an async flush of the completed message. A first\n  \
+use from the top level races that flush and normally misses. From the main thread use\n  \
+`@main`, which has no race, or re-run the same command with the same marker.\n  \
 Without @trap, do not assume which id the environment gave you. Feed it to\n  \
 `csift agents --agent <id> --format json`. A returned node carries the root in\n  \
 `parent_session_id`, and the error `no subagent matched` means the id is already\n  \
