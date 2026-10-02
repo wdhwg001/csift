@@ -6,8 +6,9 @@ use super::*;
 #[derive(Args, Debug)]
 #[command(
     about = "Reconcile a channel message's ledger INTENT against the receiver transcript's FACT",
-    long_about = "Answers \"did that message actually reach the lane?\" The csift channel keeps two\n\
-        independent records, and `msg` joins them.\n  \
+    long_about = "Answers \"did that message actually reach the lane?\" A lane is one running Claude\n\
+        Code conversation, the top-level session or one subagent, each with its own transcript.\n\
+        The csift channel keeps two independent records, and `msg` joins them.\n  \
           INTENT   the per-lane ledger, `ledger/<lane>.jsonl` in the receiver session's\n           \
                    csift-channel directory. An `emit` line says csift printed a chunk at a hook\n           \
                    point. That is csift's own claim, nothing more.\n  \
@@ -15,11 +16,10 @@ use super::*;
                    `hook_additional_context` attachment whose content opens with the envelope\n           \
                    header, so a record carrying `id=<ID>` is proof the text reached the lane's\n           \
                    context.\n\n\
-        Keeping the two apart is the whole point. A ledger with no matching record is\n\
-        INTENT-ONLY (the hook printed into a process that crashed, or the write has not flushed\n\
-        yet), and never a delivery. The fact half is exactly\n\
-        `csift search '<ID>' @<lane> -t harness.hook.context`. `msg` runs that join for you\n\
-        and adds the ledger side.\n\n\
+        A ledger with no matching record is INTENT-ONLY (the hook printed into a process that\n\
+        crashed, or the write has not flushed yet), and never a delivery. The fact half is what\n\
+        `csift search '<ID>' @<lane> -t harness.hook.context` finds, and `msg` runs that search\n\
+        and adds the ledger side (THE FACT HALF ON ITS OWN, below, says what the `-t` changes).\n\n\
         VERDICTS (a closed set)\n  \
           DELIVERED     at least one emit AND a transcript record carrying the id\n  \
           INTENT-ONLY   emitted, no transcript record (a crash window, or a flush lag)\n  \
@@ -56,11 +56,12 @@ use super::*;
         THE FACT HALF ON ITS OWN\n  \
           `csift search '<ID>' @<lane> -t harness.hook.context` is the transcript side of the\n  \
           join. `msg` reads the same records, the hook-context attachments whose text opens\n  \
-          with the envelope header naming the id. The `-t` flag is harmless here and not\n  \
-          needed. A default scan reaches a csift-channel delivery through its own envelope\n  \
-          needle, as `agent.communication.channel` rendered verbatim from its envelope. That\n  \
-          is one of the THREE attachment leaves a default scan reaches, beside the person's\n  \
-          mid-turn steer and the model's structured answer.\n\n\
+          with the envelope header naming the id. Without `-t`, `csift search '<ID>' @<lane>`\n  \
+          finds those deliveries too, labelled `agent.communication.channel` and rendered\n  \
+          verbatim from their envelope, along with any other record that quotes the id (a\n  \
+          person pasting it, say). The `-t harness.hook.context` keeps only the delivery\n  \
+          records. A delivery is one of the THREE attachment leaves a default scan reaches,\n  \
+          beside the person's mid-turn steer and the model's structured answer.\n\n\
         SEE ALSO\n  \
           csift ack <ID>              record that this lane read the message\n  \
           csift send @<lane> \"…\"      queue one\n  \
@@ -103,12 +104,14 @@ pub struct MsgArgs {
 #[derive(Args, Debug)]
 #[command(
     about = "Record that the calling lane READ a channel message (appends an `ack` ledger line)",
-    long_about = "Appends an `ack` line to the calling lane's channel ledger. A later\n\
-        `csift msg <ID>` then reads ACKED, and a delivery hook stops re-offering the message\n\
-        after a compaction.\n\n\
-        This is the ONE statement only the receiver can make. csift can see that a chunk was\n\
-        emitted and that a record carrying the id exists. Only the model that read it can say\n\
-        it acted on it.\n\n\
+    long_about = "Appends an `ack` line to the calling lane's channel ledger. A lane is one running\n\
+        Claude Code conversation, the top-level session or one subagent, each with its own\n\
+        transcript. A later `csift msg <ID>` then reads ACKED. The delivery hook offers an\n\
+        un-acked message once more after each compaction (at SessionStart with\n\
+        `source=compact`), and stops doing so once the message is acked.\n\n\
+        csift can see that a chunk was emitted and that a record carrying the id exists. Only\n\
+        the model that read the message can say it acted on it, so the ack is the receiver's\n\
+        to write.\n\n\
         THE CALLER MUST BE A CLAUDE CODE LANE\n  \
           An ack is a receiver's claim about its own context. A process outside Claude Code\n  \
           (no $CLAUDE_CODE_SESSION_ID) cannot make it, and csift refuses it instead of writing\n  \
@@ -120,8 +123,9 @@ pub struct MsgArgs {
           never received would write a record that joins to nothing, so it is a hard error,\n  \
           and the error names what the lane does hold.\n\n\
         WHAT IT WRITES\n  \
-          csift writes only its own sidecar directory `<session>/csift-channel/`. It never\n  \
-          writes a transcript, the team mailbox or a settings file.",
+          csift writes only its own `csift-channel/` directory inside the session's sidecar\n  \
+          directory, the `<session-id>/` folder beside its transcript. It never writes a\n  \
+          transcript, the team mailbox or a settings file.",
     after_help = "EXAMPLES\n  \
           csift ack 0123456789abcdef                     # this session's own lane read it\n  \
           csift ack 0123456789abcdef --lane @<agent-id>  # ...a subagent acking its own\n  \
