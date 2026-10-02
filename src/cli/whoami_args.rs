@@ -124,40 +124,41 @@ csift agents @<uuid>        the lanes below a session (the walk-down mirror)"
 )]
 pub struct WhoamiArgs {
     /// Optional SELF target: `@main`, `@trap:<marker>`, or a lane id (`@<agent-id>`, or a
-    /// teammate's routing form `@<Name>@<Team>`). With no target, whoami identifies the
-    /// calling session from `$CLAUDE_CODE_SESSION_ID`, and `@main` is the explicit spelling of
-    /// that default. `@trap:<marker>` answers "which subagent am I?". A running subagent,
-    /// whose own id Claude Code withholds from its environment, embeds a unique, literal,
-    /// one-shot marker in this very csift command. csift maps the marker to the subagent's
-    /// bare hex id and walks the upstream ancestry chain up to the top-level root, the walk-up
-    /// mirror of `agents`' walk-down. The walk never reads the environment, so it is reliable
-    /// for a built-in Task subagent and for a workflow subagent, whose environment holds the
-    /// parent's id. A lane id answers the same three sections for that lane. A session uuid
-    /// is refused. To inspect a different session, use `list` or `agents`.
-    #[arg(value_name = "SELF")]
+    /// teammate's routing form `@<Name>@<Team>`). With no target, whoami identifies the calling
+    /// session from `$CLAUDE_CODE_SESSION_ID`, and `@main` is the explicit spelling of that
+    /// default. `@trap:<marker>` answers "which subagent am I?". A running subagent, whose own
+    /// id Claude Code withholds from its environment, embeds a unique, literal, one-shot marker
+    /// in this very csift command. csift maps the marker to the subagent's bare hex id and
+    /// walks the upstream ancestry chain up to the top-level root, the walk-up mirror of
+    /// `agents`' walk-down. The walk never reads the environment, so it is reliable for a
+    /// built-in Task subagent and for a workflow subagent, whose environment holds the parent's
+    /// id. A lane id answers the same three sections for that lane. A session uuid is refused.
+    /// To inspect a different session, use `list` or `agents`.
+    #[arg(value_name = "SELF", verbatim_doc_comment)]
     pub self_target: Option<String>,
 
     /// Predict reach to one target lane. No message is sent and nothing is written. The
     /// prediction names the channel that would carry a message (from the same policy table
     /// `csift send` runs), the two gate verdicts, the delivery slots configured in the
     /// receiver's settings cascade, the slots that have actually run there, and the failure a
-    /// sender would be told. For an agent target the answer also says what it is made of.
-    /// csift reads the lane's transcript tail and probes a pid, never the harness's own
-    /// memory, so the prediction is an inference, and the line names the carrier that remains
-    /// when it is wrong. A `settings` line names the cascade the gates and the slot census
-    /// were read from. It lists the scopes that contributed, the ones tried and absent, and the
-    /// inputs that leave nothing on disk (a settings file or inline JSON handed to Claude Code
-    /// on its command line, a restricted source set, the trust dialog, MDM). TARGET takes any
-    /// `@` form csift accepts (`@<uuid>`, a uuid prefix, `@<agent-id>`, `@<Name>@<Team>`,
-    /// `@main`, `@trap:<marker>`). The sender is the lane the SELF positional resolved, so a
-    /// subagent passes `@trap:<marker>` to get the answer a send from its own lane would get.
-    /// With no positional the sender is the session the environment names, which is the
-    /// top-level session in every lane, and a stderr note says the sender was assumed.
+    /// sender would be told. For an agent target the answer also says what it is made of. csift
+    /// reads the lane's transcript tail and probes a pid, never the harness's own memory, so
+    /// the prediction is an inference, and the line names the carrier that remains when it is
+    /// wrong. A `settings` line names the cascade the gates and the slot census were read from.
+    /// It lists the scopes that contributed, the ones tried and absent, and the inputs that
+    /// leave nothing on disk (a settings file or inline JSON handed to Claude Code on its
+    /// command line, a restricted source set, the trust dialog, MDM). TARGET takes any `@` form
+    /// csift accepts (`@<uuid>`, a uuid prefix, `@<agent-id>`, `@<Name>@<Team>`, `@main`,
+    /// `@trap:<marker>`). The sender is the lane the SELF positional resolved, so a subagent
+    /// passes `@trap:<marker>` to get the answer a send from its own lane would get. With no
+    /// positional the sender is the session the environment names, which is the top-level
+    /// session in every lane, and a stderr note says the sender was assumed.
     #[arg(
         long = "to",
         value_name = "TARGET",
         conflicts_with = "peers",
-        value_parser = parse_lane_target
+        value_parser = parse_lane_target,
+        verbatim_doc_comment
     )]
     pub to: Option<String>,
 
@@ -165,14 +166,14 @@ pub struct WhoamiArgs {
     /// description, an agent type or a name read as a role is the material one lane would use
     /// to claim standing over another, so the census publishes none of it. It answers who is
     /// alive and says nothing about who should be obeyed. A lane is live when its owning
-    /// session has a registry row whose process answers a pid probe and, for a child lane,
-    /// when its own tail is not settled. A child of a dead session is never live. A top-level
-    /// lane's state is the registry's own word (`busy`, `shell`, `idle` or `waiting`). A child
-    /// lane's state is `in-flight` or `generating`.
-    #[arg(long = "peers", conflicts_with = "self_target")]
+    /// session has a registry row whose process answers a pid probe and, for a child lane, when
+    /// its own tail is not settled. A child of a dead session is never live. A top-level lane's
+    /// state is the registry's own word (`busy`, `shell`, `idle` or `waiting`). A child lane's
+    /// state is `in-flight` or `generating`.
+    #[arg(long = "peers", conflicts_with = "self_target", verbatim_doc_comment)]
     pub peers: bool,
 
     /// Emit JSON instead of text.
-    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+    #[arg(long, value_enum, default_value_t = OutputFormat::Text, verbatim_doc_comment)]
     pub format: OutputFormat,
 }

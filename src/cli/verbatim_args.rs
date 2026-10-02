@@ -224,8 +224,8 @@ The envelope is UNIFORM tool-wide (envelope v2). EVERY command's stream is\n  \
 )]
 pub struct VerbatimArgs {
     /// Project target(s) (an actual cwd or an encoded dir) whose sessions to reconstruct turns
-    /// from, or an `@<uuid>` session token. Repeatable. `@<uuid>` (8-4-4-4-12 hex) scopes to one
-    /// session, so `csift verbatim @<uuid>` works as the EXAMPLES show. `@<agent-id>`
+    /// from, or an `@<uuid>` session token. Repeatable. `@<uuid>` (8-4-4-4-12 hex) scopes to
+    /// one session, so `csift verbatim @<uuid>` works as the EXAMPLES show. `@<agent-id>`
     /// reconstructs that ONE subagent's own thread (the ids come from `csift agents`). `@main`
     /// and `@trap:<marker>` resolve the calling session, and a `*.jsonl` file scopes to that
     /// transcript. A target is REQUIRED, here or through `--sessions-from`. A bare
@@ -237,20 +237,21 @@ pub struct VerbatimArgs {
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
-        value_parser = parse_project_target
+        value_parser = parse_project_target,
+        verbatim_doc_comment
     )]
     pub paths: Vec<PathBuf>,
 
     /// Also scope to the session ids in FILE (`-` reads stdin). The ids are whitespace- or
-    /// newline-separated uuid, uuid-prefix or agent-id tokens, bare or `@`-prefixed, exactly
-    /// as csift emits them (`search -l`, JSON `transcript_ids` / `parent_session_id`). They
-    /// are unioned with the positional targets, and each id resolves fail-loud like an `@`
+    /// newline-separated uuid, uuid-prefix or agent-id tokens, bare or `@`-prefixed, exactly as
+    /// csift emits them (`search -l`, JSON `transcript_ids` / `parent_session_id`). They are
+    /// unioned with the positional targets, and each id resolves fail-loud like an `@`
     /// positional. An EMPTY list (an upstream stage that found nothing) scopes to NOTHING. The
-    /// result is an honest empty one with exit 0, never a silent widening to every project.
-    /// The resolved ids then follow this command's normal span rules, exactly as `@`
-    /// positionals would. On the span-by-default commands each session EXPANDS to its subagent
-    /// transcripts, and `--no-subagents` pins the scope to exactly the listed ids.
-    #[arg(long = "sessions-from", value_name = "FILE|-")]
+    /// result is an honest empty one with exit 0, never a silent widening to every project. The
+    /// resolved ids then follow this command's normal span rules, exactly as `@` positionals
+    /// would. On the span-by-default commands each session EXPANDS to its subagent transcripts,
+    /// and `--no-subagents` pins the scope to exactly the listed ids.
+    #[arg(long = "sessions-from", value_name = "FILE|-", verbatim_doc_comment)]
     pub sessions_from: Option<std::path::PathBuf>,
 
     /// Character budget applied PER session in scope, always in chars (as a sizing rule, about
@@ -258,25 +259,31 @@ pub struct VerbatimArgs {
     /// the top-level thread only, so a bare-uuid run realizes just `budget` chars. With
     /// `--subagents` the realized total is `budget × (sessions in scope)`, and a scope banner
     /// surfaces the multiplier. Default 40000.
-    #[arg(long, value_name = "N", default_value_t = 40000)]
+    #[arg(long, value_name = "N", default_value_t = 40000, verbatim_doc_comment)]
     pub budget: usize,
 
     /// Fraction of the budget RESERVED for complete round-trips (user → [N tool calls] →
     /// assistant EOT), which user messages alone cannot spend. A hard floor. Default 0.5. It
     /// must lie in the open interval (0.0, 1.0).
-    #[arg(long = "round-trip-fraction", value_name = "F", default_value_t = 0.5)]
+    #[arg(
+        long = "round-trip-fraction",
+        value_name = "F",
+        default_value_t = 0.5,
+        verbatim_doc_comment
+    )]
     pub round_trip_fraction: f64,
 
     /// Also span each in-scope session's SUBAGENT transcripts (built-in Task/Agent-tool, OMC
     /// and Workflow agents) under `subagents/**`. OFF by default for `verbatim`, unlike files
     /// and search. `verbatim` is a SINGLE-THREAD recovery tool and `--budget` MULTIPLIES per
     /// session in scope, so spanning hundreds of unrelated fan-out subagents by default would
-    /// bury the thread you asked to restore under megabytes of noise. Opt in with
-    /// `--subagents` only for the rare cross-fan-out reconstruction.
+    /// bury the thread you asked to restore under megabytes of noise. Opt in with `--subagents`
+    /// only for the rare cross-fan-out reconstruction.
     #[arg(
         long = "subagents",
         conflicts_with = "no_subagents",
-        default_value_t = false
+        default_value_t = false,
+        verbatim_doc_comment
     )]
     pub include_subagents: bool,
 
@@ -284,12 +291,17 @@ pub struct VerbatimArgs {
     /// already the `verbatim` DEFAULT. The flag is kept so every span command answers the same
     /// two switches, and passing it beside `--subagents` is a usage error, as on every span
     /// command.
-    #[arg(long = "no-subagents")]
+    #[arg(long = "no-subagents", verbatim_doc_comment)]
     pub no_subagents: bool,
 
-    /// Stop walking back after crossing N compaction boundaries (0 = unlimited, the default).
-    /// A guard, never a target.
-    #[arg(long = "max-compactions", value_name = "N", default_value_t = 0)]
+    /// Stop walking back after crossing N compaction boundaries (0 = unlimited, the default). A
+    /// guard, never a target.
+    #[arg(
+        long = "max-compactions",
+        value_name = "N",
+        default_value_t = 0,
+        verbatim_doc_comment
+    )]
     pub max_compactions: usize,
 
     /// Per-turn agent-message policy, the MASTER switch for the multi-agent-message model.
@@ -302,7 +314,7 @@ pub struct VerbatimArgs {
     /// takes that wrap-up whenever the substance of the run sits earlier. `rich` keeps the last
     /// always, the first by position privilege and each non-droppable middle, and only on a
     /// long run (over the mode's run threshold). `all` keeps every agent message.
-    #[arg(long = "agent-msgs", value_enum, default_value_t = crate::commands::turns::AgentMsgMode::Longest)]
+    #[arg(long = "agent-msgs", value_enum, default_value_t = crate::commands::turns::AgentMsgMode::Longest, verbatim_doc_comment)]
     pub agent_msgs: crate::commands::turns::AgentMsgMode,
 
     /// Threshold bundle for the agent-message model. `heavy` is maximal fidelity (threshold 4,
@@ -310,38 +322,39 @@ pub struct VerbatimArgs {
     /// declaration-max 240). A profile never changes the master `--agent-msgs` mode. With no
     /// `--agent-msgs` the mode stays the default `longest`, run with the profile's thresholds,
     /// and `--agent-msgs rich` also switches the keep-set.
-    #[arg(long = "profile", value_enum)]
+    #[arg(long = "profile", value_enum, verbatim_doc_comment)]
     pub profile: Option<crate::commands::turns::Profile>,
 
     /// Inclusive turn-index range in the shared grammar: `N` (one turn) · `A..B` · `N..` (to
-    /// the end) · `..N` · `-k` from the end (`-3..` = the last 3). It is 0-BASED. Turn 0 is
-    /// the first opener's turn together with every record above it (the session's opening
-    /// context), so `1..N` drops the first human turn as well as that context. A turn opens on
-    /// a genuine typed message, an answered AskUserQuestion, a tool rejection carrying typed
-    /// text, an inbound peer message, or a `<task-notification>` pulse. A slash command with
-    /// arguments carries `user.message` and still opens no turn. Find turn indices in the
-    /// `<tok>·t<N>` exchange header of `csift search` text output, or in the `turn_index`
-    /// field of any `--format json` record. Intersects (AND) with `--since` / `--until`.
+    /// the end) · `..N` · `-k` from the end (`-3..` = the last 3). It is 0-BASED. Turn 0 is the
+    /// first opener's turn together with every record above it (the session's opening context),
+    /// so `1..N` drops the first human turn as well as that context. A turn opens on a genuine
+    /// typed message, an answered AskUserQuestion, a tool rejection carrying typed text, an
+    /// inbound peer message, or a `<task-notification>` pulse. A slash command with arguments
+    /// carries `user.message` and still opens no turn. Find turn indices in the `<tok>·t<N>`
+    /// exchange header of `csift search` text output, or in the `turn_index` field of any
+    /// `--format json` record. Intersects (AND) with `--since` / `--until`.
     #[arg(
         long = "turn",
         value_name = "N|A..B|N..|-k",
-        allow_hyphen_values = true
+        allow_hyphen_values = true,
+        verbatim_doc_comment
     )]
     pub turn_range: Option<String>,
 
     /// Lower time bound, in the WHEN grammar (system-local tz). A relative
-    /// `Ns`/`Nm`/`Nh`/`Nd`/`Nw` is that many seconds/minutes/hours/days/weeks/months/years
-    /// AGO (`45s`, `90m`, `2h`, `3d`, `1w`, `2mo`, `1y`, where `mo` = 30 days and `y` = 365,
-    /// and a leading `-` is tolerated). An ISO8601 instant (`2026-06-01T05:00:00Z` /
-    /// `…+10:00`) is that instant. A BARE datetime (`2026-06-01T05:00:00`) is that LOCAL
-    /// wall-clock time, and a bare date (`2026-06-01`) is LOCAL MIDNIGHT that day. Intersects
-    /// (AND) with --turn, so both filters apply.
-    #[arg(long, value_name = "WHEN")]
+    /// `Ns`/`Nm`/`Nh`/`Nd`/`Nw` is that many seconds/minutes/hours/days/weeks/months/years AGO
+    /// (`45s`, `90m`, `2h`, `3d`, `1w`, `2mo`, `1y`, where `mo` = 30 days and `y` = 365, and a
+    /// leading `-` is tolerated). An ISO8601 instant (`2026-06-01T05:00:00Z` / `…+10:00`) is
+    /// that instant. A BARE datetime (`2026-06-01T05:00:00`) is that LOCAL wall-clock time, and
+    /// a bare date (`2026-06-01`) is LOCAL MIDNIGHT that day. Intersects (AND) with --turn, so
+    /// both filters apply.
+    #[arg(long, value_name = "WHEN", verbatim_doc_comment)]
     pub since: Option<String>,
 
     /// Upper time bound (same WHEN grammar as --since). Intersects (AND) with --turn, so both
     /// filters apply.
-    #[arg(long, value_name = "WHEN")]
+    #[arg(long, value_name = "WHEN", verbatim_doc_comment)]
     pub until: Option<String>,
 
     /// Capture the SAME rendered reconstruction that prints to stdout into this file,
@@ -349,50 +362,50 @@ pub struct VerbatimArgs {
     /// middle-truncated with a `… [+K chars, L lines elided] …` marker in BOTH. The summary
     /// still prints to stdout. For UN-truncated unit bodies use `--format json`, which carries
     /// the full verbatim `text`.
-    #[arg(long, value_name = "PATH")]
+    #[arg(long, value_name = "PATH", verbatim_doc_comment)]
     pub out: Option<PathBuf>,
 
     /// Emit JSON instead of the headered text format.
-    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+    #[arg(long, value_enum, default_value_t = OutputFormat::Text, verbatim_doc_comment)]
     pub format: OutputFormat,
 
     /// CHUNKED OUTPUT. Paginate the recovered DOCUMENT (the verbatim turns, the same content
     /// `--out` writes) into chunks of at most `--window` CHARACTERS, and print ONLY the Nth
     /// chunk (1-based) to stdout, with NO operational chrome (scope banner, SESSION header,
     /// footer). It is built for fanning a >10K reconstruction across several SessionStart
-    /// hooks. Claude Code caps EACH hook's `additionalContext` at 10,000 UTF-16 code units,
-    /// and an over-cap string is replaced by a file path and a short preview, so the body is
+    /// hooks. Claude Code caps EACH hook's `additionalContext` at 10,000 UTF-16 code units, and
+    /// an over-cap string is replaced by a file path and a short preview, so the body is
     /// effectively LOST to the model. One hook per slice keeps every injected chunk under the
-    /// wall. Slicing is DETERMINISTIC (same session and budget, identical chunk boundaries),
-    /// so N independent hooks can each request their own slice, and the lock and ordering
-    /// live in the hook shell. An out-of-range N prints nothing (exit 0), so surplus hooks
-    /// inject nothing. Text format only, and not combinable with `--out`.
-    #[arg(long, value_name = "N")]
+    /// wall. Slicing is DETERMINISTIC (same session and budget, identical chunk boundaries), so
+    /// N independent hooks can each request their own slice, and the lock and ordering live in
+    /// the hook shell. An out-of-range N prints nothing (exit 0), so surplus hooks inject
+    /// nothing. Text format only, and not combinable with `--out`.
+    #[arg(long, value_name = "N", verbatim_doc_comment)]
     pub slice: Option<usize>,
 
     /// Chunk size for `--slice`, in CHARACTERS counted as Unicode scalars, so a CJK-heavy
-    /// document is NOT over-counted 3× the way a byte budget would count it. Claude
-    /// Code's 10,000 `additionalContext` cap counts UTF-16 code units. That is the same number
-    /// for BMP text, CJK included, while an emoji or a CJK ext-B character counts 1 toward the
-    /// window and 2 toward the cap. The default 10000 equals the cap. Pass a little under
-    /// (e.g. `--window 9000`) to leave headroom for any wrapper text the hook adds around the
-    /// chunk, and more for a document carrying astral characters. Lines are packed greedily up
-    /// to the window at LINE boundaries. A single line longer than the window is hard-split on
-    /// a char boundary, so no chunk ever exceeds it. Ignored without `--slice`.
-    #[arg(long, value_name = "N", default_value_t = 10000)]
+    /// document is NOT over-counted 3× the way a byte budget would count it. Claude Code's
+    /// 10,000 `additionalContext` cap counts UTF-16 code units. That is the same number for BMP
+    /// text, CJK included, while an emoji or a CJK ext-B character counts 1 toward the window
+    /// and 2 toward the cap. The default 10000 equals the cap. Pass a little under (e.g.
+    /// `--window 9000`) to leave headroom for any wrapper text the hook adds around the chunk,
+    /// and more for a document carrying astral characters. Lines are packed greedily up to the
+    /// window at LINE boundaries. A single line longer than the window is hard-split on a char
+    /// boundary, so no chunk ever exceeds it. Ignored without `--slice`.
+    #[arg(long, value_name = "N", default_value_t = 10000, verbatim_doc_comment)]
     pub window: usize,
 
     /// FIXED-FLEET mode. Pin the reconstruction to AT MOST N slices of `--window` chars each,
     /// instead of letting `--budget` decide a VARIABLE number of chunks. A hook fleet is a
-    /// fixed set of registered `SessionStart` hooks, so the slice COUNT is the hard
-    /// constraint, and it must NOT drift to 5/6/7 as the turns grow. With `--slices N`, csift
-    /// fills the N newest-first slices with WHOLE turns. The per-role 600/900 caps are
-    /// dropped, and a turn is ellipsized ONLY if it alone exceeds one window. csift DISCARDS
-    /// the oldest turns that don't fit, so the emitted count is ALWAYS ≤N however big the turns
-    /// are. It requires `--slice i` to pick which chunk. The budget becomes N×`--window`, so
-    /// `--budget` is ignored. Without `--slices`, `--slice` keeps its legacy budget-driven,
+    /// fixed set of registered `SessionStart` hooks, so the slice COUNT is the hard constraint,
+    /// and it must NOT drift to 5/6/7 as the turns grow. With `--slices N`, csift fills the N
+    /// newest-first slices with WHOLE turns. The per-role 600/900 caps are dropped, and a turn
+    /// is ellipsized ONLY if it alone exceeds one window. csift DISCARDS the oldest turns that
+    /// don't fit, so the emitted count is ALWAYS ≤N however big the turns are. It requires
+    /// `--slice i` to pick which chunk. The budget becomes N×`--window`, so `--budget` is
+    /// ignored. Without `--slices`, `--slice` keeps its legacy budget-driven,
     /// variable-chunk-count behavior.
-    #[arg(long, value_name = "N")]
+    #[arg(long, value_name = "N", verbatim_doc_comment)]
     pub slices: Option<usize>,
 }
 

@@ -78,27 +78,28 @@ pub struct ImageArgs {
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
-        value_parser = parse_project_target
+        value_parser = parse_project_target,
+        verbatim_doc_comment
     )]
     pub paths: Vec<PathBuf>,
 
     /// Also scope to the session ids in FILE (`-` reads stdin). The ids are whitespace- or
-    /// newline-separated uuid, uuid-prefix or agent-id tokens, bare or `@`-prefixed, exactly
-    /// as csift emits them (`search -l`, JSON `transcript_ids` / `parent_session_id`). They
-    /// are unioned with the positional targets, and each id resolves fail-loud like an `@`
+    /// newline-separated uuid, uuid-prefix or agent-id tokens, bare or `@`-prefixed, exactly as
+    /// csift emits them (`search -l`, JSON `transcript_ids` / `parent_session_id`). They are
+    /// unioned with the positional targets, and each id resolves fail-loud like an `@`
     /// positional. An EMPTY list (an upstream stage that found nothing) scopes to NOTHING. The
-    /// result is an honest empty one with exit 0, never a silent widening to every project.
-    /// The resolved ids then follow this command's normal span rules, exactly as `@`
-    /// positionals would. On the span-by-default commands each session EXPANDS to its subagent
-    /// transcripts, and `--no-subagents` pins the scope to exactly the listed ids.
-    #[arg(long = "sessions-from", value_name = "FILE|-")]
+    /// result is an honest empty one with exit 0, never a silent widening to every project. The
+    /// resolved ids then follow this command's normal span rules, exactly as `@` positionals
+    /// would. On the span-by-default commands each session EXPANDS to its subagent transcripts,
+    /// and `--no-subagents` pins the scope to exactly the listed ids.
+    #[arg(long = "sessions-from", value_name = "FILE|-", verbatim_doc_comment)]
     pub sessions_from: Option<std::path::PathBuf>,
 
     /// ADDRESS specific images by the `#N` session handle (`--id 32,33`) or by the exact
-    /// `L<line>i<n>` locator (`--id L6812i1`). Repeatable and comma-delimited. Without
-    /// `--out` it filters the LISTING to these images, and with `--out` it extracts only these.
-    /// Both forms are per transcript, so `--id` needs a single transcript in scope (pin one
-    /// with `@<uuid> --no-subagents`). Claude Code reuses `#N` across prompts, so one handle can
+    /// `L<line>i<n>` locator (`--id L6812i1`). Repeatable and comma-delimited. Without `--out`
+    /// it filters the LISTING to these images, and with `--out` it extracts only these. Both
+    /// forms are per transcript, so `--id` needs a single transcript in scope (pin one with
+    /// `@<uuid> --no-subagents`). Claude Code reuses `#N` across prompts, so one handle can
     /// name more than one distinct image. Such an AMBIGUOUS `#N` makes `image` fail with the
     /// occurrence list. Disambiguate with the exact `L<line>i<n>`, or narrow the scope with
     /// `--since`/`--until`, `--turn` or `--uuid`. `#N` is inherited from Claude Code's
@@ -106,17 +107,17 @@ pub struct ImageArgs {
     /// transcript's handles can start past #1 and carry HOLES (a number whose image never
     /// landed in this transcript). A `--id` miss therefore fails naming the handles that DO
     /// exist, and the plain listing shows them all.
-    #[arg(long, value_name = "ID", value_delimiter = ',')]
+    #[arg(long, value_name = "ID", value_delimiter = ',', verbatim_doc_comment)]
     pub id: Vec<String>,
 
     /// Lower time bound (ISO8601 or relative `2h`/`3d`/…, system-local). It narrows the image
     /// set so an ambiguous `#N` can resolve in a window where it is unique. A `#N`
     /// disambiguator.
-    #[arg(long, value_name = "WHEN")]
+    #[arg(long, value_name = "WHEN", verbatim_doc_comment)]
     pub since: Option<String>,
 
     /// Upper time bound (same WHEN grammar as `--since`). A `#N` disambiguator.
-    #[arg(long, value_name = "WHEN")]
+    #[arg(long, value_name = "WHEN", verbatim_doc_comment)]
     pub until: Option<String>,
 
     /// Restrict to images in this turn range, written in the shared grammar (`N` · `A..B` ·
@@ -125,39 +126,44 @@ pub struct ImageArgs {
     #[arg(
         long = "turn",
         value_name = "N|A..B|N..|-k",
-        allow_hyphen_values = true
+        allow_hyphen_values = true,
+        verbatim_doc_comment
     )]
     pub turn_range: Option<String>,
 
     /// Restrict to images carried by the record whose uuid starts with this. A `#N`
     /// disambiguator. The ambiguity error and `--format json` both show the uuid.
-    #[arg(long, value_name = "UUID")]
+    #[arg(long, value_name = "UUID", verbatim_doc_comment)]
     pub uuid: Option<String>,
 
-    /// EXTRACT the selected images to this PATH. The path's EXTENSION drives the format, in
-    /// the `convert in.png out.jpg` idiom. A directory, or any path WITHOUT a
+    /// EXTRACT the selected images to this PATH. The path's EXTENSION drives the format, in the
+    /// `convert in.png out.jpg` idiom. A directory, or any path WITHOUT a
     /// `png`/`jpg`/`jpeg`/`gif`/`webp` extension, gets each image in its SOURCE format,
     /// auto-named `<session>[-img<N>]-L<line>i<n>.<ext>`. A path WITH one of those extensions
     /// gets the (single) selected image at exactly that file, CONVERTED to that format when it
     /// differs from the source (→jpeg lossy q90, →gif dithered palette, →webp lossy q90). An
     /// animated GIF converted to a still format yields its first frame and a warning. Without
     /// `--out`, `image` only LISTS.
-    #[arg(long, value_name = "PATH")]
+    #[arg(long, value_name = "PATH", verbatim_doc_comment)]
     pub out: Option<PathBuf>,
 
     /// Exclude subagent transcripts and scan only the top-level session. Subagent transcripts
     /// are scanned by default, since a tool screenshot may live in one.
-    #[arg(long = "no-subagents")]
+    #[arg(long = "no-subagents", verbatim_doc_comment)]
     pub no_subagents: bool,
 
     /// Span subagent transcripts. This is the DEFAULT here. The explicit flag exists so every
     /// span command answers the same two switches (`--subagents` / `--no-subagents`).
-    #[arg(long = "subagents", conflicts_with = "no_subagents")]
+    #[arg(
+        long = "subagents",
+        conflicts_with = "no_subagents",
+        verbatim_doc_comment
+    )]
     pub subagents: bool,
 
     /// Emit JSON (a header, one object per image or extracted file, a summary) instead of the
     /// text listing.
-    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+    #[arg(long, value_enum, default_value_t = OutputFormat::Text, verbatim_doc_comment)]
     pub format: OutputFormat,
 }
 
@@ -236,78 +242,83 @@ pub struct PlanArgs {
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
-        value_parser = parse_project_target
+        value_parser = parse_project_target,
+        verbatim_doc_comment
     )]
     pub paths: Vec<PathBuf>,
 
     /// Also scope to the session ids in FILE (`-` reads stdin). The ids are whitespace- or
-    /// newline-separated uuid, uuid-prefix or agent-id tokens, bare or `@`-prefixed, exactly
-    /// as csift emits them (`search -l`, JSON `transcript_ids` / `parent_session_id`). They
-    /// are unioned with the positional targets, and each id resolves fail-loud like an `@`
+    /// newline-separated uuid, uuid-prefix or agent-id tokens, bare or `@`-prefixed, exactly as
+    /// csift emits them (`search -l`, JSON `transcript_ids` / `parent_session_id`). They are
+    /// unioned with the positional targets, and each id resolves fail-loud like an `@`
     /// positional. An EMPTY list (an upstream stage that found nothing) scopes to NOTHING. The
-    /// result is an honest empty one with exit 0, never a silent widening to every project.
-    /// The resolved ids then follow this command's normal span rules, exactly as `@`
-    /// positionals would. On the span-by-default commands each session EXPANDS to its subagent
-    /// transcripts, and `--no-subagents` pins the scope to exactly the listed ids.
-    #[arg(long = "sessions-from", value_name = "FILE|-")]
+    /// result is an honest empty one with exit 0, never a silent widening to every project. The
+    /// resolved ids then follow this command's normal span rules, exactly as `@` positionals
+    /// would. On the span-by-default commands each session EXPANDS to its subagent transcripts,
+    /// and `--no-subagents` pins the scope to exactly the listed ids.
+    #[arg(long = "sessions-from", value_name = "FILE|-", verbatim_doc_comment)]
     pub sessions_from: Option<std::path::PathBuf>,
 
     /// REVERSE lookup: given a PLAN FILE, find the sessions BOUND to it, the inverse of the
     /// default session-to-plan direction. It scans the resolved scope (every project by
     /// default, or narrow it with a PATH target) and resolves each transcript's binding by the
-    /// same two laws the forward direction uses. The first is its latest `plan_mode`
-    /// attachment's path. The second, when it carries none, is `<plans-dir>/<slug>.md` from
-    /// its first valid slug, and `<slug>-agent-<agent id>.md` for a subagent transcript, so
-    /// the session's plan file does not list its subagents. It prints each session or
-    /// subagent id whose binding names this exact plan file, and JSON carries each one's
-    /// `binding_source` (`plan_mode` | `slug-only`). A forked or background session binds by
-    /// its slug alone, so it is found here too. Use it when you hold a plan file (from
+    /// same two laws the forward direction uses. The first is its latest
+    /// `plan_mode` attachment's path. The second, when it carries none, is
+    /// `<plans-dir>/<slug>.md` from its first valid slug, and `<slug>-agent-<agent id>.md` for
+    /// a subagent transcript, so the session's plan file does not list its subagents. It prints
+    /// each session or subagent id whose binding names this exact plan file, and JSON carries
+    /// each one's `binding_source` (`plan_mode` | `slug-only`). A forked or background session
+    /// binds by its slug alone, so it is found here too. Use it when you hold a plan file (from
     /// `~/.claude/plans/`, for example) and need the conversation that owns it. The path is
     /// matched by absolute identity, and relative or `~` inputs are absolutized first.
-    #[arg(long, value_name = "PLAN_FILE")]
+    #[arg(long, value_name = "PLAN_FILE", verbatim_doc_comment)]
     pub reverse: Option<PathBuf>,
 
     /// AUDIT the target scope's PLAN-FILE edits against plan BINDINGS. It finds every
     /// structured mutation (Write/Edit/MultiEdit/NotebookEdit) the scope made to a file that
     /// SOME session binds as its plan, and WARNS when the mutating session does not bind that
     /// file itself. This matters because after a compaction only the session's own BOUND plan
-    /// is re-injected in full, and content parked in another session's plan file does not
-    /// come back. Plan files are identified by JOINING against the corpus's plan_mode
-    /// bindings (one prefiltered scan of every project). A plans directory is never guessed,
-    /// since plansDirectory is configurable. Bash-side edits are outside this audit, which
-    /// reads structured tools only.
+    /// is re-injected in full, and content parked in another session's plan file does not come
+    /// back. Plan files are identified by JOINING against the corpus's plan_mode bindings (one
+    /// prefiltered scan of every project). A plans directory is never guessed, since
+    /// plansDirectory is configurable. Bash-side edits are outside this audit, which reads
+    /// structured tools only.
     ///
     /// Each binding in scope is also QUALIFIED by four facts its own records carry. (a) The
     /// slug's CHANGE POINTS. `slug  L<n>  none -> <value>` is the mint, and `<a> -> <b>` reads
     /// as the binding having MOVED. The binding csift reports is the harness's, and this says
-    /// when it became so. Every measured transcript has exactly one change point, so two
-    /// is news. (b) Whether the bound plan file is on disk, the same `[exists]`/`[missing]`
+    /// when it became so. Every measured transcript has exactly one change point, so two is
+    /// news. (b) Whether the bound plan file is on disk, the same `[exists]`/`[missing]`
     /// verdict the forward view prints. `[missing]` is an ordinary state, because the name is
-    /// minted at Plan Mode entry and the file lands only when content is first written.
-    /// (c) A `plan_file_reference` attachment (the post-compaction re-injection of the bound
-    /// plan's whole content) present while NO record carries a slug. That is plan text with
-    /// nothing bound to it, which nothing will re-inject. It is a warning with no corpus
-    /// specimen, kept because the fork path that strips a slug can produce it. (d) The first
-    /// slug-carrying record against the plan file's BIRTH instant. `before` is the ordinary
-    /// order, and `after` means this transcript bound a file that already existed. `unknown`
-    /// names its reason (no file, no timestamp, or a platform that records no birth time) and
-    /// guesses no direction.
-    #[arg(long, conflicts_with = "reverse")]
+    /// minted at Plan Mode entry and the file lands only when content is first written. (c) A
+    /// `plan_file_reference` attachment (the post-compaction re-injection of the bound plan's
+    /// whole content) present while NO record carries a slug. That is plan text with nothing
+    /// bound to it, which nothing will re-inject. It is a warning with no corpus specimen, kept
+    /// because the fork path that strips a slug can produce it. (d) The first slug-carrying
+    /// record against the plan file's BIRTH instant. `before` is the ordinary order, and
+    /// `after` means this transcript bound a file that already existed. `unknown` names its
+    /// reason (no file, no timestamp, or a platform that records no birth time) and guesses no
+    /// direction.
+    #[arg(long, conflicts_with = "reverse", verbatim_doc_comment)]
     pub audit: bool,
 
-    /// Exclude subagent transcripts. Forward, only the top-level session's bound plan
-    /// resolves. Reverse, only top-level bindings are listed.
-    #[arg(long = "no-subagents")]
+    /// Exclude subagent transcripts. Forward, only the top-level session's bound plan resolves.
+    /// Reverse, only top-level bindings are listed.
+    #[arg(long = "no-subagents", verbatim_doc_comment)]
     pub no_subagents: bool,
 
     /// Span subagent transcripts. This is the DEFAULT here. The explicit flag exists so every
     /// span command answers the same two switches (`--subagents` / `--no-subagents`).
-    #[arg(long = "subagents", conflicts_with = "no_subagents")]
+    #[arg(
+        long = "subagents",
+        conflicts_with = "no_subagents",
+        verbatim_doc_comment
+    )]
     pub subagents: bool,
 
-    /// Emit NDJSON (a header, one object per resolved plan, a summary) instead of the
-    /// headered text format.
-    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+    /// Emit NDJSON (a header, one object per resolved plan, a summary) instead of the headered
+    /// text format.
+    #[arg(long, value_enum, default_value_t = OutputFormat::Text, verbatim_doc_comment)]
     pub format: OutputFormat,
 }
 
