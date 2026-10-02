@@ -13,9 +13,14 @@ use super::*;
     about = "List sessions with times, first and last genuine user message, last agent message",
     long_about = "\
 List sessions, each with a quick identity read WITHOUT parsing the whole file. For every
-session jsonl under the target(s) a row gives the session id, the FIRST genuine-user message,
-the LAST genuine-user message and the LAST agent message, each with its time. It adds the
-decoded cwd, the git branch and the Claude Code version.
+session jsonl under the target(s) a row gives the session id, the FIRST and LAST
+genuine-user message and the LAST agent message, each with its time. It adds the decoded
+cwd, the git branch and the Claude Code version.
+
+A genuine-user message is one the person typed. Claude Code also writes `type:\"user\"`
+records that are none. A tool result rides on one, the harness writes text into the turn
+on one it flags `isMeta` (\"Continue from where you left off.\"), and a compaction summary
+is one. None of those counts.
 
 `git_branch` and `version` are LAST-seen, so they say what the session is on NOW. A session
 that upgraded or switched branches mid-flight reports the current value, with the opening
@@ -29,10 +34,7 @@ transcripts. Files are scanned in parallel across the corpus, then sorted for de
 output.
 
 A PATH is either a real cwd, which csift path-encodes, or an already-encoded `-Users-...`
-token. With no PATH, every project is listed.
-
-Genuine-user excludes tool_result carriers, isMeta pseudo-turns (\"Continue from where you
-left off.\") and compaction summaries.",
+token. With no PATH, every project is listed.",
     after_help = "\
 EXAMPLES
   csift list                                                 # every session, all projects
@@ -54,7 +56,7 @@ SCOPE
   the plain `SESSION  <uuid>` header.
 
 JSON SCHEMA (--format json)
-  The standard envelope v2, the same as every command's. A header line comes first:
+  The standard envelope. A header line comes first:
 
     {kind:\"header\", command:\"list\", sessions_in_scope, top_level_sessions,
      subagent_sessions}
@@ -76,6 +78,15 @@ JSON SCHEMA (--format json)
   to re-feed. `first_user`, `last_user` and `last_agent` are {excerpt, ts_utc, ts_local}
   sub-objects, or null when absent. `dropped_by_cap` is above 0 when the unscoped-flood cap
   trimmed rows, and the most recent 50 are the ones kept.
+
+  Three keys report the elicitation file, `elicitations.jsonl` in the session's sidecar
+  directory (the `<session-id>/` folder beside its transcript). A hook writes a pending
+  AskUserQuestion, ExitPlanMode or MCP prompt there, because the transcript shows none of
+  them until it is answered. `sidecar_present` is true when that file exists, which says
+  the hook is installed, so true with nothing pending means the session waits on no such
+  prompt and false means csift cannot tell. `pending_elicitations` lists the prompts still
+  unanswered, one rendered line each, and `with_elicitation_sidecar` is true when that list
+  is not empty. All three read false or empty on a subagent row, which has no such file.
 
 DUPLICATE COPIES (`also_at` / `duplicate_relation`, text row `copies`)
   One session id can be on disk under TWO project directories. A renamed project whose
@@ -101,13 +112,27 @@ DUPLICATE COPIES (`also_at` / `duplicate_relation`, text row `copies`)
   dropped nothing reads 0 in the first two, exactly like an ordinary scope. The resolver
   also names every merge on stderr. A dropped copy is read by targeting its `*.jsonl` path.
 
+LINEAGE
+  A row can carry four links to other sessions. Two are inferred, the CLONE lineage
+  (`is_clone`, `clone_of`) and the CLEAR lineage (`cleared_from`). Two are stated by
+  Claude Code itself, the BACKGROUND HANDOFF (`continued_in`) and MINTED ELSEWHERE
+  (`minted_elsewhere`). They are independent, and one row can carry all four.
+
+CLONE LINEAGE (an inference, and the row says so)
+  A transcript whose FIRST timestamped record is a compaction boundary was minted by
+  COPYING another session at that compaction, which is what a background fork does.
+  `is_clone` is then true, `clone_boundary_uuid` names that boundary, and `clone_of` names
+  the session in the same project directory that carries the same boundary, or null when
+  none does (text row `clone`). The copy keeps its origin's records, so every command that
+  spans both sessions counts those records twice until one of the two is scoped away.
+
 CLEAR LINEAGE (an inference, and the row says so)
   A `/clear` mints a new session id inside the same process and writes no lineage anywhere
   on disk, so a cleared transcript names no predecessor. csift reads two facts instead.
 
   A transcript whose FIRST non-isMeta user record is the `/clear` wrapper was minted by that
   clear (`minted_by:\"clear\"`, text row `cleared`). Its predecessor is the sibling in the
-  same project directory whose cost-ledger checkpoint closes within 2000 ms of the
+  same project directory whose cost checkpoint closes within 2000 ms of the
   wrapper's timestamp. A checkpoint closes at `startTime + totalDuration` on a `cost-state`
   line. The join goes in `cleared_from`, with the distance in `cleared_from_distance_ms`.
 
@@ -116,15 +141,15 @@ CLEAR LINEAGE (an inference, and the row says so)
   time adjacency of ordinary records, because two busy sessions share those.
 
 BACKGROUND HANDOFF (`continued_in`, text row `handoff`), a STATED fact
-  When a session is handed to a background child (the left-arrow gesture, or the
+  When a session is handed to a background child (Claude Code's left-arrow gesture, or its
   background-fork command), Claude Code appends a `type:\"continued-in\"` line to the PARENT
-  transcript naming the child's session id. The clone lineage (`is_clone`, `clone_of`) and
-  the clear lineage are inferred, and this one is not. The harness writes the child id
-  itself, and csift reports it verbatim in `continued_in` (text:
-  `handoff  continued in <first8> ...`).
+  transcript naming the child's session id. Unlike the clone and clear lineage, nothing
+  here is inferred. The harness writes the child id itself, and csift reports it verbatim
+  in `continued_in` (text: `handoff  continued in <first8> ...`).
 
-  The line carries four keys and no `uuid`, so it is not a chain node and its only address
-  is its jsonl line. An in-place `/fork` writes no such line, so its absence never means the
+  The line carries four keys and no `uuid`, so it is no part of the conversation chain (the
+  global `--cross-compactions` entry says what the chain is) and its only address is its
+  jsonl line. An in-place `/fork` writes no such line, so its absence never means the
   session was not forked.
 
   WINDOW LIMIT. The line is written after the last conversation record, so the backward
@@ -151,18 +176,20 @@ LANE LINEAGE (`session_kind`, text row `lane`)
 MINTED ELSEWHERE (`minted_elsewhere`, text row `minted`), a STATED fact
   A record carries TWO session ids under two spellings. The local writer stamps `sessionId`
   on everything it appends and never touches a snake-case `session_id`, which belongs to
-  the Remote Control bridge's event envelope. So the two agree on every record this session
-  minted, and they differ exactly on a record hydrated here from another session's stream.
+  the event envelope of Claude Code's Remote Control bridge (the connection that relays a
+  session's events to another session). So the two agree on every record this session
+  minted, and they differ exactly on a record copied into this file from another session's
+  event stream.
 
   Where they differ, `minted_elsewhere` reports the session the record OBJECT was minted in.
   It is a SET, with `minted_elsewhere_count` beside it, because one transcript can hold runs
-  from more than one session and a single value would drop the rest in silence. It is the
-  fourth lineage link a row can carry, and the only one a RECORD states about itself, so
-  the row carries no inference wording.
+  from more than one session and a single value would drop the rest in silence. Of the four
+  lineage links it is the only one a RECORD states about itself, so the row carries no
+  inference wording.
 
-  It needs `--lineage`, like the `session_kind` span. A hydrated run sits wherever the
-  bridge put it, and on the measured specimens one file's run starts below the head window.
-  A window read would be right on one file and silently empty on the next.
+  It needs `--lineage`, like the `session_kind` span. A copied run sits wherever the bridge
+  put it, and it can start below the head window, so a window read would be right on one
+  file and silently empty on the next.
 
 SKIPPED_LINES (a window census)
   The count covers the read windows and gives no whole-file verdict. `list` reads only the
@@ -172,10 +199,10 @@ SKIPPED_LINES (a window census)
   The full-scan corruption census over the same bytes is `csift stats`, and every full-scan
   command (search, files, recover) agrees with it.
 
-  Within the read windows every malformed line, and every sidecar marker the current schema
-  cannot read, is booked exactly once. `--lineage` does NOT widen this count. Its pass is a
-  key walk with no record parse, so it has no parse failure to report and cannot book a
-  line the windows already booked.
+  Within the read windows every malformed line, and every elicitation-file entry the current
+  schema cannot read, is booked exactly once. `--lineage` leaves this count as it is. Its
+  pass reads each line's top-level keys and parses no record, so it has no parse failure to
+  report and cannot book a line the windows already booked.
 
   ENCODING is not malformity. A line whose JSON is sound while its bytes are invalid UTF-8
   is decoded LOSSILY and counted as a record, never as a malformed line. The undecodable
@@ -248,9 +275,10 @@ pub struct ListArgs {
     /// reads (head and tail, never a full scan).
     ///
     /// WHEN is ISO8601 or relative. A bare date means local midnight, a bare datetime means
-    /// LOCAL wall-clock time, and `Z` or `+10:00` is explicit. A relative WHEN such as `45s`,
-    /// `90m`, `2h`, `3d` or `1w` means that long ago. A session with no readable timestamp
-    /// never matches a bounded window.
+    /// LOCAL wall-clock time, and `Z` or `+10:00` is explicit. A relative WHEN is N units
+    /// AGO, in seven units, `s` seconds, `m` minutes, `h` hours, `d` days, `w` weeks, `mo`
+    /// months (30 days) and `y` years (365 days), as in `45s`, `90m`, `2h`, `3d`, `1w`,
+    /// `2mo` or `1y`. A session with no readable timestamp never matches a bounded window.
     #[arg(long, value_name = "WHEN", verbatim_doc_comment)]
     pub since: Option<String>,
 
@@ -258,9 +286,8 @@ pub struct ListArgs {
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
-    /// Exclude subagent transcripts and list only the top-level `<uuid>.jsonl` sessions,
-    /// the behavior from before subagents were spanned. Subagent transcripts are spanned
-    /// by default.
+    /// Exclude subagent transcripts and list only the top-level `<uuid>.jsonl` sessions.
+    /// Subagent transcripts are spanned by default.
     #[arg(long = "no-subagents", verbatim_doc_comment)]
     pub no_subagents: bool,
 
@@ -287,9 +314,9 @@ pub struct ListArgs {
     ///   `minted_elsewhere`, a run of records hydrated from another session, which can sit
     ///   anywhere between the two windows.
     ///
-    /// The pass is ONE depth-1 key walk per file that never parses a payload. It adds
-    /// nothing to `skipped_lines`, whose meaning stays "the head/tail lines read", and the
-    /// whole-file corruption census is still `csift stats`.
+    /// The pass reads the top-level keys of every line in the file and parses no record
+    /// body. It adds nothing to `skipped_lines`, whose meaning stays "the head/tail lines
+    /// read", and the whole-file corruption census is still `csift stats`.
     #[arg(long = "lineage", verbatim_doc_comment)]
     pub lineage: bool,
 
