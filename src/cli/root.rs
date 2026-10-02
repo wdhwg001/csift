@@ -16,50 +16,64 @@ use super::*;
         person or a model, and `--format json` is the machine form.\n\n\
         Matching is pure regex, as in ripgrep. There is no BM25, no embedding and no semantic\n\
         search, by design.\n\n\
+        A lane is one running Claude Code conversation, the top-level session or one subagent,\n\
+        each with its own transcript.\n\n\
         SUBCOMMANDS\n  \
-          list     a fast \"which session is this?\" index showing the first and last user\n           \
-                   message and the last agent message\n  \
+          list     a fast \"which session is this?\" index giving per session its times, the\n           \
+                   first and last message the person typed, and the last agent message\n  \
           search   regex search over transcripts that returns the complete round-trip\n           \
                    exchange of each hit\n  \
           show     fetch the records you name in ONE transcript, by `--line`, `--turn` or\n           \
                    `--uuid`, rendered in full or as `--raw` bytes. `--turn -3..` fetches the\n           \
-                   last 3 turns (the live-tail peek).\n  \
-          stats    one-scan aggregates per session (tokens by model, tool calls, turns, span)\n  \
-          whoami   identify the calling Claude Code session from $CLAUDE_CODE_SESSION_ID\n  \
+                   last 3 turns (the live-tail peek), and `--branch-points` lists where the\n           \
+                   conversation forked.\n  \
+          stats    one-scan aggregates per session, counting records, turns, tool calls by\n           \
+                   name, tokens by model, time span, compactions, and the turns that were\n           \
+                   abandoned or rewound\n  \
+          whoami   identify the calling Claude Code session from $CLAUDE_CODE_SESSION_ID, or\n           \
+                   from $CODEX_COMPANION_SESSION_ID when that is unset\n  \
           agents   list a session's subagents with kind, start and completion time and\n           \
                    status, filtered by a time window\n  \
           files    the files and directories a session modified, and when (Edit, Write and\n           \
                    Notebook calls, plus a heuristic reading of Bash)\n  \
           recover  reconstruct a file's history from the transcript as segmented\n           \
                    diff-patches, a point-in-time partial snapshot, or a coverage scope\n  \
-          plan     locate the Plan-Mode plan file bound to a session (`recover --file @plan`\n           \
-                   prints its text)\n  \
+          plan     locate the Plan-Mode plan file bound to a session. That is the path its\n           \
+                   `plan_mode` attachment names or, with no attachment, the file named by the\n           \
+                   first plan slug its records carry (the first-slug law).\n           \
+                   `recover --file @plan` prints the plan's text.\n  \
           verbatim restore, within a character budget, the verbatim user/assistant\n           \
                    back-and-forth a compaction summary CLIPPED. The live-tail peek is\n           \
                    `show --turn`.\n  \
-          image    list and extract the inline images a session carries (pastes and\n           \
-                   screenshots)\n  \
+          image    list the inline images a session carries (pastes and screenshots) and\n           \
+                   extract them to files\n  \
           status   a one-shot LIVE verdict on a session, with the evidence named. The verdict\n           \
-                   is one of running, waiting-children, waiting-hitl, idle-background-open,\n           \
-                   idle-eot, stale-dead or unknown.\n  \
-          wait     block until a session condition fires (stop, hitl, auq, notification,\n           \
-                   tool:, write:, verdict:). Exits 124 when --timeout elapses.\n  \
+                   is one of running, waiting-children, waiting-hitl (a dialog waits on a\n           \
+                   person, so a human is in the loop), idle-background-open, idle-eot (idle at\n           \
+                   the end of a turn), stale-dead or unknown.\n  \
+          wait     block until a session condition fires. The conditions are stop, hitl,\n           \
+                   auq (an AskUserQuestion is waiting for its answer), notification, tool:,\n           \
+                   write: and verdict:. Exits 124 when --timeout elapses.\n  \
           send     queue a message for ONE lane on the csift channel, carried by a\n           \
                    `csift deliver` hook the user installed. Each send prints one verdict.\n           \
                    An official send is printed for you to make and never performed.\n  \
-          msg      reconcile one csift-channel message, joining the ledger's INTENT to the\n           \
-                   receiver transcript's FACT in one verdict. With no id it lists the\n           \
-                   lane's ledger.\n  \
+          msg      reconcile one csift-channel message, joining the INTENT in csift's ledger\n           \
+                   (`csift-channel/ledger/<lane>.jsonl`) to the receiver transcript's FACT in\n           \
+                   one verdict. With no id it lists the lane's ledger.\n  \
           ack      record that the calling lane READ a channel message (appends an ack line)\n  \
           deliver  the hook entry. Claude Code calls it through the installed hook. By hand\n           \
                    you run only `--recipe`, which prints the block you paste.\n\n\
-        Most commands read a session's subagent transcripts too. list, search, stats, files,\n\
-        recover, plan, image, status and wait span them by default (built-in Task/Agent-tool\n\
-        agents, OMC agents and Workflow agents), and `--no-subagents` restricts them to\n\
-        top-level sessions. `verbatim` is the exception among the file-operating commands. It\n\
-        reads only the TOP-LEVEL thread by default (single-thread recovery), opts INTO\n\
-        spanning with `--subagents`, and REQUIRES a target. `agents` LISTS subagents as its\n\
-        targets instead of spanning them as inputs, so it rejects both span flags.\n\n\
+        Most commands read a session's subagent transcripts too. Those live in the session's\n\
+        sidecar directory, the `<session-id>/` folder beside its transcript, which also holds\n\
+        externalised tool output (`tool-results/`), the elicitation file (`elicitations.jsonl`)\n\
+        and csift's channel files (`csift-channel/`). Agents the Task or Agent tool started sit\n\
+        under `subagents/`, and workflow agents under `subagents/workflows/<run>/`. list, search,\n\
+        stats, files, recover, plan, image, status and wait span them by default, and\n\
+        `--no-subagents` restricts them to top-level sessions. `verbatim` is the exception among\n\
+        the file-operating commands. It reads only the TOP-LEVEL thread by default (single-thread\n\
+        recovery), opts INTO spanning with `--subagents`, and REQUIRES a target. `agents` LISTS\n\
+        subagents as its targets instead of spanning them as inputs, so it rejects both span\n\
+        flags.\n\n\
         TARGETS\n  \
           A target is always a positional argument. With no target, every project under\n  \
           ~/.claude/projects is scanned.\n\n    \
@@ -88,19 +102,19 @@ use super::*;
           TIMING. A subagent's transcript flushes per content block, so its command is on disk\n  \
           at dispatch and a first try resolves. The MAIN conversation's record is an async\n  \
           flush of the completed assistant message, landing about 1 to 3.4 s after dispatch.\n  \
-          A top-level FIRST use races that flush and normally misses. From the main thread use\n  \
-          `@main` instead (it reads the environment and has no race), or re-run the SAME\n  \
-          command with the SAME marker.\n\n  \
-          DISCIPLINE (enforced). Invent the marker yourself, once, right now. It is an\n  \
-          imaginative, literary, random, CONTEXT-INDEPENDENT token of EXACTLY 3 CamelCase\n  \
-          words and 4 random digits, shaped like `@trap:JollyShinyBrook4283`. That exact\n  \
-          literal is the RESERVED doc example and csift refuses it, because a copied example\n  \
-          collides with itself into ambiguity. Invent your OWN.\n    \
-            - NEVER generate it with a script. The generator would be another `csift`-like\n      \
-              command carrying the marker, and the match would be ambiguous.\n    \
-            - Never build it from a shell variable or by string concatenation. It must\n      \
-              appear VERBATIM in the recorded command.\n    \
-            - Never reuse a previous one.\n  \
+          A top-level FIRST use races that flush and normally misses. From the main thread\n  \
+          `@main` answers with no race (it reads the environment), and a re-run of the SAME\n  \
+          command with the SAME marker resolves.\n\n  \
+          THE MARKER (csift checks its shape). A marker is invented by hand, once, for this\n  \
+          one command. It is an imaginative, literary, random, CONTEXT-INDEPENDENT token of\n  \
+          EXACTLY 3 CamelCase words and 4 random digits, shaped like\n  \
+          `@trap:JollyShinyBrook4283`. That exact literal is the RESERVED doc example and\n  \
+          csift refuses it, because a copied example collides with itself into ambiguity.\n    \
+            - A marker generated by a script never resolves. The generator is another\n      \
+              `csift`-like command carrying the marker, so the match is ambiguous.\n    \
+            - A marker built from a shell variable or by string concatenation does not appear\n      \
+              VERBATIM in the recorded command, so nothing matches it.\n    \
+            - A reused marker also matches the earlier command that carried it.\n  \
           csift REJECTS lazy markers: not EXACTLY 3 words, single-letter or ALLCAPS \"words\"\n  \
           (`HTML`, `USB`, ...), not exactly 4 trailing digits, or trivial digits (1111, 1234,\n  \
           9876, 1357, 2468).",
@@ -129,13 +143,14 @@ use super::*;
             empty, exit 0. A zero-match search also prints a diagnosis on stderr that says\n    \
             what was searched and, under a label filter, where the pattern DOES occur.\n    \
             A write that cannot LAND is an ordinary error too. Pipe csift into a reader that\n    \
-            goes away (`| head`), and every surface whose rows go through the shared output\n    \
-            buffer reports `csift: error: Broken pipe` and exits 1. It still exits 1 under\n    \
-            `2>&1`, where that line shares the closed pipe and is lost. The surfaces that\n    \
-            still print row by row abort with 101 and a std panic message, with a backtrace\n    \
-            only under `RUST_BACKTRACE=1`. The rule follows the WRITER that makes the failing\n    \
-            write, never the subcommand. On a buffered surface a stderr note that cannot land\n    \
-            is dropped, and the run does not abort.\n\n  \
+            goes away (`| head`), and a command that buffers its output reports\n    \
+            `csift: error: Broken pipe` and exits 1. The buffered ones are `search` (except\n    \
+            `-c`, `-l` and `--count-by`), `show` (except `--branch-points`), `files`, `agents`,\n    \
+            `image` and `verbatim`. A buffered command still exits 1 under `2>&1`, where that\n    \
+            line shares the closed pipe and is lost. Every other command prints row by row and aborts with\n    \
+            101 and a std panic message, with a backtrace only under `RUST_BACKTRACE=1`. On a\n    \
+            buffered command a stderr note that cannot land is dropped, and the run does not\n    \
+            abort.\n\n  \
           Ranges\n    \
             Every range flag shares one grammar, `N | A..B | N.. | ..N | .. | -k`, with\n    \
             inclusive endpoints. `-k` counts from the end, so `-3..` means \"the last 3\".\n    \
@@ -158,16 +173,18 @@ use super::*;
               - A copy csift could not READ stays in scope too, and the stderr note names it\n        \
                 with the error. A command that reads every file in its scope then dies on\n        \
                 that copy, after the note and before its own header. `agents` opens a session\n        \
-                file only through its sidecar, so it never reads a copy with no sidecar\n        \
-                directory beside it, and that run finishes normally.\n    \
-            Every merge is named on stderr and counted in the JSON header\n    \
+                file only through its sidecar directory, so it never reads a copy with no\n        \
+                sidecar directory beside it, and that run finishes normally.\n    \
+            Every merge is named on stderr. The JSON header of `list`, `search`, `stats`,\n    \
+            `files`, `recover`, `verbatim`, `image` and `agents` counts it\n    \
             (`duplicate_transcripts`, `duplicate_records_dropped`), beside the copies it did\n    \
             NOT merge (`divergent_transcripts`) and the ones it could not read\n    \
             (`unreadable_transcripts`). `show` still refuses an address that resolves to two\n    \
-            files. Target a `*.jsonl` path to read one copy. A path reads the file it names,\n    \
-            never another copy of its id, and names the others on stderr. One agent id can\n    \
-            also sit at BOTH sidecar locations of one session, the built-in one and a workflow\n    \
-            run's (its conversation continued there). The same rule reads both and names both.\n\n  \
+            files. A `*.jsonl` path reads one copy, the file it names, never another copy of\n    \
+            its id, and it names the others on stderr. One agent id can also sit in BOTH\n    \
+            subagent folders of one sidecar directory, `subagents/` and a workflow run's\n    \
+            `subagents/workflows/<run>/` (its conversation continued there). The same rule\n    \
+            reads both and names both.\n\n  \
           Caps\n    \
             Nothing is truncated silently. Every cap prints what it dropped and how to get the\n    \
             rest. `list` caps an unscoped run at 50 rows. `show` caps at 200 record units and\n    \
@@ -197,25 +214,24 @@ use super::*;
           - An empty pattern (\"\") matches EVERYTHING. It is the base for -t, time and turn\n    \
             filters, and the on-ramp to a census (`csift search \"\" <target> --count-by label`).\n  \
           - `search -c` counts round-trip EXCHANGES, never records or lines. Per-record counts\n    \
-            come from `--count-by <axis>`, and `stats`' tool tallies count each CALL. These are\n    \
-            three units (exchange, record, call). A `--count-by tool` reading about twice a\n    \
-            `stats` tally (the use plus its result carrier) is that unit difference and\n    \
-            nothing more.\n  \
+            come from `--count-by <axis>`, and `stats`' tool tallies count each CALL. So a\n    \
+            `--count-by tool` reading runs about twice a `stats` tally, since it counts the tool\n    \
+            use and the record carrying its result as two records.\n  \
           - `search -l` prints the owning SESSION uuids, which is what `--sessions-from -`\n    \
-            consumes. The JSON summary's `transcript_ids` is the finer per-transcript list.\n    \
-            The two answer different questions.\n  \
+            consumes. The JSON summary's `transcript_ids` is the finer per-transcript list,\n    \
+            with a subagent's own id where the hit sat in a subagent.\n  \
           - Line numbers are per FILE. Fetch a subagent's line at the subagent's own id, never\n    \
             at the parent uuid. The printed `refetch` command already gets this right.\n  \
           - Reading recent turns is `show <target> --turn -3..`. `verbatim` is only for turns\n    \
             a compaction summary already clipped, and it tells you when nothing was.\n  \
           - A pending AskUserQuestion, ExitPlanMode or MCP prompt is invisible in the\n    \
-            transcript until it is answered. csift merges pending ones from a hook-written\n    \
-            sidecar when one is present, and `list` reports `sidecar_present`, so \"nothing\n    \
-            pending\" and \"no hook installed\" read differently. A sidecar entry is dropped\n    \
-            automatically when the NATIVE transcript already shows its elicitation closed,\n    \
-            because the native record outranks the sidecar. A REJECTED plan is one such case.\n    \
-            Claude Code fires no PostToolUse for a rejection, so the hook never wrote its\n    \
-            resolved marker.\n  \
+            transcript until it is answered. When a hook writes them to the elicitation file\n    \
+            (`elicitations.jsonl` in the sidecar directory), csift merges the pending ones in,\n    \
+            and `list` reports `sidecar_present`, so \"nothing pending\" and \"no hook installed\"\n    \
+            read differently. An entry of that file is dropped automatically when the NATIVE\n    \
+            transcript already shows its elicitation closed, because the native record\n    \
+            outranks the file. A REJECTED plan is one such case. Claude Code fires no\n    \
+            PostToolUse for a rejection, so the hook never wrote its resolved marker.\n  \
           - A text-mode excerpt is ONE LINE per record. Whitespace runs collapse to single\n    \
             spaces, so a multiline Bash command renders flat, and `--no-truncate` alone will\n    \
             not bring a table or a paragraph break back. The JSON `body` keeps the newlines of\n    \
@@ -225,9 +241,9 @@ use super::*;
             An opener csift RECONSTRUCTS (a user message, an answered AskUserQuestion, a\n    \
             rejection) is flattened a layer earlier. Its `body` is flat even then, and `--raw`\n    \
             is the only way to its bytes.\n  \
-          - To bound the OUTPUT, use `--max-count`. A capped run keeps every note and names\n    \
-            what it dropped, while a pipe into `head` or `tail` amputates one end of the\n    \
-            ledger.\n\n\
+          - `--max-count` bounds the OUTPUT. A capped run keeps every note and names what it\n    \
+            dropped, while a pipe into `head` or `tail` cuts off one end of the output and\n    \
+            the footer notes with it.\n\n\
         THE CHANNEL (send / msg / ack / deliver)\n  \
           The channel carries a message between Claude Code lanes, and into one from any\n  \
           process outside Claude Code. It exists because the official channel is structurally\n  \
@@ -253,10 +269,11 @@ use super::*;
           - Terminating anything.\n\n\
         WHAT csift WRITES\n  \
           Every command reads. Two kinds of command also write. The channel three (`send`,\n  \
-          `deliver` and `ack`) write the csift-owned `<session>/csift-channel/` and nothing\n  \
-          else. They never write a transcript, the team mailbox, the messaging socket, the\n  \
-          session registry or a settings file. Arming the channel is an edit you make\n  \
-          yourself. Three commands also write the file YOU name with an output flag.\n    \
+          `deliver` and `ack`) write the csift-owned `csift-channel/` folder of a session's\n  \
+          sidecar directory and nothing else. They never write a transcript, the team\n  \
+          mailbox, the messaging socket, the session registry or a settings file. Arming the\n  \
+          channel is an edit you make yourself. Three commands also write the file YOU name\n  \
+          with an output flag.\n    \
             recover --out <PATH>     the reconstructed artifact. It replaces the file, and\n                             \
                                      leaves it untouched when nothing was reconstructed.\n    \
             verbatim --out <PATH>    the rendered reconstruction, under the same rule\n    \
@@ -267,8 +284,8 @@ use super::*;
                                      unless `--force`.\n\n\
         RETENTION\n  \
           Claude Code deletes transcripts older than `cleanupPeriodDays` (default 30!).\n  \
-        Check `jq '.cleanupPeriodDays // 30' ~/.claude/settings.json` and consider raising\n  \
-        it. csift can only read what survives.\n\n\
+          `jq '.cleanupPeriodDays // 30' ~/.claude/settings.json` prints the current value,\n  \
+          and a larger value keeps transcripts longer. csift can only read what survives.\n\n\
         `csift <subcommand> --help` gives each subcommand's flags, JSON schemas and examples."
 )]
 pub struct Cli {
@@ -293,50 +310,58 @@ pub struct Cli {
     )]
     pub claude_home: Option<PathBuf>,
 
-    /// How many compaction boundaries the survival walk may step OVER, following the
-    /// `logicalParentUuid` each boundary records. It applies to EVERY chain-walking
-    /// subcommand (`search`, `show`, `stats`, `files`, `recover`, `verbatim`, `image`),
-    /// since any of them can be asked about a session that compacted.
+    /// How many compaction boundaries the conversation chain may cross. It applies to EVERY
+    /// subcommand that walks the chain (`search`, `show`, `stats`, `files`, `recover`,
+    /// `verbatim`, `image`), since any of them can be asked about a session that compacted.
     ///
-    /// Claude Code's own loader never crosses. It reads `parentUuid` only, which is null on
-    /// a boundary, so on resume the model sees the summary and not the turns above it.
-    /// csift crosses because a transcript is an archive and the turns above the cut were
-    /// real. The records above a cut belong to the same conversation, and a turn the
-    /// operator rewound past up there is one csift cannot name until the walk reaches it.
-    /// Above a CROSSED boundary, records resolve by the ordinary rules (live or abandoned).
-    /// Above the FLOOR where the walk stopped, they stay `pre-cut`.
+    /// THE CHAIN. Claude Code rebuilds a conversation by picking one leaf record and walking
+    /// its `parentUuid` links back to the head, and only what that walk reaches is the
+    /// conversation. csift calls that walk the chain. A record the walk reaches is `live`. A
+    /// turn opener it does not reach, such as a draft the person recalled or a turn the person
+    /// rewound past, is `abandoned`. A record above a compaction cut that the walk could not
+    /// resolve is `pre-cut`.
     ///
-    /// `0` restores the loader's reading, and csift then says nothing about crossing at
-    /// all. `all` follows every boundary a transcript carries.
+    /// A compaction writes a boundary record whose `parentUuid` is null, so Claude Code's own
+    /// walk ends there, and on resume the model sees the summary and not the turns above it.
+    /// The boundary also names, in `logicalParentUuid`, the record the conversation continued
+    /// from, and csift follows that link across up to N boundaries. It crosses because a
+    /// transcript is an archive and the turns above the cut were real. Above a CROSSED
+    /// boundary, records read `live` or `abandoned` by the same rule as below it, so a turn the
+    /// person rewound past up there gets named. Above the FLOOR, the point where the walk
+    /// stopped, they stay `pre-cut`.
     ///
-    /// `0` ends the walk AT every boundary with no exception. That includes the one shape
-    /// where a BUDGET and a GUARD on the `logicalParentUuid` arm decide differently. A
-    /// boundary whose OWN `parentUuid` is non-null and names no record is climbable by that
-    /// arm as a guard, while a budget of `0` buys no hop at all, so the records above it
-    /// read `pre-cut` instead of resolving. No transcript of the measured corpus (32
-    /// streams over 8 transcripts) carries that shape. On a transcript that does, read both
-    /// budgets and do not assume they agree.
+    /// `0` is Claude Code's own reading. The walk ends AT every boundary, and csift then says
+    /// nothing about crossing at all. `all` follows every boundary a transcript carries.
     ///
-    /// The footer names what was crossed, what was not, and what you can do about the
-    /// rest. It offers a flag value only where raising the flag would MOVE the floor, and
-    /// that takes two conditions together. The BUDGET must be what stopped the walk, and
-    /// the boundary it stopped at must still name a record the file carries. A boundary
-    /// naming a record no line carries is a floor at every budget. The offered value
-    /// promises that every boundary here gets TRIED. It does not promise that every one of
-    /// them opens.
+    /// One shape reads differently at `0` than at any larger budget. It is a boundary whose
+    /// OWN `parentUuid` is non-null and names no record. At any budget above `0` the walk steps
+    /// past it through its `logicalParentUuid`. At `0` it steps nowhere, so the records above it
+    /// read `pre-cut` instead of resolving. On a transcript that carries this shape, the two
+    /// budgets give different readings.
     ///
-    /// The floor's own reason rides JSON as `floor_cause`, which takes EIGHT values.
+    /// The text footer names what was crossed, what was not, and what a larger budget would
+    /// do. It offers a flag value only where raising the flag would MOVE the floor, and that
+    /// takes two conditions together. The BUDGET must be what stopped the walk, and the
+    /// boundary it stopped at must still name a record the file carries. A boundary naming a
+    /// record no line carries is a floor at every budget. The offered value is the budget at
+    /// which every boundary in the file gets TRIED, and a tried boundary can still stop the walk
+    /// for one of the three reasons below.
     ///
-    ///   `budget-exhausted`        the only one a larger budget can move, and only when
-    ///                             that boundary's door is open
+    /// JSON `floor_cause` says why the walk stopped. It takes EIGHT values.
     ///
-    /// THREE mean a boundary whose door is shut, and each names the fact that shut it.
+    ///   `budget-exhausted`        the budget ran out on a boundary. The only cause a larger
+    ///                             budget can move, and only when that boundary still names a
+    ///                             record the walk can step to.
+    ///
+    /// THREE mean a boundary the walk cannot step past at any budget, each named for the fact
+    /// that stops it.
     ///
     ///   `unresolvable-boundary`   its `logicalParentUuid` is on no line of this file
-    ///   `relink-removed`          it is on a line, which you can open, that the
-    ///                             pre-boundary relink cut took out of the uuid map
-    ///   `boundary-loop`           it names a record the walk had already reached, so its
-    ///                             door leads back into the conversation, not above the cut
+    ///   `relink-removed`          its `logicalParentUuid` is on a line you can open, but
+    ///                             before the walk starts Claude Code removes records above a
+    ///                             compaction from the set it walks, and that record was one
+    ///   `boundary-loop`           it names a record the walk had already reached, so stepping
+    ///                             past it leads back into the conversation below the cut
     ///
     /// The remaining four mean the walk ended BELOW the boundaries and never reached them.
     ///
@@ -345,12 +370,9 @@ pub struct Cli {
     ///   `cycle`                   the parent links loop
     ///   `no-leaf`                 nothing resolved, so there is no walk to extend
     ///
-    /// The DEFAULT of 3 is the measured value. On an idle host, budget 3 ran inside the
-    /// same-binary noise band against budget 0 on every one of 95 chain-walking rows (a
-    /// compacted transcript and the 397 MiB landmark, 21 repetitions each). The medians
-    /// were 1.001 and 1.002 and the widest slowdown 10 ms, so the crossing costs nothing a
-    /// clock can see. Pass the number explicitly wherever a reading must not depend on the
-    /// default.
+    /// The DEFAULT is 3. Measured on an idle host, crossing three boundaries took no time a
+    /// clock can tell apart from crossing none. A reading that must not depend on the default
+    /// names the number explicitly.
     #[arg(
         long = "cross-compactions",
         value_name = "N|all",
