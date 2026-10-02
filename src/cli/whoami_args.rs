@@ -36,8 +36,9 @@ use super::*;
         resolved - `self` (its id, both forms for a teammate, its kind and its depth), `parent` \
         (the lane above it, whether that lane is alive, and which channel a reply would take) \
         and `topology` (the live child lanes under it, then how many other live lanes exist). \
-        `--to @<target>` answers the reach question about ANOTHER lane instead, predicting the \
-        channel and the verdict WITHOUT sending anything; `--peers` lists every live lane as \
+        `--to @<target>` asks the reach question about ANOTHER lane, predicting the channel and \
+        the verdict of a send from the lane the positional resolved WITHOUT sending anything; \
+        with no positional the sender is the session the environment names. `--peers` lists every live lane as \
         `id kind state` and nothing else. Nothing on this path writes: a prediction is a read of \
         disk plus the policy table.\n\n\
         FLAG NOTE: whoami's positional is the optional SELF token `@trap:<marker>` / `@main` / a \
@@ -89,7 +90,12 @@ use super::*;
           gate verdicts, the configured and armed delivery slots, a `settings` line naming the\n  \
           cascade all of that was read from (scopes read, scopes absent, inputs that leave no\n  \
           trace), and what a sender would be\n  \
-          told. An AGENT target adds the sentence naming what the prediction is made of - the\n  \
+          told. The sender is the lane the positional resolved, so `csift whoami\n  \
+          @trap:<marker> --to @<target>` gives a subagent the answer a send from its own lane\n  \
+          gets. The positional's sections print first and the prediction follows. With no\n  \
+          positional the sender is the session the environment names, which is the top-level\n  \
+          session in every lane, and a stderr note says the sender was assumed.\n  \
+          An AGENT target adds the sentence naming what the prediction is made of - the\n  \
           transcript tail and a pid probe, not the harness's own state - and the fallback\n  \
           carrier. `--peers` lists every live lane as `id kind state` ONLY: no description, no\n  \
           agent type, no name-as-role, because that is the material one lane uses to claim\n  \
@@ -102,6 +108,7 @@ use super::*;
           csift whoami                  # the calling session's uuid + its jsonl path\n  \
           csift whoami @<agent-id>      # the same three sections for another lane\n  \
           csift whoami --to @<lane>     # would a message reach it? (nothing is sent)\n  \
+          csift whoami @trap:<marker> --to @<lane>   # the same, sent from your own lane\n  \
           csift whoami --peers          # every live lane: id, kind, state\n  \
           csift whoami --format json    # {\"session_id\":\"…\",\"path\":\"…\"}\n  \
           csift whoami @trap:<invent-a-fresh-3word-4digit-marker>   # which SUBAGENT am I? -> upstream chain (self -> ... -> top-level root); the marker is YOURS to invent, never a copied literal\n  \
@@ -119,7 +126,8 @@ use super::*;
         where the caller resolved and 0 where detection failed, which is a different fact\n  \
         from an empty scope; `--to` closes {kind:\"summary\", queued, refused} with `queued`\n  \
         false by construction, since a prediction sends nothing; `--peers` closes\n  \
-        {kind:\"summary\", peers}, the row count.\n\n\
+        {kind:\"summary\", peers}, the row count. A positional with `--to` prints the\n  \
+        positional's rows, then the `reach` row, then ONE summary carrying both key sets.\n\n\
         SEE ALSO\n  \
           csift send @<lane> \"…\"      act on the prediction: queue a message for that lane\n  \
           csift msg                   the calling lane's channel ledger, newest first\n  \
@@ -155,23 +163,17 @@ pub struct WhoamiArgs {
     /// inline JSON handed to Claude Code on its command line, a restricted source set, the
     /// trust dialog, MDM). Takes any `@`-form csift accepts
     /// (`@<uuid>`, a uuid prefix, `@<agent-id>`, `@<Name>@<Team>`, `@main`, `@trap:<marker>`).
+    /// The sender is the lane the SELF positional resolved, so a subagent passes `@trap:<marker>`
+    /// for the answer a send from its own lane would get. With no positional the sender is the
+    /// session the environment names, the top-level session in every lane, and a stderr note
+    /// says the sender was assumed.
     #[arg(
         long = "to",
         value_name = "TARGET",
-        conflicts_with_all = ["peers", "self_target"],
+        conflicts_with = "peers",
         value_parser = parse_lane_target
     )]
     pub to: Option<String>,
-
-    /// The SENDER the `--to` prediction is made for, in `csift send --from`'s grammar: inside
-    /// Claude Code `@<lane>` (`@main`, or the `a...` id `csift agents` prints); outside it a
-    /// free label. Without it a caller inside Claude Code is ASSUMED to be the top-level
-    /// session, because the environment names that session in every lane - and the relation
-    /// between sender and receiver is one of the facts the prediction is decided from, so a
-    /// subagent passes its own id (`csift whoami @trap:<marker>` recovers it) for the answer
-    /// a send from that lane would get. Only with `--to`.
-    #[arg(long, value_name = "LANE|LABEL", requires = "to", value_parser = parse_sender)]
-    pub from: Option<String>,
 
     /// List every LIVE lane under the projects root as `id kind state` and nothing else. A
     /// description, an agent type or a name read as a role is exactly the material one lane

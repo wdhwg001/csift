@@ -531,7 +531,7 @@ fn the_reach_lines_name_the_target_the_caller_and_the_slots_that_have_run() {
     // sender it was attributed to is an assumption.
     assert!(
         out.stderr
-            .contains("lane unknown, sending as the top-level session"),
+            .contains("lane unknown, predicting as the top-level session"),
         "{}",
         out.stderr
     );

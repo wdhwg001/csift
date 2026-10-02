@@ -62935,7 +62935,7 @@
         },
         {
           "path": "src/commands/whoami.rs",
-          "lines": "115-116",
+          "lines": "120-121",
           "snippet": "    // hands a subagent its parent's id), so env-only resolution cannot know whether the\n    // CALLER is that session. Say so on stderr; the unknowable JSON fields are null."
         }
       ],
@@ -78736,8 +78736,8 @@
       "code": [
         {
           "path": "src/commands/live/channel/reach/predict.rs",
-          "lines": "125-141",
-          "snippet": "/// `csift whoami --to @<target> [--from <sender>]`: predict, print, write nothing. The\n/// sender is classified exactly as `csift send` classifies it, so the prediction and the send\n/// decide from the same relation.\npub(crate) fn run_reach_to(target: &str, from: Option<&str>, format: OutputFormat) -> Result<()> {\n    let caller = caller::classify(from)?;\n    let path = resolve_one(target)?;\n    let receiver = caller::probe_receiver(&path)?;\n    let merged = settings::merged(\n        &crate::path::claude_home()?,\n        receiver.cwd.as_deref().map(Path::new),\n    );\n    let slots = ReachSlots::read(&merged);\n    let armed = armed_slots(&receiver);\n    let relation = relation_of(&caller, &receiver);\n    let t = receiver_target(&receiver);\n    let ctx = send_context(&caller, &t, &merged, &slots, armed.len(), relation);\n    let decision = policy::decide(&ctx);"
+          "lines": "172-186",
+          "snippet": "/// Predict a send from `caller` to `target`, printing nothing. One builder for both the env form\n/// and a positional sender, so the two can only differ in who the sender is.\npub(crate) fn reach_for(target: &str, caller: &Caller) -> Result<Reach> {\n    let path = resolve_one(target)?;\n    let receiver = caller::probe_receiver(&path)?;\n    let merged = settings::merged(\n        &crate::path::claude_home()?,\n        receiver.cwd.as_deref().map(Path::new),\n    );\n    let slots = ReachSlots::read(&merged);\n    let armed = armed_slots(&receiver);\n    let relation = relation_of(caller, &receiver);\n    let t = receiver_target(&receiver);\n    let ctx = send_context(caller, &t, &merged, &slots, armed.len(), relation);\n    let decision = policy::decide(&ctx);"
         }
       ],
       "states": [

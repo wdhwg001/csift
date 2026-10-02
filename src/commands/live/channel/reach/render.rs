@@ -223,18 +223,30 @@ pub(crate) fn armed_line(armed: &[u32]) -> String {
         .join(",")
 }
 
+/// The whole `--to` envelope: a header, the one `reach` row and the summary.
 pub(crate) fn render_reach_json(r: &Reach) -> Result<()> {
+    println!(
+        "{}",
+        serde_json::to_string(&text::envelope_header("whoami", json!({})))?
+    );
+    println!("{}", serde_json::to_string(&reach_row_json(r))?);
+    println!(
+        "{}",
+        serde_json::to_string(&text::envelope_summary(reach_summary_fields(r)))?
+    );
+    Ok(())
+}
+
+/// The `reach` row alone, for a stream whose envelope another surface owns (`whoami` with a
+/// positional sender prints its own rows first).
+pub(crate) fn reach_row_json(r: &Reach) -> serde_json::Value {
     let configured: serde_json::Map<String, serde_json::Value> = r
         .slots
         .per_event
         .iter()
         .map(|(e, ks)| (e.clone(), json!(ks)))
         .collect();
-    println!(
-        "{}",
-        serde_json::to_string(&text::envelope_header("whoami", json!({})))?
-    );
-    let row = json!({
+    json!({
         "kind": "reach",
         "lane": r.lane,
         "routing_id": r.routing_id,
@@ -257,16 +269,15 @@ pub(crate) fn render_reach_json(r: &Reach) -> Result<()> {
         })),
         "inference": r.inference,
         "settings": r.settings.json(),
-    });
-    println!("{}", serde_json::to_string(&row)?);
-    println!(
-        "{}",
-        serde_json::to_string(&text::envelope_summary(json!({
-            "queued": false,
-            "refused": r.decision.verdict == Verdict::Refused,
-        })))?
-    );
-    Ok(())
+    })
+}
+
+/// The two summary keys a prediction closes with: `queued` is false by construction.
+pub(crate) fn reach_summary_fields(r: &Reach) -> serde_json::Value {
+    json!({
+        "queued": false,
+        "refused": r.decision.verdict == Verdict::Refused,
+    })
 }
 
 // -- the peer census --

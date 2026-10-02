@@ -157,20 +157,53 @@ fn to_a_headless_receiver_is_unpredictable_however_many_slots_are_configured() {
     );
 }
 
-#[test]
-fn the_prediction_takes_the_sender_its_lane_note_names() {
-    // The lane-unknown note tells a lane caller to pass `--from @<your lane id>`, so the
-    // command printing it has to take the flag: the relation between sender and receiver is
-    // one of the facts the prediction is decided from.
+/// A built-in subagent of [`SESS`], with its meta and one Bash call carrying a trap marker, so
+/// the same lane can be named by its id and by `@trap:`.
+const SUBAGENT: &str = "a00000000000000aa";
+const MARKER: &str = "PlumWaxenHarbor5719";
+
+fn subagent_lane() -> String {
+    format!(
+        "{}\n{}\n",
+        format_args!(
+            r#"{{"type":"user","uuid":"s1","timestamp":"2026-06-07T05:01:00.000Z","cwd":"{CWD}","version":"2.1.258","isSidechain":true,"message":{{"role":"user","content":"look"}}}}"#
+        ),
+        format_args!(
+            r#"{{"type":"assistant","uuid":"s2","parentUuid":"s1","timestamp":"2026-06-07T05:01:05.000Z","version":"2.1.258","isSidechain":true,"message":{{"role":"assistant","stop_reason":"tool_use","content":[{{"type":"tool_use","id":"toolu_trap01","name":"Bash","input":{{"command":"csift whoami @trap:{MARKER} --to @{DONE_TEAMMATE}"}}}}]}}}}"#
+        )
+    )
+}
+
+fn home_with_subagent() -> Home {
     let h = home();
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-{SUBAGENT}.jsonl"),
+        &subagent_lane(),
+    );
+    h.write(
+        &format!("{ENC}/{SESS}/subagents/agent-{SUBAGENT}.meta.json"),
+        r#"{"agentType":"general-purpose","description":"look around"}"#,
+    );
+    h
+}
+
+#[test]
+fn the_positional_names_the_sender_of_the_prediction() {
+    // `whoami` answers who "I" am, and `--to` predicts a send from that lane. The environment
+    // names the top-level session in every lane, so the positional is how a subagent says it is
+    // the sender: by its own id, or by a trap marker its own Bash call carries.
+    let h = home_with_subagent();
     let env = [("CLAUDE_CODE_SESSION_ID", SESS)];
     let assumed = h.run_with_env(&["whoami", "--to", &at(DONE_TEAMMATE)], &env);
     assert!(assumed.success, "stderr: {}", assumed.stderr);
     assert!(
-        assumed.stderr.contains("pass --from @<your lane id>"),
+        assumed
+            .stderr
+            .contains("name your own lane as the positional"),
         "{}",
         assumed.stderr
     );
+    assert!(!assumed.stderr.contains("--from"), "{}", assumed.stderr);
     assert!(
         assumed
             .stdout
@@ -178,45 +211,95 @@ fn the_prediction_takes_the_sender_its_lane_note_names() {
         "{}",
         assumed.stdout
     );
-    // Named, the sender is the lane given and nothing is assumed.
-    let named = h.run_with_env(
-        &[
-            "whoami",
-            "--to",
-            &at(DONE_TEAMMATE),
-            "--from",
-            &at(DONE_TEAMMATE),
-        ],
-        &env,
-    );
-    assert!(named.success, "stderr: {}", named.stderr);
+    let trap = format!("@trap:{MARKER}");
+    for me in [at(SUBAGENT), trap] {
+        let out = h.run_with_env(&["whoami", &me, "--to", &at(DONE_TEAMMATE)], &env);
+        assert!(out.success, "{me}: {}", out.stderr);
+        assert!(!out.stderr.contains("lane unknown"), "{me}: {}", out.stderr);
+        // The positional's own output comes first, then the prediction from that lane.
+        let self_at = out.stdout.find(&format!("self     {SUBAGENT}"));
+        let reach_at = out.stdout.find("csift channel");
+        assert!(
+            matches!((self_at, reach_at), (Some(a), Some(b)) if a < b),
+            "{me}: the self section precedes the prediction:\n{}",
+            out.stdout
+        );
+        assert!(
+            out.stdout
+                .contains(&format!("  caller      lane {SUBAGENT}")),
+            "{me}: the sender is the lane itself:\n{}",
+            out.stdout
+        );
+    }
+    // `@main` names the top-level session: the same sender, named rather than assumed.
+    let main = h.run_with_env(&["whoami", "@main", "--to", &at(DONE_TEAMMATE)], &env);
+    assert!(main.success, "stderr: {}", main.stderr);
+    assert!(!main.stderr.contains("lane unknown"), "{}", main.stderr);
     assert!(
-        named
-            .stdout
-            .contains(&format!("  caller      lane {DONE_TEAMMATE}")),
+        main.stdout.contains(&format!("  caller      lane {SESS}")),
         "{}",
-        named.stdout
+        main.stdout
     );
-    assert!(!named.stderr.contains("lane unknown"), "{}", named.stderr);
-    // `@main` is exact too: the same session, named rather than assumed.
-    let main = h.run_with_env(
+    // The flag that named a sender is gone: a sender is the positional.
+    let gone = h.run_with_env(
         &["whoami", "--to", &at(DONE_TEAMMATE), "--from", "@main"],
         &env,
     );
-    assert!(main.success, "stderr: {}", main.stderr);
-    assert!(!main.stderr.contains("lane unknown"), "{}", main.stderr);
-    // The grammar is `send`'s: inside Claude Code a bare label would misattribute a lane.
-    let label = h.run_with_env(
-        &["whoami", "--to", &at(DONE_TEAMMATE), "--from", "ops"],
+    assert_eq!(gone.code, Some(2), "{}", gone.stderr);
+}
+
+#[test]
+fn a_positional_prediction_is_one_json_stream() {
+    // The positional owns the envelope: its rows, then the `reach` row, then ONE summary that
+    // carries the positional's counts and the prediction's two keys.
+    let h = home_with_subagent();
+    let env = [("CLAUDE_CODE_SESSION_ID", SESS)];
+    let out = h.run_with_env(
+        &[
+            "whoami",
+            &at(SUBAGENT),
+            "--to",
+            &at(DONE_TEAMMATE),
+            "--format",
+            "json",
+        ],
         &env,
     );
-    assert!(!label.success);
-    assert!(
-        label.stderr.contains("the sender is a LANE"),
-        "{}",
-        label.stderr
+    assert!(out.success, "{}", out.stderr);
+    let rows: Vec<serde_json::Value> = out
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).expect("one JSON object per line"))
+        .collect();
+    let kinds: Vec<&str> = rows.iter().filter_map(|r| r["kind"].as_str()).collect();
+    assert_eq!(
+        kinds.iter().filter(|k| **k == "header").count(),
+        1,
+        "{kinds:?}"
     );
-    // A sender is a question about a prediction, so it rides `--to` and nothing else.
-    let alone = h.run_with_env(&["whoami", "--from", "@main"], &env);
-    assert!(!alone.success, "--from without --to names no prediction");
+    assert_eq!(
+        kinds.iter().filter(|k| **k == "summary").count(),
+        1,
+        "{kinds:?}"
+    );
+    assert_eq!(kinds.first(), Some(&"header"), "{kinds:?}");
+    assert_eq!(kinds.last(), Some(&"summary"), "{kinds:?}");
+    let self_at = kinds.iter().position(|k| *k == "self");
+    let reach_at = kinds.iter().position(|k| *k == "reach");
+    assert!(
+        matches!((self_at, reach_at), (Some(a), Some(b)) if a < b),
+        "{kinds:?}"
+    );
+    let reach = &rows[reach_at.unwrap_or_default()];
+    assert_eq!(reach["caller"]["label"], SUBAGENT, "{reach}");
+    let summary = &rows[rows.len() - 1];
+    for key in [
+        "identities",
+        "live_child_lanes",
+        "other_live_lanes",
+        "queued",
+        "refused",
+    ] {
+        assert!(summary.get(key).is_some(), "summary lacks {key}: {summary}");
+    }
 }

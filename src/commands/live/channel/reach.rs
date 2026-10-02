@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use serde_json::json;
 
-use super::caller::{self, Caller, GateVerdict, Receiver, SettingsDisclosure, LANE_ASSUMED_NOTE};
+use super::caller::{self, Caller, GateVerdict, Receiver, SettingsDisclosure};
 use super::policy::{self, Decision, ReceiverKind, ReceiverState, SendContext};
 use super::send::{relation_of, truthy};
 use super::{channel_dir, read_armed, Mode, Relation, SenderKind, Verdict, STEER_EVENTS};

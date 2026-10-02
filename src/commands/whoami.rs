@@ -62,14 +62,16 @@ pub struct WhoAmI {
 
 /// Entry point for `csift whoami`. With no target (or `@main`), identify the calling session from
 /// the environment; with `@trap:<marker>`, resolve which SUBAGENT the caller is (env-independent);
-/// with an `@<agent-id>` / `@<Name>@<Team>` target, answer for THAT lane. `--to` and `--peers` are
-/// terminal reach modes that ask about other lanes instead of this one.
+/// with an `@<agent-id>` / `@<Name>@<Team>` target, answer for THAT lane. `--peers` is a terminal
+/// mode about other lanes. `--to` predicts a send FROM the lane the positional names: with no
+/// positional the sender is the environment's top-level session (assumed, as `send` assumes it),
+/// and with one the positional's output prints first and the prediction follows in one stream.
 pub fn run_whoami(args: &WhoamiArgs) -> Result<()> {
     if args.peers {
         return channel::run_peers(args.format);
     }
-    if let Some(to) = args.to.as_deref() {
-        return channel::run_reach_to(to, args.from.as_deref(), args.format);
+    if let (None, Some(to)) = (args.self_target.as_deref(), args.to.as_deref()) {
+        return channel::run_reach_to(to, args.format);
     }
     match args.self_target.as_deref() {
         None | Some("@main") => run_whoami_env(args),
@@ -110,6 +112,9 @@ fn run_whoami_env(args: &WhoamiArgs) -> Result<()> {
 
     let session_id = env.id;
     let path = locate_transcript(&session_id);
+    // `@main` names the top-level session as the caller, so a prediction from it is exact, as
+    // `send --from @main` is. Computed before anything prints: a bad `--to` fails alone.
+    let reach = predict(args, || channel::lane_caller(&session_id, &session_id))?;
 
     // Lane honesty: the env names the TOP-LEVEL session in EVERY lane (current CC
     // hands a subagent its parent's id), so env-only resolution cannot know whether the
@@ -135,7 +140,33 @@ fn run_whoami_env(args: &WhoamiArgs) -> Result<()> {
         Some(p) => Some(sections_for(p, false, "env", args.format)?),
         None => None,
     };
-    finish_json(args.format, 1, counts)
+    emit_reach(reach.as_ref(), args.format)?;
+    finish_json(args.format, 1, counts, reach.as_ref())
+}
+
+/// The `--to` prediction for a positional sender, when `--to` was given. The caller is built only
+/// then, from the lane the positional resolved.
+fn predict(
+    args: &WhoamiArgs,
+    caller: impl FnOnce() -> channel::Caller,
+) -> Result<Option<channel::Reach>> {
+    args.to
+        .as_deref()
+        .map(|to| channel::reach_for(to, &caller()))
+        .transpose()
+}
+
+/// Print the prediction after the positional's own output. JSON prints the bare `reach` row,
+/// because the positional's stream already owns the envelope.
+fn emit_reach(reach: Option<&channel::Reach>, format: OutputFormat) -> Result<()> {
+    let Some(r) = reach else {
+        return Ok(());
+    };
+    match format {
+        OutputFormat::Text => channel::render_reach_text(r),
+        OutputFormat::Json => println!("{}", serde_json::to_string(&channel::reach_row_json(r))?),
+    }
+    Ok(())
 }
 
 /// Print the reach sections for one resolved lane.
@@ -160,31 +191,39 @@ fn sections_for(
 /// form was asked for.
 fn run_whoami_lane(token: &str, args: &WhoamiArgs) -> Result<()> {
     let path = channel::resolve_lane(token)?;
+    let reach = predict(args, || channel::lane_caller_for_path(&path))?;
     if matches!(args.format, OutputFormat::Json) {
         println!("{}", crate::text::envelope_header("whoami", json!({})));
     }
     let counts = sections_for(&path, true, "target", args.format)?;
-    finish_json(args.format, 0, Some(counts))
+    emit_reach(reach.as_ref(), args.format)?;
+    finish_json(args.format, 0, Some(counts), reach.as_ref())
 }
 
-/// Close a JSON stream with the shared summary. A text run prints nothing here.
+/// Close a JSON stream with the shared summary. A text run prints nothing here. With a prediction
+/// in the stream the summary also carries the prediction's two keys, so one terminator closes
+/// both parts.
 fn finish_json(
     format: OutputFormat,
     identities: usize,
     counts: Option<(usize, usize)>,
+    reach: Option<&channel::Reach>,
 ) -> Result<()> {
     if !matches!(format, OutputFormat::Json) {
         return Ok(());
     }
     let (live, others) = counts.unwrap_or((0, 0));
-    println!(
-        "{}",
-        crate::text::envelope_summary(json!({
-            "identities": identities,
-            "live_child_lanes": live,
-            "other_live_lanes": others,
-        }))
-    );
+    let mut fields = json!({
+        "identities": identities,
+        "live_child_lanes": live,
+        "other_live_lanes": others,
+    });
+    if let (Some(r), Some(map)) = (reach, fields.as_object_mut()) {
+        if let Some(extra) = channel::reach_summary_fields(r).as_object() {
+            map.extend(extra.clone());
+        }
+    }
+    println!("{}", crate::text::envelope_summary(fields));
     Ok(())
 }
 
@@ -195,6 +234,13 @@ fn finish_json(
 /// subagent (whose env id is the PARENT, not itself).
 fn run_whoami_trap(marker: &str, args: &WhoamiArgs) -> Result<()> {
     let chain = path::resolve_trap_who(marker)?;
+    // The marker names the caller's own lane, so a prediction from it is exact.
+    let reach = match chain.first() {
+        Some(me) => predict(args, || {
+            channel::lane_caller(&me.session_id, &me.parent_session_id)
+        })?,
+        None => None,
+    };
     match args.format {
         OutputFormat::Text => {
             // chain[0] = self (the marker carrier); chain.last() = the top-level root.
@@ -240,7 +286,8 @@ fn run_whoami_trap(marker: &str, args: &WhoamiArgs) -> Result<()> {
         Some(p) => Some(sections_for(p, true, "trap", args.format)?),
         None => None,
     };
-    finish_json(args.format, chain.len(), counts)
+    emit_reach(reach.as_ref(), args.format)?;
+    finish_json(args.format, chain.len(), counts, reach.as_ref())
 }
 
 /// Locate `<id>.jsonl` under the projects root. First try the current cwd's encoded

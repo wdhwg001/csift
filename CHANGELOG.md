@@ -396,11 +396,15 @@ surface change bumps the PATCH.
   bodies share no head, and the records carry no field saying which command expanded them -
   the parent link names the command's own wrapper on three of the four measured records and
   an attachment on the fourth.
-- **`whoami --to` takes `--from`, the sender its prediction is made for.** The prediction
-  is decided partly from the relation between sender and receiver, and the stderr note
-  already told a lane caller to `pass --from @<your lane id> for an exact sender` while
-  `whoami` rejected the flag. `--from` takes `csift send`'s grammar and only goes with
-  `--to`, so a subagent that names itself gets the answer a send from that lane gets.
+- **`whoami --to` predicts a send from the lane its positional names.** The prediction is
+  decided partly from the relation between sender and receiver, and the environment names
+  the top-level session in every lane, so a subagent got the prediction for a send from its
+  parent. `whoami @trap:<marker> --to @<lane>` and `whoami @<agent-id> --to @<lane>` now
+  print the positional's sections and then the prediction from that lane, where the pair
+  used to be refused. In JSON the positional's rows, the `reach` row and one summary
+  carrying both key sets make up one stream. With no positional the sender is still assumed to be
+  the top-level session, and the stderr note now says to name your own lane as the
+  positional.
 - **A quota's reset instant joins the timestamp pair.** A rate-limited assistant record's
   `api_failure.quota` carried `resets_at` as the harness writes it, bare epoch seconds - the
   one instant on any csift surface with no `_utc` / `_local` pair and no unit. It now
@@ -1401,11 +1405,10 @@ surface change bumps the PATCH.
   leaf reaches them, whenever neither was given; the JSON summary carries the list as
   `attachment_leaves_unread`. The list is the shape inventory's attachment axis, derived
   rather than typed.
-- **An empty `--from` read as a sender nobody named.** `whoami --to <lane> --from ""`
-  predicted a send from an `external unknown` sender, and `send <lane> <text> --from ""`
-  queued one, where `--to ""` and an empty lane target are refused. `--from` takes
-  `@<lane>` inside Claude Code or a non-empty free label outside it, so both commands now
-  refuse the empty token at parse time (exit 2) naming that grammar.
+- **An empty `--from` read as a sender nobody named.** `send <lane> <text> --from ""`
+  queued a message from an `external unknown` sender, where an empty lane target is
+  refused. `--from` takes `@<lane>` inside Claude Code or a non-empty free label outside
+  it, so `send` now refuses the empty token at parse time (exit 2) naming that grammar.
 - **`show --line -1..-3` answered differently in the two fetch modes.** A from-end range
   whose ends reverse on the file (the last line, then the third from the end) names no
   line; the rendered fetch refused it with the unparseable-line explanation, while `--raw`

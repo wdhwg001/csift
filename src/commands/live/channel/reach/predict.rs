@@ -122,11 +122,56 @@ pub(crate) fn send_context(
     }
 }
 
-/// `csift whoami --to @<target> [--from <sender>]`: predict, print, write nothing. The
-/// sender is classified exactly as `csift send` classifies it, so the prediction and the send
-/// decide from the same relation.
-pub(crate) fn run_reach_to(target: &str, from: Option<&str>, format: OutputFormat) -> Result<()> {
-    let caller = caller::classify(from)?;
+/// `csift whoami --to @<target>` with no positional: predict for the sender the environment
+/// names, print the whole envelope, write nothing. The sender is classified exactly as
+/// `csift send` classifies a send with no `--from`, so inside Claude Code it is ASSUMED to be the
+/// top-level session and the stderr note says how to name the real one.
+pub(crate) fn run_reach_to(target: &str, format: OutputFormat) -> Result<()> {
+    let caller = caller::classify(None)?;
+    let reach = reach_for(target, &caller)?;
+    if caller.kind == SenderKind::Lane && !caller.lane_exact {
+        eprintln!("{WHOAMI_LANE_ASSUMED_NOTE}");
+    }
+    match format {
+        OutputFormat::Text => {
+            render_reach_text(&reach);
+            Ok(())
+        }
+        OutputFormat::Json => render_reach_json(&reach),
+    }
+}
+
+/// The note an env-only `whoami --to` prints inside Claude Code. It names the positional, which
+/// is how `whoami` learns who "I" is: the environment names the top-level session in every lane.
+pub(crate) const WHOAMI_LANE_ASSUMED_NOTE: &str =
+    "csift: lane unknown, predicting as the top-level session; name your own lane as the \
+     positional for an exact sender (`csift whoami @trap:<marker> --to <target>`, or \
+     `@<your agent id>`; a subagent's own id is withheld from its environment).";
+
+/// The exact sender for a lane `whoami`'s positional resolved: the lane's own transcript-form
+/// id and the top-level session that owns it (the lane itself for a top-level session).
+pub(crate) fn lane_caller(lane: &str, session: &str) -> Caller {
+    Caller {
+        kind: SenderKind::Lane,
+        session: Some(session.to_string()),
+        lane: Some(lane.to_string()),
+        label: None,
+        lane_exact: true,
+    }
+}
+
+/// [`lane_caller`] for a resolved transcript: the id trio helpers read the lane id and its
+/// owning session off the path, the same way every other surface derives them.
+pub(crate) fn lane_caller_for_path(path: &Path) -> Caller {
+    let lane = crate::subagent::session_id_from_path(path);
+    let session =
+        crate::subagent::parent_session_id_from_path(path).unwrap_or_else(|| lane.clone());
+    lane_caller(&lane, &session)
+}
+
+/// Predict a send from `caller` to `target`, printing nothing. One builder for both the env form
+/// and a positional sender, so the two can only differ in who the sender is.
+pub(crate) fn reach_for(target: &str, caller: &Caller) -> Result<Reach> {
     let path = resolve_one(target)?;
     let receiver = caller::probe_receiver(&path)?;
     let merged = settings::merged(
@@ -135,15 +180,11 @@ pub(crate) fn run_reach_to(target: &str, from: Option<&str>, format: OutputForma
     );
     let slots = ReachSlots::read(&merged);
     let armed = armed_slots(&receiver);
-    let relation = relation_of(&caller, &receiver);
+    let relation = relation_of(caller, &receiver);
     let t = receiver_target(&receiver);
-    let ctx = send_context(&caller, &t, &merged, &slots, armed.len(), relation);
+    let ctx = send_context(caller, &t, &merged, &slots, armed.len(), relation);
     let decision = policy::decide(&ctx);
-
-    if caller.kind == SenderKind::Lane && !caller.lane_exact {
-        eprintln!("{LANE_ASSUMED_NOTE}");
-    }
-    let reach = Reach {
+    Ok(Reach {
         inference: inference_note(&t, &decision, &ctx),
         lane: receiver.lane.clone(),
         routing_id: receiver.routing_id.clone(),
@@ -152,21 +193,14 @@ pub(crate) fn run_reach_to(target: &str, from: Option<&str>, format: OutputForma
         state: receiver.state,
         version: receiver.version.clone(),
         caller_kind: caller.kind,
-        caller_label: caller_label(&caller),
+        caller_label: caller_label(caller),
         decision,
         slots,
         armed,
         teams: ctx.teams.clone(),
         harbor: ctx.harbor.clone(),
         settings: SettingsDisclosure::of(&merged),
-    };
-    match format {
-        OutputFormat::Text => {
-            render_reach_text(&reach);
-            Ok(())
-        }
-        OutputFormat::Json => render_reach_json(&reach),
-    }
+    })
 }
 
 /// The sentence an AGENT target carries: what the prediction is made of, and which carrier is

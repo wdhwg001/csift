@@ -62,7 +62,7 @@ pub(crate) fn parse_lane_target(s: &str) -> Result<String, String> {
     Ok(s.to_string())
 }
 
-/// `--from`'s value parser (`send`, and `whoami --to`, which predicts a send): a sender is
+/// `send --from`'s value parser: a sender is
 /// `@<lane>` inside Claude Code or a free label outside it, and an empty token is neither -
 /// read as a label, it printed a sender nobody named. Every other value passes unchanged.
 pub(crate) fn parse_sender(s: &str) -> Result<String, String> {

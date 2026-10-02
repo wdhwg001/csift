@@ -69,9 +69,11 @@ pub(crate) use paths::*;
 // Named re-exports, not a glob: the reach surface carries lane vocabulary (`LaneRef`,
 // `Sections`) that only `whoami` needs, and flattening all of it into the channel namespace
 // would put two meanings of "lane" in one scope.
+pub(crate) use caller::Caller;
 pub(crate) use reach::{
-    emit_lane_sections, external_answer, resolve_one as resolve_lane, run_peers, run_reach_to,
-    LaneRef,
+    emit_lane_sections, external_answer, lane_caller, lane_caller_for_path, reach_for,
+    reach_row_json, reach_summary_fields, render_reach_text, resolve_one as resolve_lane,
+    run_peers, run_reach_to, LaneRef, Reach,
 };
 pub(crate) use recipe::*;
 pub(crate) use reconcile::*;
