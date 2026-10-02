@@ -8,7 +8,7 @@ use super::*;
 
 #[derive(Debug, Clone, Args, Default)]
 #[command(
-    about = "Regex-search sessions, returning complete request/response round-trip exchanges",
+    about = "Regex-search sessions and return the complete round-trip exchange around each hit",
     long_about = SEARCH_LONG_ABOUT,
     after_help = SEARCH_AFTER_HELP.as_str()
 )]

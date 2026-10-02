@@ -4,7 +4,7 @@ use super::*;
 
 #[derive(Debug, Args)]
 #[command(
-    about = "Which files and dirs a session modified, and when (Edit/Write/Notebook, heuristic Bash)",
+    about = "List files and dirs a session modified and when (Edit, Write, Notebook, heuristic Bash)",
     long_about = "Show which FILES and DIRECTORIES a session modified, and when.\n\
         \n\
         csift extracts file mutations from a session's transcript. It spans the session's subagents\n\

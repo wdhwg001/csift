@@ -4,7 +4,7 @@ use super::*;
 
 #[derive(Debug, Args)]
 #[command(
-    about = "Reconstruct a file's history from the transcript as segmented diff patches, a partial snapshot or coverage scoping",
+    about = "Rebuild a file's history as segmented diffs, a partial snapshot or a coverage scope",
     long_about = "Reconstruct the history of a single file from a session transcript.\n\
         \n\
         `files` only rolls up which files a session touched. `recover` rebuilds a file's CONTENT\n\

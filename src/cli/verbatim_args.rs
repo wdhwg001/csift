@@ -4,8 +4,8 @@ use super::*;
 
 #[derive(Debug, Args)]
 #[command(
-    about = "Turn-fidelity reconstruction: restore the verbatim user/assistant \
-             back-and-forth a compaction summary clipped, within a char budget",
+    about = "Restore verbatim user and assistant turns a compaction summary cut, in a char \
+             budget",
     long_about = "Restore the verbatim user and assistant back-and-forth that a Claude Code\n\
 COMPACTION SUMMARY clipped.\n\n\
 A summary preserves TASK STATE in high fidelity (the 9-section synthesis: intent, file\n\

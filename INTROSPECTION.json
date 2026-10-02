@@ -44720,7 +44720,7 @@
         },
         {
           "path": "src/cli/show_stats_args.rs",
-          "lines": "233-237",
+          "lines": "232-236",
           "snippet": "    /// The fetch returns every user and assistant record of the named turns, so it reads a\n    /// turn's whole back-and-forth. The gated non-record lines a turn carries\n    /// (turn-duration, stop-hooks, away-summary, queue, snapshot, system) belong to no turn\n    /// fetch. An address by `--line` or `--uuid` reaches them, and so does naming their leaf:\n    /// `search -t 'harness.bookkeeping.*' -t 'harness.turn.*' -t 'harness.system.*'`."
         }
       ],

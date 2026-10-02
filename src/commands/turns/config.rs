@@ -110,23 +110,29 @@ pub(crate) const DEDUP_PREFIX: usize = 80;
 /// How a turn's agent-message run is reduced to a survivor set. The MASTER switch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Default)]
 pub enum AgentMsgMode {
-    /// DEFAULT. Keep the LONGEST agent message (by `full_chars` - the substantive Rich
-    /// Response, which is frequently a MIDDLE message, not the last throwaway wrap-up) +
-    /// the FIRST when substantive (`full_chars >= rich_min_chars`) + each RICH middle;
-    /// collapse everything else into a placeholder. Applies to every multi-message turn
-    /// (no short-run escape). On a tie the LAST maximum wins, so an all-equal run
-    /// coincides with the last-only pick.
+    /// DEFAULT. Keep the LONGEST agent message by `full_chars`. That is the
+    /// substantive Rich Response, which often sits in the MIDDLE while the last
+    /// message is a throwaway wrap-up. Also keep the FIRST message when it is substantive
+    /// (`full_chars >= rich_min_chars`) and each RICH middle, and collapse
+    /// everything else into a placeholder. It applies to every multi-message
+    /// turn, with no short-run escape. On a tie the LAST maximum wins, so an
+    /// all-equal run gives the same pick as last-only.
     #[default]
+    #[value(verbatim_doc_comment)]
     Longest,
-    /// Keep ONLY the last agent message per turn: the "force last-only" escape, which
-    /// takes the wrap-up whenever the substance of the run sits earlier.
-    #[value(name = "eot-only")]
+    /// Keep ONLY the last agent message of each turn. This is the "force
+    /// last-only" escape. It takes the wrap-up whenever the substance of the
+    /// run sits earlier.
+    #[value(name = "eot-only", verbatim_doc_comment)]
     EotOnly,
-    /// Keep the last always + the first by position privilege +
-    /// each rich middle; collapse the proven pure declarations. Gated by the run
-    /// threshold (short runs keep all).
+    /// Keep the last message always, the first by position privilege and each
+    /// rich middle, and collapse the proven pure declarations. The run
+    /// threshold gates it, so a short run keeps every message.
+    #[value(verbatim_doc_comment)]
     Rich,
-    /// Keep EVERY agent message - no filtering, no collapse (maximal-fidelity escape).
+    /// Keep EVERY agent message, with no filtering and no collapse. This is
+    /// the maximal-fidelity escape.
+    #[value(verbatim_doc_comment)]
     All,
 }
 
@@ -136,12 +142,15 @@ pub enum AgentMsgMode {
 /// individual flags so an explicit flag overrides the profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Profile {
-    /// Maximal fidelity thresholds: threshold 4, rich-min 200, declaration-max 140 (does
-    /// not change the master mode - bundled with the default `longest` unless `--agent-msgs
-    /// rich` is also passed).
+    /// Maximal-fidelity thresholds of threshold 4, rich-min 200 and
+    /// declaration-max 140. It does not change the master mode, so it runs
+    /// with the default `longest` unless `--agent-msgs rich` is also passed.
+    #[value(verbatim_doc_comment)]
     Heavy,
-    /// Lean thresholds: threshold 8, rich-min 360, declaration-max 240 (master mode
-    /// unchanged - bundled with the default `longest` unless `--agent-msgs rich` is passed).
+    /// Lean thresholds of threshold 8, rich-min 360 and declaration-max 240.
+    /// The master mode is unchanged, so it runs with the default `longest`
+    /// unless `--agent-msgs rich` is passed.
+    #[value(verbatim_doc_comment)]
     Light,
 }
 

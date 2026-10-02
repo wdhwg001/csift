@@ -10,7 +10,7 @@ use super::*;
 
 #[derive(Debug, Args)]
 #[command(
-    about = "List sessions with first/last genuine-user + last-agent message and timestamps",
+    about = "List sessions with times, first and last genuine user message, last agent message",
     long_about = "\
 List sessions, each with a quick identity read WITHOUT parsing the whole file. For every
 session jsonl under the target(s) a row gives the session id, the FIRST genuine-user message,

@@ -177,9 +177,8 @@ pub(crate) static SHOW_AFTER_HELP: std::sync::LazyLock<String> = std::sync::Lazy
 
 #[derive(Args, Debug)]
 #[command(
-    about = "Fetch specific record(s) of ONE transcript by line / turn index / record uuid \
-            , rendered full, or verbatim raw jsonl with `--raw`; `--branch-points` reports \
-            where the conversation forked",
+    about = "Fetch a transcript's records by line, turn or uuid (full or --raw), or \
+             --branch-points",
     long_about = "\
 Fetch the record(s) at specific 1-based jsonl line numbers or record uuids, from exactly ONE
 transcript. The line numbers are the `Lnnnn` every csift surface prints.
@@ -337,8 +336,8 @@ impl ShowArgs {
 /// `csift stats`: one-scan aggregates per session (and a scope total).
 #[derive(Args, Debug)]
 #[command(
-    about = "One-scan aggregates per session: records, turns, tool calls by name, tokens \
-             by model, time span, compactions",
+    about = "Count a session's records, turns, tools by name, tokens by model, span and \
+             compactions",
     long_about = "\
 One scan of each transcript answers the aggregation questions that otherwise need
 hand-rolled jsonl parsing. Every session row has the same fixed shape:

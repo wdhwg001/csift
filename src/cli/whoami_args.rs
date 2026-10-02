@@ -4,8 +4,8 @@ use super::*;
 
 #[derive(Debug, Args)]
 #[command(
-    about = "Identify the calling Claude Code session (via CLAUDE_CODE_SESSION_ID, falling \
-             back to CODEX_COMPANION_SESSION_ID)",
+    about = "Name the calling session from CLAUDE_CODE_SESSION_ID, else \
+             CODEX_COMPANION_SESSION_ID",
     long_about = "Identify the calling Claude Code session, with no false positives.\n\n\
 Claude Code exports `CLAUDE_CODE_SESSION_ID` into every Bash-tool environment. Its value is\n\
 exactly the calling session's own jsonl basename. csift trusts that variable and nothing\n\

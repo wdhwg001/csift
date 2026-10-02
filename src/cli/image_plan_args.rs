@@ -4,7 +4,7 @@ use super::*;
 
 #[derive(Debug, Args)]
 #[command(
-    about = "List + extract the images a session carries (inline base64 blocks → files)",
+    about = "List the images a session carries and extract its inline base64 blocks to files",
     long_about = "List and EXTRACT the images a session carries.\n\n\
 A pasted or attached image is stored INLINE on its record as a base64 image block, so\n\
 `image` decodes it straight back to a file. Nothing was externalised. The same holds for a\n\
@@ -141,9 +141,9 @@ pub struct ImageArgs {
     /// `png`/`jpg`/`jpeg`/`gif`/`webp` extension, gets each image in its SOURCE format,
     /// auto-named `<session>[-img<N>]-L<line>i<n>.<ext>`. A path WITH one of those extensions
     /// gets the (single) selected image at exactly that file, CONVERTED to that format when it
-    /// differs from the source (→jpeg lossy q90, →gif dithered palette, →webp lossy q90). An
-    /// animated GIF converted to a still format yields its first frame and a warning. Without
-    /// `--out`, `image` only LISTS.
+    /// differs from the source (→jpeg lossy q90, →gif dithered palette, →webp lossy q90).
+    /// An animated GIF converted to a still format yields its first frame and a warning.
+    /// Without `--out`, `image` only LISTS.
     #[arg(long, value_name = "PATH", verbatim_doc_comment)]
     pub out: Option<PathBuf>,
 
@@ -178,7 +178,7 @@ impl ImageArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    about = "Locate the plan file BOUND to a session (plan_mode attachment, or the first-slug law)",
+    about = "Find the plan file bound to a session by its plan_mode attachment or the first-slug law",
     long_about = "Locate the Plan Mode PLAN FILE bound to a session.\n\n\
 Claude Code stores plans flat under `~/.claude/plans/<three-words>.md`, and a subagent's plan\n\
 gets an `-agent-<agent id>` suffix. Two binding laws decide which file is a session's plan.\n\

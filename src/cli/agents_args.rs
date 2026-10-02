@@ -17,7 +17,7 @@ pub enum AgentKindFilter {
 
 #[derive(Debug, Args)]
 #[command(
-    about = "List a session's subagents with kind, start/completion timestamps and status",
+    about = "List a session's subagents with their kind, status, and start and completion times",
     long_about = "List a session's SUBAGENT lifecycle.\n\
         \n\
         Every subagent transcript the session spawned is listed with its id, KIND, start and\n\
