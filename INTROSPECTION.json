@@ -3187,8 +3187,8 @@
         },
         {
           "path": "src/cli/live_args.rs",
-          "lines": "77-82",
-          "snippet": "          timeout does, and a PERSISTENT monitor never returns by design, so name it with\\n  \\\n          --ignore-background.\\n\\n  \\\n          NOT RETURNED IS NOT PROOF OF RUNNING. Claude Code's own orphan summary says a UI\\n  \\\n          stop, a Monitor timeout or agent teardown leaves no transcript marker, and it\\n  \\\n          reconciles only at the next session start. A long session commonly carries several\\n  \\\n          to dozens of dangling or days-old tasks.\\n\\n\\"
+          "lines": "83-88",
+          "snippet": "          timeout does, and a PERSISTENT monitor never returns by design, so name it with\\n  \\\n          --ignore-background.\\n\\n  \\\n          AN OPEN TASK MAY ALREADY BE DEAD. Claude Code's own orphan summary says a UI stop, a\\n  \\\n          Monitor timeout or agent teardown leaves no transcript marker, and it reconciles\\n  \\\n          those tasks only at the next session start. A long session commonly carries several\\n  \\\n          to dozens of dangling or days-old tasks.\\n\\n\\"
         }
       ],
       "states": [

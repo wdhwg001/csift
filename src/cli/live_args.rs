@@ -9,9 +9,9 @@ use super::*;
 pub struct BackgroundLensArgs {
     /// Count only background tasks launched at or after WHEN, and list earlier ones as
     /// ignored. WHEN takes the shared time grammar (`2026-09-02`, `2h`, `1d`, `2mo`, `-30m`)
-    /// or `now`, this command's own start instant. `now` ignores everything already
-    /// dangling when the wait began, which is what a session supervising another one
-    /// usually wants.
+    /// or `now`, this command's own start instant. With `now`, every task already dangling
+    /// when the command started is ignored, which is what a session supervising another one
+    /// usually wants from `wait`.
     #[arg(verbatim_doc_comment, long = "background-since", value_name = "WHEN")]
     pub background_since: Option<String>,
 
@@ -35,9 +35,13 @@ pub struct BackgroundLensArgs {
             process    whether the owner process is alive. A `ps`-based probe answers, falling\n               \
                        back to `/proc/<pid>` where ps lacks the flags, with a process-start-time\n               \
                        guard against pid reuse.\n\n\
-        Child transcripts and workflow journals join in by default (the span law), and the\n\
-        elicitation sidecar covers the human-in-the-loop states. Each child lane is classified\n\
-        in one of three states, and settled lanes FOLD to a count so live work stays visible.\n    \
+        A lane is one running Claude Code conversation, the top-level session or one subagent,\n\
+        each with its own transcript. Child transcripts and workflow journals join in by default,\n\
+        as on every command that spans subagents, and `--no-subagents` leaves the main lane only.\n\
+        The elicitation file covers the human-in-the-loop (HITL) states, where a dialog blocks\n\
+        the session on a person. It is `elicitations.jsonl` in the session's sidecar directory,\n\
+        the `<session-id>/` folder beside its transcript. Each child lane is classified in one of\n\
+        three states, and settled lanes FOLD to a count so live work stays visible.\n    \
             in-flight    an unreturned call\n    \
             generating   a tail record younger than 300s and no end_turn yet. A long\n                 \
                          generation writes nothing for minutes, so recency plus a non-final\n                 \
@@ -54,13 +58,14 @@ pub struct BackgroundLensArgs {
           timeout, or to let a queued message reach the model. On those three the launching\n  \
           tool call carries no flag and is never rewritten, so the RECEIPT sentence is the\n  \
           only trace. `status` reads it and counts the task like any other. Each row says\n  \
-          which door it came through (`entered by ctrl+b`, `entered by timeout after 2m`,\n  \
+          which way the task entered (`entered by ctrl+b`, `entered by timeout after 2m`,\n  \
           `entered to deliver a message`), and so does JSON `entered_by`.\n\n  \
           A row whose launching record cannot be found keeps the receipt instant and says so.\n  \
-          It never invents a launch time. A receipt counts only as a whole sentence, meaning\n  \
-          the clause, a real `b`+8 task id and that arm's own closing clause, so a transcript\n  \
-          that merely renders the template cannot fabricate a task. A fifth way in, a\n  \
-          plugin's turn abort, writes the ordinary sentence and stays invisible.\n\n  \
+          It never invents a launch time. csift counts a receipt only when the whole sentence\n  \
+          is there, from its opening words through a real task id (`b` plus 8 characters) to\n  \
+          the closing words that kind of receipt ends with. A transcript that only quotes the\n  \
+          receipt wording, with a placeholder for the id, therefore cannot fabricate a task. A\n  \
+          fifth way in, a plugin's turn abort, writes the ordinary sentence and stays invisible.\n\n  \
           The harness itself writes NOTHING about a still-running shell at end of turn. The\n  \
           REPL's \"N shell still running\" lives in process memory. The end-of-turn record\n  \
           carries a duration and a message count, and its pending counts cover background\n  \
@@ -70,15 +75,16 @@ pub struct BackgroundLensArgs {
           For every OPEN task it lists the kind (shell, agent or monitor), the id, the launch\n  \
           instant and age, the description or command, and the output file's size and last\n  \
           write. Closed tasks fold to one count per state. The states are completed, failed,\n  \
-          killed, stopped and timed out, plus blocked (the remote-agent notifier's fifth\n  \
-          value) and any unknown status, which is disclosed and never booked as completed.\n\n  \
+          killed, stopped and timed out, plus blocked, which only a remote agent's completion\n  \
+          notice reports, and any unknown status, which is disclosed and never booked as\n  \
+          completed.\n\n  \
           A Monitor is armed as an immediately-paired tool call and shares the shell id\n  \
           namespace. Its event pulses never close it. Only its termination notice or its\n  \
           timeout does, and a PERSISTENT monitor never returns by design, so name it with\n  \
           --ignore-background.\n\n  \
-          NOT RETURNED IS NOT PROOF OF RUNNING. Claude Code's own orphan summary says a UI\n  \
-          stop, a Monitor timeout or agent teardown leaves no transcript marker, and it\n  \
-          reconciles only at the next session start. A long session commonly carries several\n  \
+          AN OPEN TASK MAY ALREADY BE DEAD. Claude Code's own orphan summary says a UI stop, a\n  \
+          Monitor timeout or agent teardown leaves no transcript marker, and it reconciles\n  \
+          those tasks only at the next session start. A long session commonly carries several\n  \
           to dozens of dangling or days-old tasks.\n\n\
         THE LENS\n  \
           The lens decides which open tasks COUNT toward the verdict. Every task is still\n  \
@@ -97,7 +103,8 @@ pub struct BackgroundLensArgs {
             `idle-background-open`   the turn ended, but N background tasks the lens counts\n                             \
                                      have not returned. They are neither running nor\n                             \
                                      stopped, and csift cannot tell whether that is by design.\n    \
-            `idle-eot`               truly stopped at end of turn\n    \
+            `idle-eot`               truly stopped at the end of turn (EOT, the assistant's\n                             \
+                                     end_turn record)\n    \
             `stale-dead`             the owning process is gone. The tail shape then says\n                             \
                                      HOW it died.\n    \
             `unknown`                the evidence is insufficient or contradictory. That is\n                             \
@@ -118,23 +125,23 @@ pub struct BackgroundLensArgs {
           useful only for judging whether a background task is still meaningful. The message\n  \
           may still be waiting on a task that will never return. In any orchestration it must\n  \
           NEVER be read as a complete or near-complete review of the work. Counting tool calls\n  \
-          and reading the last message is a check shallower than any human would accept, and\n  \
-          trust built on it violates the guardrail. A model with a partial context tends to\n  \
+          and reading the last message is a check shallower than any human would accept, so\n  \
+          no trust in the work may rest on it. A model with a partial context tends to\n  \
           believe it read everything, even past an explicit tool error.\n\n\
         THIS IS A LIVE-TRUTH COMMAND\n  \
-          It is point-in-time and explicitly NON-reproducible, a deliberate and documented\n  \
-          departure from the forensic contract. search, show and stats stay reproducible.\n  \
-          status answers \"now\" and says so. It reads outside projects/ (the registry) and\n  \
-          honors --claude-home.\n\n\
+          It is point-in-time and explicitly NON-reproducible. search, show and stats give the\n  \
+          same answer every time they read the same files. status answers \"now\" and says so.\n  \
+          It reads outside projects/ (the registry) and honors --claude-home.\n\n\
         HONESTY LIMITS (stated in the output when they bite)\n  \
           - A pending PERMISSION prompt leaves no transcript trace. Only a CURRENT registry\n    \
             row shows it, as status `waiting`, which the harness sets for any blocking dialog\n    \
             (a question, a permission prompt, a plan approval, a sandbox or worker request).\n    \
             That row is transition-written, so only the pid probe refutes a stale one.\n  \
           - A multi-question AskUserQuestion was measured on disk while its dialog was open,\n    \
-            and the tail reads it as hitl. A single-question one stays buffered until it is\n    \
-            answered. The difference is a timing outcome of the write frontier, and no rule\n    \
-            keys on the question count. The sidecar covers the buffered shape.\n  \
+            and the tail reads it as waiting-hitl. A single-question one stays buffered until\n    \
+            it is answered. The difference depends on when Claude Code writes the record to\n    \
+            disk, and no rule keys on the question count. The elicitation file covers the\n    \
+            buffered shape.\n  \
           - The registry covers top-level sessions only. A subagent target degrades to tail\n    \
             and pid evidence, and never gets a fabricated row.\n  \
           - The pid probe is `ps` (plus `/proc` on Linux) on unix, and PowerShell\n    \
@@ -179,16 +186,15 @@ pub struct BackgroundLensArgs {
           an in-app resume and at exit, and most such lines sit mid-file. All a tail one says\n  \
           is that nothing was appended after it. Liveness stays the registry row's answer, and\n  \
           the verdict set is unchanged.\n\n  \
-          The tasks section reads the same store it always did. That store is named after the\n  \
-          id the PROCESS started with, and a `/clear` never renames it. When the session's own\n  \
+          The tasks section reads the harness's task store, which is named after the id the\n  \
+          PROCESS started with, and a `/clear` never renames it. When the session's own\n  \
           id finds nothing, csift tries the root of the `cleared_from` chain (see\n  \
           `csift list`), then the team file written within 5s of the registry row's\n  \
           startedAt. Each store that answered prints as `tasks store: <dir> (via <candidate>)`,\n  \
           and an EMPTY one is marked `- empty`. The directory existing answers where the list\n  \
-          came from, whether or not it holds anything.\n\n  \
-          One pre-existing JSON key moves with this. A session whose store is found through\n  \
-          the root or the team file reports its tasks where an older csift reported none, so\n  \
-          `tasks` goes from null to an array and `tasks_completed` from null to a count.\n\n\
+          came from, whether or not it holds anything. A store found through the chain root or\n  \
+          the team file fills `tasks` and `tasks_completed` like the session's own, and with no\n  \
+          store found both are null.\n\n\
         SEE ALSO\n  \
           csift whoami --peers        every live lane at once, as `id kind state` only\n  \
           csift whoami --to @<lane>   liveness turned into a reach prediction for one lane\n  \
@@ -245,36 +251,45 @@ impl StatusArgs {
         REQUIRED --timeout elapses first, it exits 124 with a report of what the session did\n\
         meanwhile.\n\n\
         BASELINE SEMANTICS\n  \
-          This is the difference between a monitor and a query. At startup `wait` snapshots\n  \
-          every watched file's byte length and observes ONLY events strictly AFTER those\n  \
-          offsets. A condition already satisfied by history alone never fires, because history\n  \
-          is `search`'s job. After the snapshot one readiness line prints to stderr\n  \
-          (`csift: watching N file(s) ...`), so a scripted caller can order its own actions\n  \
-          after the baseline.\n\n\
+          At startup `wait` snapshots every watched file's byte length and observes ONLY events\n  \
+          strictly AFTER those offsets. A condition already satisfied by history alone never\n  \
+          fires, because history is `search`'s job. After the snapshot one readiness line\n  \
+          prints to stderr (`csift: watching N file(s) ...`), so a scripted caller can order its\n  \
+          own actions after the baseline.\n\n\
         CONDITIONS (repeatable, OR-ed, the first hit wins)\n  \
-          stop                      the verdict becomes idle-eot or stale-dead, a TRUE stop.\n                            \
-                                    `idle-background-open` never satisfies it. Narrow the\n                            \
-                                    lens, or let the timeout elapse and read the report.\n  \
-          hitl                      the verdict becomes waiting-hitl\n  \
-          auq                       the elicitation sidecar gains an unanswered question\n  \
+          A lane is one running Claude Code conversation, the top-level session or one\n  \
+          subagent, each with its own transcript, and `wait` watches the target's lanes.\n  \
+          stop                      the verdict becomes idle-eot (stopped at the end of turn)\n                            \
+                                    or stale-dead, a TRUE stop. `idle-background-open`\n                            \
+                                    never satisfies it. A narrower lens lets it fire. The\n                            \
+                                    lens is `--background-since` and `--ignore-background`,\n                            \
+                                    which decide which open background tasks count. Without\n                            \
+                                    one, the timeout elapses and the report shows what\n                            \
+                                    stayed open.\n  \
+          hitl                      the verdict becomes waiting-hitl (HITL, human in the\n                            \
+                                    loop, where a dialog blocks the session on a person)\n  \
+          auq                       the elicitation file (`elicitations.jsonl` in the\n                            \
+                                    session's `<session-id>/` folder) gains an unanswered\n                            \
+                                    AskUserQuestion (AUQ)\n  \
           notification[:REGEX]      a task-notification lands in any watched lane\n  \
           tool:NAME[:REGEX]         a tool_use of NAME whose serialized input matches\n  \
           write:PATH_RE[:LINE_RE]   a Write/Edit whose path matches (and a content line, if\n                            \
                                     given)\n  \
-          verdict:V                 any verdict from the status table\n\n  \
-          Regexes use the same RE2-class engine as search (no backrefs, no lookaround).\n  \
+          verdict:V                 any verdict `csift status --help` lists\n\n  \
+          Regexes take the same syntax as search (RE2-class, no backrefs, no lookaround).\n  \
           Polling is adaptive, from a 200ms floor backing off toward 2s when quiet, and\n  \
           `--interval` pins it. Reads are incremental (only appended bytes) and guarded\n  \
           against a torn tail.\n\n\
         --timeout IS REQUIRED\n  \
           A background task can be designed never to return (a dev server, a watcher, a\n  \
-          tail -f), so an unbounded wait on `stop` is a bug. A call without --timeout is\n  \
-          rejected with that reason.\n\n\
+          tail -f), so a wait on `stop` with no bound might never end. A call without\n  \
+          --timeout is rejected with that reason.\n\n\
         A SHELL THE MODEL RAN IN THE FOREGROUND CAN HOLD `stop` OPEN\n  \
           Ctrl+b, a timeout or a message delivery moves such a shell into the background. It\n  \
-          then counts like any other open task, and its row and JSON carry `entered_by`. If\n  \
-          that is the task you are willing to leave running, name it with --ignore-background\n  \
-          or narrow --background-since. Do not read the 124 as a stall.\n\n\
+          then counts like any other open task, and its row and JSON carry `entered_by`. A\n  \
+          task that may stay running is left out of the count by --ignore-background or a\n  \
+          narrower --background-since. Without that, a 124 exit means the task was still open\n  \
+          when the timeout elapsed, and the session itself may not have stalled.\n\n\
         HOW TO WAIT ON A SESSION, IN ORDER\n  \
           1. Run `csift status @<id>` first and read the background rows. They show which\n     \
              tasks dangle, how old they are, and which are days-old zombies.\n  \
@@ -290,8 +305,8 @@ impl StatusArgs {
         EXIT CODES\n  \
           0       a condition fired\n  \
           124     --timeout elapsed. This follows the GNU timeout convention and is the ONE\n          \
-                  documented exception to the crate's 0-vs-non-zero law, because a monitor's\n          \
-                  timeout is a normal outcome a script must branch on.\n  \
+                  exit code outside csift's 0-or-non-zero rule, because a monitor's timeout\n          \
+                  is a normal outcome a script must branch on.\n  \
           other   any other non-zero exit is an error",
     after_help = "EXAMPLES\n  \
           csift wait @<uuid> --until stop --timeout 300      # block until truly stopped (or 5m)\n  \
