@@ -343,11 +343,10 @@ fn a_capped_fetch_continues_with_exactly_the_records_it_dropped() {
 /// Two edges of the cap. A first record holding more units than the cap is kept WHOLE - a
 /// record's units share its line, and a cut through it would leave the continuation
 /// re-fetching its kept half - and the continuation starts at the next line. A `--turn`
-/// window continues as a window: cut inside its one turn, it re-enters that turn and passes
-/// over the units already shown with `--skip`, so following the continuations reaches every
-/// unit of the turn once.
+/// window cut inside its one turn continues by the lines it left out, so following the
+/// continuations reaches every unit of the turn once.
 #[test]
-fn a_capped_fetch_keeps_a_wide_first_record_and_a_turn_window_continues_as_a_window() {
+fn a_capped_fetch_keeps_a_wide_first_record_and_a_turn_window_continues_by_line() {
     let h = Home::new();
     let sess = "7a6b5c4d-3e2f-4109-a876-543210fedcbc";
     h.write(
@@ -378,8 +377,8 @@ fn a_capped_fetch_keeps_a_wide_first_record_and_a_turn_window_continues_as_a_win
             .is_some_and(|c| c.ends_with("--line 3..4")),
         "{summary}"
     );
-    // The one turn, a page at a time: each continuation passes over what the pages before it
-    // showed, and the last page prints none.
+    // The one turn, a page at a time: each continuation names what the pages before it left
+    // out, and the last page prints none.
     let mut address = vec!["--turn".to_string(), "..".to_string()];
     let mut pages = Vec::new();
     loop {

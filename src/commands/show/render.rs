@@ -30,7 +30,6 @@ pub(crate) fn render_text(
     is_subagent: bool,
     parent_session_id: &str,
     skipped: usize,
-    passed: usize,
     dropped: usize,
     cap: usize,
     remainder: Option<&str>,
@@ -86,25 +85,15 @@ pub(crate) fn render_text(
     }
     writeln!(out)?;
     writeln!(out, "fetched {units} record unit(s)")?;
-    if passed > 0 {
+    if dropped > 0 {
+        let cont = remainder
+            .map(|cmd| format!(" · continue: {cmd}"))
+            .unwrap_or_default();
         writeln!(
             out,
-            "--skip passed over the first {passed} record unit(s) the address selects"
+            "+{dropped} more record unit(s) beyond the {cap}-unit cap{cont}  (or --max-count 0 \
+             = the whole fetch)"
         )?;
-    }
-    if dropped > 0 {
-        match remainder {
-            Some(cmd) => writeln!(
-                out,
-                "+{dropped} more record unit(s) beyond the {cap}-unit cap · continue: {cmd}  \
-                 (or --max-count 0 = uncapped)"
-            )?,
-            None => writeln!(
-                out,
-                "+{dropped} more record unit(s) beyond the {cap}-unit cap — pass \
-                 --max-count 0 (uncapped)"
-            )?,
-        }
     }
     if uncovered.non_record > 0 {
         writeln!(
@@ -145,7 +134,6 @@ pub(crate) fn render_json(
     is_subagent: bool,
     parent_session_id: &str,
     skipped: usize,
-    passed: usize,
     dropped: usize,
     remainder: Option<&str>,
     uncovered: Uncovered,
@@ -221,7 +209,6 @@ pub(crate) fn render_json(
     let mut summary = json!({
         "kind": "summary",
         "records": units,
-        "dropped_by_skip": passed,
         "dropped_by_cap": dropped,
         "refetch_remainder": remainder,
         "non_record_lines": uncovered.non_record,

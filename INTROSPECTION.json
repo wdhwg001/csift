@@ -45682,7 +45682,7 @@
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "338-341",
+          "lines": "330-333",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"{}\",\n            crate::commands::search::address_miss(&misses.join(\", \"))"
         },
         {
@@ -59520,7 +59520,7 @@
         },
         {
           "path": "src/commands/show/run.rs",
-          "lines": "338-341",
+          "lines": "330-333",
           "snippet": "    if !misses.is_empty() {\n        bail!(\n            \"{}\",\n            crate::commands::search::address_miss(&misses.join(\", \"))"
         }
       ],
@@ -89508,7 +89508,7 @@
         {
           "path": "SPEC.md",
           "snippet": "LEDGER-ONLY KEYS (measured, deliberately not modelled)",
-          "lines": "3661"
+          "lines": "3652"
         }
       ],
       "states": [

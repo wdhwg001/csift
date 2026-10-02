@@ -159,6 +159,7 @@ const FORMS: &[&[&str]] = &[
     &["--turn", ".."],
     &["--turn", "1..3"],
     &["--turn", "1"],
+    &["--turn", "-2.."],
 ];
 
 #[test]
@@ -174,147 +175,153 @@ fn every_address_form_pages_forward_to_the_whole_fetch_exactly_once() {
 }
 
 #[test]
-fn a_turn_wider_than_the_cap_continues_past_what_it_showed() {
+fn a_turn_wider_than_the_cap_continues_by_the_lines_it_left_out() {
     let h = Home::new();
     fixture(&h);
-    // t1 holds ten rendered units: each page passes over everything shown before it.
-    assert_eq!(
+    let chains: Vec<Vec<String>> = vec![
+        // t1 is wider than the cap: each page names the lines it did not show, and the turn
+        // window's attachment line (L6) is never among them.
         chain(&h, &["--turn", "1"], "3", false),
-        [
-            "--turn 1",
-            "--turn 1 --skip 3",
-            "--turn 1 --skip 6",
-            "--turn 1 --skip 9",
-        ]
-    );
-    // Cut on a turn boundary the window continues with no skip; L2's four units are one
-    // record, kept whole past a cap of two.
-    assert_eq!(
+        // L2's four units are one record, kept whole past a cap of five.
         chain(&h, &["--turn", ".."], "5", false),
-        [
-            "--turn ..",
-            "--turn 1..3",
-            "--turn 1..3 --skip 5",
-            "--turn 2..3"
-        ]
-    );
-    assert_eq!(
-        chain(&h, &["--turn", "0..1"], "2", false)[..2],
-        ["--turn 0..1", "--turn 0..1 --skip 1"]
-    );
-    // Raw counts lines: t1 is nine lines there (the attachment is outside the window and
-    // L5's two units are one line).
-    assert_eq!(
+        chain(&h, &["--turn", "0..1"], "2", false),
+        // Raw counts lines: L5's two units are one line there.
         chain(&h, &["--turn", "1"], "3", true),
-        ["--turn 1", "--turn 1 --skip 3", "--turn 1 --skip 6"]
-    );
+    ];
+    assert_eq!(chains, TURN_CHAINS_WANT, "{chains:#?}");
 }
 
+const TURN_CHAINS_WANT: [&[&str]; 4] = [
+    &["--turn 1", "--line 7..13", "--line 10..13", "--line 13"],
+    &[
+        "--turn ..",
+        "--line 4..5,7..17 --uuid u-toolu_AQ1",
+        "--line 9..17 --uuid u-toolu_AQ1",
+        "--line 14..17 --uuid u-toolu_AQ1",
+    ],
+    &[
+        "--turn 0..1",
+        "--line 2,4..5,7..13",
+        "--line 4..5,7..13",
+        "--line 5,7..13",
+        "--line 7..13",
+        "--line 9..13",
+        "--line 11..13",
+        "--line 13",
+    ],
+    &["--turn 1", "--line 8..13", "--line 11..13"],
+];
+
 #[test]
-fn a_line_or_uuid_continuation_fetches_exactly_what_the_cap_dropped() {
+fn a_line_or_uuid_continuation_names_exactly_what_the_cap_dropped() {
     let h = Home::new();
     fixture(&h);
-    for (form, cap, want) in [
-        (&["--line", "1..6,12..19"][..], "5", "--line 3..6,12..19"),
-        (&["--line", "2,6,12,14"][..], "5", "--line 12,14"),
+    let mut got = Vec::new();
+    for (form, cap) in [
+        (&["--line", "1..6,12..19"][..], "5"),
+        (&["--line", "2,6,12,14"][..], "5"),
         // L2 holds four units: under a cap of one it is kept whole and the next page starts
         // at L3.
-        (&["--line", "2..4"][..], "1", "--line 3..4"),
-        (
-            &["--uuid", "u4,u3,a1,u-toolu_AQ1"][..],
-            "1",
-            "--uuid u4,u3,u-toolu_AQ1",
-        ),
-        // u3's replay copy (L12) is kept and its survivor (L14) dropped: `--uuid u3` would
-        // fetch the copy again, so the survivor is named by its line.
-        (
-            &["--uuid", "u4,u3,a1,u-toolu_AQ1"][..],
-            "5",
-            "--line 14 --uuid u4,u-toolu_AQ1",
-        ),
-        (
-            &["--line", "1..5", "--uuid", "u3,a7"][..],
-            "2",
-            "--line 2..5 --uuid u3,a7",
-        ),
+        (&["--line", "2..4"][..], "1"),
+        // A uuid list continues by line, and the sidecar record, which has no line, by uuid.
+        (&["--uuid", "u4,u3,a1,u-toolu_AQ1"][..], "1"),
+        // u3's replay copy (L12) is kept and its survivor (L14) dropped: the line names the
+        // survivor alone.
+        (&["--uuid", "u4,u3,a1,u-toolu_AQ1"][..], "5"),
+        (&["--line", "1..5", "--uuid", "u3,a7"][..], "2"),
     ] {
         let start: Vec<String> = form.iter().map(|s| (*s).to_string()).collect();
         let (_, cont) = page(&h, &start, cap, false);
-        assert_eq!(
-            cont.map(|c| c.join(" ")).as_deref(),
-            Some(want),
-            "{form:?} cap {cap}"
-        );
+        got.push(cont.map(|c| c.join(" ")).unwrap_or_default());
     }
+    assert_eq!(got, RECORD_CONTINUATIONS_WANT, "{got:#?}");
+}
+
+const RECORD_CONTINUATIONS_WANT: [&str; 6] = [
+    "--line 3..6,12..19",
+    "--line 12,14",
+    "--line 3..4",
+    "--line 12,14,16 --uuid u-toolu_AQ1",
+    "--line 14,16 --uuid u-toolu_AQ1",
+    "--line 2..5,12..15",
+];
+
+/// A landmark-shaped turn: one prompt and 535 replies is one turn of 536 units, and at the
+/// default cap of 200 it pages as 200, 200 and 136, each page naming the lines it left out.
+#[test]
+fn a_turn_of_536_units_pages_as_200_200_and_136() {
+    let h = Home::new();
+    let sess = "7a6b5c4d-3e2f-4109-a876-5432100cab02";
+    let mut lines = vec![format!(
+        r#"{{"type":"user","uuid":"w0","parentUuid":null,"timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"user","content":"go"}}}}"#
+    )];
+    for i in 1..536 {
+        lines.push(format!(
+            r#"{{"type":"assistant","uuid":"w{i}","parentUuid":"w{}","timestamp":"2026-06-07T05:00:00.000Z","message":{{"role":"assistant","content":[{{"type":"text","text":"step {i}"}}]}}}}"#,
+            i - 1
+        ));
+    }
+    h.write(&format!("{ENC}/{sess}.jsonl"), &(lines.join("\n") + "\n"));
+    let t = at(sess);
+    let mut address = vec!["--turn".to_string(), "0".to_string()];
+    let mut pages = Vec::new();
+    let mut commands = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    loop {
+        let mut args = vec!["show", t.as_str()];
+        args.extend(address.iter().map(String::as_str));
+        args.extend(["--format", "json"]);
+        let out = h.run(&args);
+        assert!(out.success, "{args:?}: {}", out.stderr);
+        let rows = json_rows(&out.stdout, "record");
+        for r in &rows {
+            assert!(
+                seen.insert(r["line"].as_u64()),
+                "{address:?} repeats {}",
+                r["line"]
+            );
+        }
+        pages.push(rows.len());
+        commands.push(address.join(" "));
+        let summary = &json_rows(&out.stdout, "summary")[0];
+        let Some(cmd) = summary["refetch_remainder"].as_str() else {
+            break;
+        };
+        let next: Vec<String> = cmd.split_whitespace().skip(3).map(String::from).collect();
+        assert_ne!(next, address, "a continuation is never its own command");
+        address = next;
+        assert!(pages.len() < 5, "{pages:?}");
+    }
+    assert_eq!(pages, [200, 200, 136], "{commands:?}");
+    assert_eq!(
+        commands,
+        ["--turn 0", "--line 201..536", "--line 401..536"],
+        "{pages:?}"
+    );
+    assert_eq!(seen.len(), 536);
 }
 
 #[test]
-fn skip_past_the_end_is_an_empty_answer_and_is_not_an_address() {
+fn show_takes_no_skip_and_the_summary_names_no_skip() {
     let h = Home::new();
     fixture(&h);
     let t = at(SESS);
     let t = t.as_str();
-    let out = h.run(&["show", t, "--turn", "1", "--skip", "99", "--format", "json"]);
-    assert!(out.success, "{}", out.stderr);
+    let out = h.run(&["show", t, "--turn", "1", "--skip", "3"]);
+    assert_eq!(out.code, Some(2), "{}", out.stderr);
+    let json = h.run(&["show", t, "--turn", "1", "--format", "json"]);
+    assert!(json.success, "{}", json.stderr);
+    let summary = &json_rows(&json.stdout, "summary")[0];
+    assert!(summary.get("dropped_by_skip").is_none(), "{summary}");
+    // The footer names the dropped lines and says what `--max-count 0` returns.
+    let text = h.run(&["show", t, "--turn", "1", "--max-count", "3"]);
     assert!(
-        json_rows(&out.stdout, "record").is_empty(),
-        "{}",
-        out.stdout
-    );
-    let summary = &json_rows(&out.stdout, "summary")[0];
-    assert_eq!(summary["dropped_by_skip"], 10, "{summary}");
-    assert_eq!(summary["dropped_by_cap"], 0, "{summary}");
-    assert!(
-        out.stderr.contains(
-            "csift: note: --skip 99 passes over all 10 record unit(s) the address selects"
-        ),
-        "{}",
-        out.stderr
-    );
-    let raw = h.run(&["show", t, "--turn", "1", "--skip", "9", "--raw"]);
-    assert!(raw.success, "{}", raw.stderr);
-    assert!(raw.stdout.is_empty(), "{}", raw.stdout);
-    assert!(
-        raw.stderr.contains("--skip 9 passes over all 9 line(s)"),
-        "{}",
-        raw.stderr
-    );
-    // Short of the end: the page and the text footer say what was passed over.
-    let text = h.run(&["show", t, "--turn", "1", "--skip", "7"]);
-    assert!(
-        text.stdout.contains("fetched 3 record unit(s)"),
+        text.stdout.contains(&format!(
+            "beyond the 3-unit cap · continue: csift show @{SESS} --line "
+        )) && text.stdout.contains("(or --max-count 0 = the whole fetch)"),
         "{}",
         text.stdout
     );
-    assert!(
-        text.stdout
-            .contains("--skip passed over the first 7 record unit(s) the address selects"),
-        "{}",
-        text.stdout
-    );
-    assert!(!text.stderr.contains("passes over all"), "{}", text.stderr);
-    // With no `--skip` the footer says nothing about one.
-    let plain = h.run(&["show", t, "--turn", "1"]);
-    assert!(
-        plain.stdout.contains("fetched 10 record unit(s)"),
-        "{}",
-        plain.stdout
-    );
-    assert!(
-        !plain.stdout.contains("--skip passed over"),
-        "{}",
-        plain.stdout
-    );
-    // Not an address, and not a branch-point option.
-    let bare = h.run(&["show", t, "--skip", "3"]);
-    assert!(!bare.success);
-    assert!(
-        bare.stderr.contains("show needs an address"),
-        "{}",
-        bare.stderr
-    );
-    let forks = h.run(&["show", t, "--branch-points", "--skip", "3"]);
-    assert_eq!(forks.code, Some(2), "{}", forks.stderr);
 }
 
 /// A uuid names the same records raw and rendered: both lines a replay copy shares with its

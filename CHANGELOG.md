@@ -1574,21 +1574,16 @@ surface change bumps the PATCH.
   order, so a window with an abandoned record printed a continuation that stopped at it or
   ran backwards: on one transcript `--line 1..400` continued with `--line 201..393` and lost
   L394-L400. The cap now keeps the records on the lowest lines, whole records, and the
-  continuation is written in the addressing the reader used. A line address continues as
-  its own ranges clipped at the first dropped line (`--line 1..4,9..14` cut at L3 continues
-  `--line 3..4,9..14`, where one range from L3 also fetched L5-L8), a uuid address as the
-  dropped uuids, and a mixed one as both; each fetches exactly the dropped records. A
-  `--turn` window continues as a window, `--turn K..<its end>`, and when the cap cut inside
-  turn K it passes over that turn's units already shown with the new `--skip M`, which
-  drops the first M record units of what an address selects, in the order the cap keeps
-  them, before the cap applies (lines under `--raw`; the JSON summary counts them as
-  `dropped_by_skip`). A window starts at a turn's first record, so without it a turn wider
-  than the cap continued as the command just run and its later units were never reached.
-  Every form now moves forward: following the continuations at one cap until none is
-  printed yields every unit of the uncapped fetch exactly once. A `--skip` past everything
-  addressed prints an empty page and a stderr note, exit 0. `show --raw`'s stderr
-  continuation follows the same rule. `show --help` says so under `--max-count` and
-  `--skip`.
+  continuation names the units it dropped by their lines, with touching ranges merged
+  (`--line 1..4,9..14` cut at L3 continues `--line 3..4,9..14`, where one range from L3
+  also fetched L5-L8). A dropped record merged from the elicitation sidecar has no line
+  and is named by `--uuid`. Every address form continues this way, `--turn` included, so
+  a turn wider than the cap pages forward and the footer always says which records the
+  page left out. A wide window pays for that in length: `--turn ..` on a 397 MiB
+  transcript continues with 17,534 line pieces. Following the continuations at one cap
+  until none is printed yields every unit of the uncapped fetch exactly once, and the
+  footer now says `--max-count 0` returns the whole fetch. `show --raw`'s stderr
+  continuation follows the same rule. `show --help` says so under `--max-count`.
 - **`show --raw` by uuid fetches the records the rendered fetch does.** A uuid a replay
   copy shares with the line that survives it fetched both rendered and only the copy raw;
   it now prints both lines, lowest first. The uuid of a record merged from the elicitation

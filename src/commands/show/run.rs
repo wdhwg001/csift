@@ -71,11 +71,11 @@ pub fn run_show(args: &ShowArgs, cross: CrossingBudget) -> Result<()> {
         bail!("no such record(s): {}", empty.join(", "));
     }
 
-    let page = Page::new(args.skip, args.max_count);
+    let cap = effective_cap(args.max_count);
     if args.raw {
-        return run_raw(&file, &specs, &uuids, turn_spec, page, cross);
+        return run_raw(&file, &specs, &uuids, turn_spec, cap, cross);
     }
-    run_rendered(&file, &specs, &uuids, turn_spec, args.format, page, cross)
+    run_rendered(&file, &specs, &uuids, turn_spec, args.format, cap, cross)
 }
 
 /// `--raw`: emit the verbatim bytes of each addressed jsonl line, ascending, exactly
@@ -85,7 +85,7 @@ pub(crate) fn run_raw(
     specs: &LineSpecs,
     uuids: &[String],
     turn_range: Option<crate::text::RangeSpec>,
-    page: Page,
+    cap: usize,
     cross: CrossingBudget,
 ) -> Result<()> {
     let Some(mmap) = mmap_bytes(file)? else {
@@ -102,10 +102,10 @@ pub(crate) fn run_raw(
     let mut wanted_lines = specs.all();
     // `--turn --raw`: resolve the turn range to its records' physical lines (via the shared
     // grouping, so the turn numbering matches `search`), then emit those lines verbatim. The
-    // turn of each line rides along, because a capped window continues as a window.
+    // turn of each line rides along, because a capped window keeps its earliest turns.
     let mut crossing = crate::model::CrossingReport::new(cross);
     let mut line_turn: std::collections::BTreeMap<usize, usize> = std::collections::BTreeMap::new();
-    let mut window_last = None;
+    let mut window = false;
     if let Some(spec) = turn_range {
         let (exchanges, _, turn_count, report) =
             fetch_records(file, BTreeSet::new(), BTreeSet::new(), Some(spec), cross)?;
@@ -114,7 +114,7 @@ pub(crate) fn run_raw(
         if turn_spec_is_explicit(&spec) && exchanges.is_empty() {
             return Err(turn_miss_error(&spec, turn_count));
         }
-        window_last = Some(spec.resolve(turn_count, false).1);
+        window = true;
         for ex in &exchanges {
             for h in &ex.hits {
                 if h.line > 0 {
@@ -182,31 +182,26 @@ pub(crate) fn run_raw(
         bail!("no such record(s): {}", misses.join(", "));
     }
 
-    // Context-flood guard: pass over `--skip` lines, keep the next `cap`, report the drop on
-    // stderr (stdout stays a pure jsonl stream) with the continuation command, in the address
-    // domain the reader used - the rule the rendered fetch follows, one line a unit.
-    let cap = page.cap;
-    let domain = match window_last {
-        Some(last) => Addressed::Turns { last },
-        None => Addressed::Records { specs, uuids },
+    // Context-flood guard: keep the first `cap` lines, report the drop on stderr (stdout stays
+    // a pure jsonl stream) with the continuation naming the dropped lines - the rule the
+    // rendered fetch follows, one line a unit. Every raw unit has a line, so no uuid is needed.
+    let domain = if window {
+        Addressed::Turns
+    } else {
+        Addressed::Records
     };
     let capped = {
-        let uuid_of: std::collections::BTreeMap<usize, &str> = uuid_lines
-            .iter()
-            .flat_map(|(u, lines)| lines.iter().map(move |&l| (l, *u)))
-            .collect();
         let units: Vec<Unit> = keep
             .keys()
             .map(|&line| Unit {
                 line,
-                uuid: uuid_of.get(&line).copied(),
+                uuid: None,
                 turn: line_turn.get(&line).copied(),
             })
             .collect();
-        cap_units(&units, page.skip, cap, &domain)
+        cap_units(&units, cap, domain)
     };
     let dropped = capped.dropped;
-    let addressed_units = keep.len();
     let mut flags = capped.keep.iter().copied();
     keep.retain(|_, _| flags.next().unwrap_or(true));
 
@@ -235,9 +230,6 @@ pub(crate) fn run_raw(
                  transcript line — omitted under --raw (the rendered fetch shows it)"
             ));
         }
-        if let Some(note) = skip_note(page.skip, addressed_units, "line") {
-            crate::text::stderr_line(format_args!("csift: note: {note}"));
-        }
         if dropped > 0 {
             let sid = crate::subagent::session_id_from_path(file);
             let cont = match &capped.continuation {
@@ -245,8 +237,8 @@ pub(crate) fn run_raw(
                 None => String::new(),
             };
             crate::text::stderr_line(format_args!(
-                "csift: note: +{dropped} more line(s) beyond the {cap}-unit cap{cont}, or pass \
-                 --max-count 0 (uncapped)"
+                "csift: note: +{dropped} more line(s) beyond the {cap}-unit cap{cont}  (or \
+                 --max-count 0 = the whole fetch)"
             ));
         }
         // A `--turn` window is resolved through the chain, so which lines these ARE moves with
@@ -288,7 +280,7 @@ pub(crate) fn run_rendered(
     uuids: &[String],
     turn_range: Option<crate::text::RangeSpec>,
     format: OutputFormat,
-    page: Page,
+    cap: usize,
     cross: CrossingBudget,
 ) -> Result<()> {
     let (mut exchanges, skipped, turn_count, crossing) = fetch_records(
@@ -359,15 +351,13 @@ pub(crate) fn run_rendered(
     };
 
     // Context-flood guard (law 4's last hole): an open range (`--line ..` / `--turn ..`)
-    // addresses the WHOLE transcript, so uncapped it would dump the lot. Pass over `--skip`
-    // units, keep the next `cap` and report the drop with the continuation command, in the
-    // address domain the reader used; `--max-count 0` lifts the cap.
-    let cap = page.cap;
-    let domain = match turn_range {
-        Some(spec) => Addressed::Turns {
-            last: spec.resolve(turn_count, false).1,
-        },
-        None => Addressed::Records { specs, uuids },
+    // addresses the WHOLE transcript, so uncapped it would dump the lot. Keep the first `cap`
+    // units and report the drop with the continuation naming the dropped units; `--max-count
+    // 0` lifts the cap.
+    let domain = if turn_range.is_some() {
+        Addressed::Turns
+    } else {
+        Addressed::Records
     };
     let capped = {
         let units: Vec<Unit> = exchanges
@@ -380,9 +370,8 @@ pub(crate) fn run_rendered(
                 })
             })
             .collect();
-        cap_units(&units, page.skip, cap, &domain)
+        cap_units(&units, cap, domain)
     };
-    let addressed_units = capped.keep.len();
     let mut flags = capped.keep.iter().copied();
     for ex in &mut exchanges {
         ex.hits.retain(|_| flags.next().unwrap_or(true));
@@ -401,7 +390,6 @@ pub(crate) fn run_rendered(
                 is_subagent,
                 &parent_session_id,
                 skipped,
-                capped.skipped,
                 dropped,
                 cap,
                 remainder.as_deref(),
@@ -416,29 +404,11 @@ pub(crate) fn run_rendered(
             is_subagent,
             &parent_session_id,
             skipped,
-            capped.skipped,
             dropped,
             remainder.as_deref(),
             uncovered,
             &crossing,
         )?,
     }
-    // After the render flushed: the page is empty because `--skip` reached past everything
-    // the address selects, which the address resolving makes an answer, not a miss.
-    #[allow(clippy::print_stderr)]
-    if let Some(note) = skip_note(page.skip, addressed_units, "record unit") {
-        crate::text::stderr_line(format_args!("csift: note: {note}"));
-    }
     Ok(())
-}
-
-/// The note for a `--skip` that reaches past every unit the address selects: the address
-/// resolved, so the empty page is an answer (exit 0) rather than a miss. `None` otherwise.
-pub(crate) fn skip_note(skip: usize, addressed: usize, noun: &str) -> Option<String> {
-    (skip > 0 && skip >= addressed).then(|| {
-        format!(
-            "--skip {skip} passes over all {addressed} {noun}(s) the address selects - \
-             nothing is left to show"
-        )
-    })
 }

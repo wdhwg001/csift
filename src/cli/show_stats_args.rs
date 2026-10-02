@@ -91,10 +91,10 @@ const SHOW_AFTER_HELP_TAIL: &str = ". `text` is one line: whitespace runs are \
         boundary unpaired: no summary after it, or a second boundary first), and \
         `compact_metadata` is the \
         boundary's own object verbatim, including the `preservedMessages` uuid lists the \
-        one-line excerpt only counts. The summary is {records, dropped_by_skip (the units \
-        `--skip` passed over, 0 without it), dropped_by_cap, refetch_remainder (the \
-        ready-to-run continuation command when the cap dropped units, else null; it never \
-        repeats a unit already shown), non_record_lines (lines that exist and render no \
+        one-line excerpt only counts. The summary is {records, dropped_by_cap, \
+        refetch_remainder (the ready-to-run continuation command when the cap dropped units, \
+        else null; it names the dropped units by line, or by uuid for a unit with no line, so \
+        it never repeats a unit already shown), non_record_lines (lines that exist and render no \
         record), lines_past_end (lines a range named past the file's last line), \
         skipped_lines, with_elicitation_sidecar}, plus \
         the crossing set \
@@ -193,27 +193,16 @@ pub struct ShowArgs {
     /// Cap the emitted record units: the CONTEXT-FLOOD guard for open ranges (`--line ..`
     /// / `--turn ..` address a whole transcript). Defaults to 200. The cap keeps the records
     /// on the LOWEST lines (a `--turn` window: its earliest turns, by line within a turn),
-    /// whole records (at least one), whatever order they render in; the drop is ALWAYS
-    /// reported, with the continuation command for the remainder in the addressing you used,
-    /// and a continuation always moves forward: run at any cap it never repeats a unit
-    /// already shown. A `--line` or `--uuid` address continues exactly: its own ranges clipped
-    /// at the first dropped line, and the dropped uuids. A `--turn` window continues as
-    /// `--turn K..<its end> --skip M`, K the turn of the first dropped unit and M the units of
-    /// tK already shown (no `--skip` when M is 0), because a window starts at a turn's first
-    /// record. `0` = uncapped (the crate-wide `--max-count 0` convention).
+    /// whole records (at least one), whatever order they render in. The drop is ALWAYS
+    /// reported with a continuation command that names the dropped units by their lines,
+    /// sorted, with ranges that overlap or touch merged (`--line 3..4,9..14`). A dropped
+    /// record merged from the elicitation sidecar has no line and is named by `--uuid`. Every
+    /// address form continues this way, `--turn` included, so the footer always says which
+    /// records this page left out, and following the continuations at one cap returns every
+    /// unit of the uncapped fetch exactly once. `0` = uncapped (the crate-wide
+    /// `--max-count 0` convention).
     #[arg(long, value_name = "N")]
     pub max_count: Option<usize>,
-
-    /// Pass over the first N record units of what the address selects, in the order the cap
-    /// keeps them (lowest line first, a record merged from the elicitation sidecar last; a
-    /// `--turn` window by turn, then line; the units of one record in the order they
-    /// render), before the cap applies. Under `--raw` N counts lines, what the raw cap
-    /// counts. An N that reaches past every unit addressed prints an empty page and a stderr
-    /// note, exit 0 - the address resolved. `--skip` is not an address: without
-    /// `--line`/`--uuid`/`--turn` it is refused like any addressless `show`, and clap refuses
-    /// it beside `--branch-points`. The JSON summary carries the count as `dropped_by_skip`.
-    #[arg(long, value_name = "N")]
-    pub skip: Option<usize>,
 
     /// Emit the VERBATIM raw jsonl line(s) instead of the rendered record view
     /// (mutually exclusive with `--format json`).
@@ -236,7 +225,7 @@ pub struct ShowArgs {
     /// assistant record, say) or `pre-cut` (above a compaction boundary, where the
     /// chain stops and csift keeps reading). Beyond what the chain resolves, csift
     /// reports and ranks, never guesses.
-    #[arg(long = "branch-points", conflicts_with_all = ["line", "uuid", "turn", "raw", "skip"])]
+    #[arg(long = "branch-points", conflicts_with_all = ["line", "uuid", "turn", "raw"])]
     pub branch_points: bool,
 
     /// Emit JSON instead of the rendered text format.

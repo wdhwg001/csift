@@ -237,22 +237,6 @@ pub(crate) fn effective_cap(max_count: Option<usize>) -> usize {
     }
 }
 
-/// One page of a fetch: the units `--skip` passes over, then at most `cap` kept.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Page {
-    pub(crate) skip: usize,
-    pub(crate) cap: usize,
-}
-
-impl Page {
-    pub(crate) fn new(skip: Option<usize>, max_count: Option<usize>) -> Self {
-        Self {
-            skip: skip.unwrap_or(0),
-            cap: effective_cap(max_count),
-        }
-    }
-}
-
 /// True when a `--turn` spec is fully EXPLICIT (`N` / `A..B` - both endpoints written as
 /// absolute indices): an ADDRESS by law 1, so resolving to zero records is a miss (hard
 /// error), never an honest-empty. Open / from-the-end forms (`N..`, `..N`, `-k`, `..`)
