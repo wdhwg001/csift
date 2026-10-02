@@ -9280,8 +9280,8 @@
       "code": [
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "138-141",
-          "snippet": "        STALENESS: `pending_classification: awaiting-execution` means slow OR wedged OR \\\n        abandoned; jsonl cannot tell them apart, and at corpus scale a lane pending for \\\n        hours/days is overwhelmingly \\\"parent session ended, nobody is coming back\\\", not \\\n        in-flight work: weigh `pending_since_utc` against now yourself; \\"
+          "lines": "172-176",
+          "snippet": "        pending_*         STALENESS. `pending_classification: awaiting-execution` means slow OR\\n                      \\\n        wedged OR abandoned, and jsonl cannot tell them apart. At corpus scale\\n                      \\\n        a lane pending for hours or days is overwhelmingly \\\"parent session\\n                      \\\n        ended, nobody is coming back\\\", not in-flight work. Weigh\\n                      \\\n        `pending_since_utc` against now yourself.\\n                      \\"
         }
       ],
       "states": [
@@ -62679,8 +62679,8 @@
         },
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "160",
-          "snippet": "\\\"what did the agent conclude\\\": a `sync-tool-result` source faithfully reports \\"
+          "lines": "200",
+          "snippet": "        return\\\", not \\\"what did the agent conclude\\\". A `sync-tool-result`\\n                      \\"
         },
         {
           "path": "src/subagent/spawn.rs",
@@ -62689,8 +62689,8 @@
         },
         {
           "path": "src/cli/agents_args.rs",
-          "lines": "159-165",
-          "snippet": "        SEMANTICS: it answers \\\"what did the PARENT SESSION record as the return\\\", not \\\n        \\\"what did the agent conclude\\\": a `sync-tool-result` source faithfully reports \\\n        the parent's tool_result even when it is a terse sign-off (`Done.`, `Complete.`) \\\n        plus the harness's appended continuation footer (`agentId: <id> (use SendMessage \\\n        with to: '<id>', summary: '<5-10 word recap>' to continue this agent)` - the harness \\\n        appends, it never truncates); the child's own final words are always \\\n        `csift show @<agent-id> --turn -1..`). \\"
+          "lines": "199-206",
+          "snippet": "        SEMANTICS. It answers \\\"what did the PARENT SESSION record as the\\n                      \\\n        return\\\", not \\\"what did the agent conclude\\\". A `sync-tool-result`\\n                      \\\n        source faithfully reports the parent's tool_result even when it is a\\n                      \\\n        terse sign-off (`Done.`, `Complete.`) plus the harness's appended\\n                      \\\n        continuation footer (`agentId: <id> (use SendMessage with to: '<id>',\\n                      \\\n        summary: '<5-10 word recap>' to continue this agent)`). The harness\\n                      \\\n        appends and never truncates. The child's own final words are always\\n                      \\\n        `csift show @<agent-id> --turn -1..`.\\n    \\"
         }
       ],
       "states": [

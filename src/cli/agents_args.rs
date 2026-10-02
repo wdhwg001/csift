@@ -6,214 +6,262 @@ use super::*;
 /// (path location), with `agentType` retained as a descriptive sub-label per row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum AgentKindFilter {
-    /// Built-in Task/Agent-tool subagents (`subagents/agent-<hex>.jsonl`).
+    /// Built-in Task/Agent-tool subagents (`subagents/agent-<hex>.jsonl`)
     #[value(name = "builtin-task")]
     BuiltinTask,
-    /// Workflow / OMC workflow-subagent transcripts
-    /// (`subagents/workflows/wf_*/agent-<hex>.jsonl`).
+    /// Workflow / OMC workflow-subagent transcripts (`workflows/wf_*/`)
     Workflow,
-    /// "Teammate" agents (`taskKind:"in_process_teammate"`): Claude Code's persistent,
-    /// directly-addressable team members. They share the built-in on-disk location
-    /// (`subagents/agent-<id>.jsonl`); the meta.json `taskKind` is the discriminator.
+    /// Claude Code's persistent, directly-addressable team members
     Teammate,
 }
 
 #[derive(Debug, Args)]
 #[command(
-    about = "List a session's subagents with kind, start/completion timestamps + status",
-    long_about = "List a session's SUBAGENT lifecycle: every subagent transcript the session \
-        spawned, with its id, KIND, start + completion timestamps, duration, and a \
-        determinable status. Three on-disk shapes are discovered under \
-        `<session>/subagents/**`:\n  \
-          • builtin-task  subagents/agent-<hex>.jsonl                 (Task/Agent tool)\n  \
-          • workflow      subagents/workflows/wf_<id>/agent-<hex>.jsonl (OMC workflows)\n  \
-          • teammate      subagents/agent-a<Name>-<hex>.jsonl         (in_process_teammate / FleetView; meta taskKind)\n\
-        Workflow `journal.jsonl` event logs are NOT transcripts; they are read only \
-        to corroborate completion status, never listed as agents.\n\n\
-        The TARGET selects the parent session: pass `@<uuid>` for one \
-        session, or a project PATH/encoded-dir to cover every session under it (each \
-        session's subagents are grouped under it). Start/completion come from the \
-        subagent transcript's first/last record timestamp. A workflow lane's own RUN \
-        decides its status first, by the rule `status` reads: the agent's journal line \
-        (`result` is `completed`, `failed` is `failed`), else the manifest an ended run \
-        writes (`completed`, or its status verbatim - `killed`, `failed`, an open set) - \
-        unless the lane's newest record is more than a minute newer than that manifest's \
-        own end instant: such a lane wrote after its run's end, most likely because a run \
-        resumed under its id runs under its predecessor's manifest until it ends, so it is \
-        read from its tail and its row names the stale manifest. A lane its run ended without completing carries no completion instant, \
-        and its row names why in brackets (JSON `settled_by`), in the words `status` uses. Any other \
-        lane is `completed` when the transcript's NEWEST meaningful record is an \
-        assistant text ending its turn, else \
-        `running`/`unknown` - a returned tool_result at the tail is a lane mid-turn, and \
-        reads `running` with no completion instant.\n\n\
-        `--since`/`--until` (ISO8601 or relative `2h`/`3d`/…, in the system local \
-        timezone) filter to subagents whose TRIGGER time (the parent tool_use ts: the \
-        true spawn instant) falls in the window by default; `--order-by start` uses the \
-        transcript's first-record ts, `--order-by completion` the last (the lane's \
-        TERMINAL instant, `last_activity_utc`, so a frozen lane windows on its freeze \
-        instant rather than vanishing from a bounded window for never completing).\n\n\
-        TOPOLOGY: the TEXT output is ALWAYS the parent→child tree: workflow runs as \
-        parent nodes of their agents, and a nested sub-subagent under its spawning agent \
-        (indented by depth). JSON emits the SAME topology as FLAT kind-tagged rows (one \
-        `kind:\"agent\"` row per node, tree pre-order; rebuild nesting from \
-        parent_agent_id + depth). `--agent <hex>` grabs ONE subagent with its returned message; \
-        `--returned-message` adds the 3-way-resolved returned message to every row; \
-        `--with-files` attaches each node's files-changed list.",
-    after_help = "TARGET / TOPOLOGY (scope guidance)\n  \
-          The TARGET selects the PARENT session whose subagents to list: pass `@<uuid>` \
-        (or `@main`/`@trap:<marker>`) for ONE session, or a project PATH/encoded-dir \
-        to cover every session under it (each session's subagents grouped under it). \
-        Subagent shapes discovered under `<session>/subagents/**`:\n    \
-            • builtin-task  subagents/agent-<hex>.jsonl                       (Task/Agent tool)\n    \
-            • workflow      subagents/workflows/wf_<id>/agent-<hex>.jsonl     (OMC workflows)\n    \
-            • teammate      subagents/agent-a<Name>-<hex>.jsonl              (in_process_teammate; meta taskKind)\n  \
-          Workflow `journal.jsonl` event logs are NOT transcripts (read only to corroborate \
-        status, never listed). A workflow lane's run decides first - its journal line \
-        (`result` completed, `failed` failed), else its ended run's manifest status \
-        (`completed`, or the word verbatim, e.g. `killed`) unless the lane wrote past \
-        that manifest's end by more than a minute - and any other lane is \
-        `completed` when the transcript's newest meaningful record is an assistant text \
-        ending its turn, else `running`/`unknown`. \
-        The TEXT output is ALWAYS the parent→child topology tree (workflow runs as parents \
-        of their agents; a nested sub-subagent under its spawning agent); JSON carries the \
-        SAME topology as flat pre-ordered rows. `--agent <hex>` grabs ONE subagent \
-        by its bare-hex id (full node + returned \
-        message); it is a DIRECT lookup that IGNORES --since/--until/--order-by/--shape and \
-        renders just that node (a tree of one), and \
-        a non-matching hex is a hard error (run a plain listing first to discover ids). NOTE: \
-        `--shape` here is the TRANSCRIPT-SHAPE filter (builtin-task | workflow | teammate), a DIFFERENT \
-        axis from the automation-trigger KIND a `<task-notification>` pulse carries \
-        (background-command / workflow / agent / monitor / task in its rendered label; the \
-        `-t harness.notification.<leaf>` selector spells `agent` as `subagent`); they \
-        overlap only on the token `workflow`.\n\n\
+    about = "List a session's subagents with kind, start/completion timestamps and status",
+    long_about = "List a session's SUBAGENT lifecycle.\n\
+        \n\
+        Every subagent transcript the session spawned is listed with its id, KIND, start and\n\
+        completion timestamps, duration and a determinable status. Three on-disk shapes are\n\
+        discovered under `<session>/subagents/**`.\n  \
+        • builtin-task  subagents/agent-<hex>.jsonl                    (Task/Agent tool)\n  \
+        • workflow      subagents/workflows/wf_<id>/agent-<hex>.jsonl  (OMC workflows)\n  \
+        • teammate      subagents/agent-a<Name>-<hex>.jsonl            (in_process_teammate /\n                                                                 \
+        FleetView, meta taskKind)\n\
+        Workflow `journal.jsonl` event logs are NOT transcripts. They are read only to corroborate\n\
+        completion status, and they are never listed as agents.\n\
+        \n\
+        The TARGET selects the parent session. Pass `@<uuid>` for one session, or a project path or\n\
+        encoded directory to cover every session under it, with each session's subagents grouped\n\
+        under it.\n\
+        \n\
+        STATUS\n\
+        Start and completion come from the subagent transcript's first and last record timestamps.\n\
+        A workflow lane's own RUN decides its status first, by the rule `status` reads.\n  \
+        1. The agent's journal line decides when there is one. `result` reads `completed`, and\n     \
+        `failed` reads `failed`.\n  \
+        2. Otherwise the manifest an ended run writes decides. It reads `completed`, or the run's\n     \
+        status verbatim (`killed`, `failed`, an open set).\n\
+        A lane whose newest record is more than a minute newer than that manifest's own end instant\n\
+        is the exception. Such a lane wrote after its run ended, most likely because a run resumed\n\
+        under its id runs under its predecessor's manifest until it ends. It is read from its tail,\n\
+        and its row names the stale manifest. A lane its run ended without completing carries no\n\
+        completion instant, and its row names why in brackets (JSON `settled_by`), in the words\n\
+        `status` uses.\n\
+        \n\
+        Any other lane is `completed` when the transcript's NEWEST meaningful record is an\n\
+        assistant text ending its turn, and `running` or `unknown` otherwise. A returned\n\
+        tool_result at the tail is a lane mid-turn, and it reads `running` with no completion\n\
+        instant.\n\
+        \n\
+        TIME WINDOW\n\
+        `--since`/`--until` take ISO8601 or a relative `2h`/`3d`/… in the system local timezone. By\n\
+        default they keep the subagents whose TRIGGER time falls in the window. The trigger time is\n\
+        the parent tool_use timestamp, the true spawn instant. `--order-by start` uses the\n\
+        transcript's first-record timestamp instead. `--order-by completion` uses the last one, the\n\
+        lane's TERMINAL instant `last_activity_utc`, so a frozen lane windows on its freeze instant\n\
+        and does not vanish from a bounded window for never completing.\n\
+        \n\
+        TOPOLOGY\n\
+        The TEXT output is ALWAYS the parent→child tree. Workflow runs are the parent nodes of\n\
+        their agents, and a nested sub-subagent sits under its spawning agent, indented by depth.\n\
+        JSON emits the SAME topology as FLAT kind-tagged rows, one `kind:\"agent\"` row per node in\n\
+        tree pre-order. Rebuild the nesting from parent_agent_id + depth. `--agent <hex>` grabs ONE\n\
+        subagent with its returned message. `--returned-message` adds the 3-way-resolved returned\n\
+        message to every row. `--with-files` attaches each node's files-changed list.",
+    after_help = "AT A GLANCE\n  \
+        The TARGET selects the PARENT session whose subagents to list. `@<uuid>` (or `@main` or\n  \
+        `@trap:<marker>`) names ONE session, and a project path or encoded directory covers every\n  \
+        session under it, with each session's subagents grouped under it. The subagent shapes\n  \
+        are discovered under `<session>/subagents/**`.\n    \
+        • builtin-task  subagents/agent-<hex>.jsonl                    (Task/Agent tool)\n    \
+        • workflow      subagents/workflows/wf_<id>/agent-<hex>.jsonl  (OMC workflows)\n    \
+        • teammate      subagents/agent-a<Name>-<hex>.jsonl            (in_process_teammate,\n                                                                   \
+        meta taskKind)\n  \
+        Workflow `journal.jsonl` event logs are NOT transcripts. They are read only to\n  \
+        corroborate status, and never listed.\n\
+        \n  \
+        A workflow lane's run decides its status first. Its journal line comes first (`result` is\n  \
+        completed, `failed` is failed), then its ended run's manifest status (`completed`, or the\n  \
+        word verbatim, e.g. `killed`), unless the lane wrote past that manifest's end by more\n  \
+        than a minute. Any other lane is `completed` when the transcript's newest meaningful\n  \
+        record is an assistant text ending its turn, and `running` or `unknown` otherwise.\n\
+        \n  \
+        The TEXT output is ALWAYS the parent→child topology tree, with workflow runs as the\n  \
+        parents of their agents and a nested sub-subagent under its spawning agent. JSON carries\n  \
+        the SAME topology as flat pre-ordered rows.\n\
+        \n  \
+        `--agent <hex>` grabs ONE subagent by its bare-hex id, with the full node and its returned\n  \
+        message. It is a DIRECT lookup that IGNORES --since/--until/--order-by/--shape and renders\n  \
+        just that node, a tree of one. A non-matching hex is a hard error, so run a plain listing\n  \
+        first to discover the ids.\n\
+        \n  \
+        `--shape` here is the TRANSCRIPT-SHAPE filter (builtin-task | workflow | teammate). It is a\n  \
+        DIFFERENT axis from the automation-trigger KIND a `<task-notification>` pulse carries\n  \
+        (background-command / workflow / agent / monitor / task in its rendered label, where the\n  \
+        `-t harness.notification.<leaf>` selector spells `agent` as `subagent`). The two axes\n  \
+        overlap only on the token `workflow`.\n\
+        \n\
         EXAMPLES\n  \
-          csift agents @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d              # one session's subagent tree\n  \
-          csift agents .                                                   # every session under this project\n  \
-          csift agents . --shape workflow                                   # only workflow-shape agents (NOT the automation kind)\n  \
-          csift agents @<uuid> --since 2h                                  # subagents TRIGGERED in the last 2h\n  \
-          csift agents @<uuid> --since 6h --order-by completion            # COMPLETED in the last 6h\n  \
-          csift agents @<uuid> --order-by completion                       # order/window on the completion axis\n  \
-          csift agents @<uuid> --since 2026-06-01T09:00:00Z --order-by completion  # COMPLETED since an ISO bound\n  \
-          csift agents @<uuid>                                             # discover ids, then grab one:\n  \
-          csift agents --agent <hex>                                       #   grab ONE subagent (direct lookup; ignores time/kind)\n  \
-          csift agents @<uuid> --with-files                                # each node + its files-changed list\n  \
-          csift agents @<uuid> --returned-message                          # add the 3-way-resolved returned message to every row\n  \
-          csift agents . --format json                                     # machine-readable flat rows (kind: session|run|agent)\n\n\
+        One session's subagent tree:\n    \
+        csift agents @0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d\n  \
+        Every session under this project:\n    \
+        csift agents .\n  \
+        Only workflow-shape agents (NOT the automation kind):\n    \
+        csift agents . --shape workflow\n  \
+        Subagents TRIGGERED in the last 2h:\n    \
+        csift agents @<uuid> --since 2h\n  \
+        Subagents COMPLETED in the last 6h:\n    \
+        csift agents @<uuid> --since 6h --order-by completion\n  \
+        Order and window on the completion axis:\n    \
+        csift agents @<uuid> --order-by completion\n  \
+        Subagents COMPLETED since an ISO bound:\n    \
+        csift agents @<uuid> --since 2026-06-01T09:00:00Z --order-by completion\n  \
+        Discover the ids, then grab ONE subagent (a direct lookup that ignores time and kind):\n    \
+        csift agents @<uuid>\n    \
+        csift agents --agent <hex>\n  \
+        Each node with its files-changed list:\n    \
+        csift agents @<uuid> --with-files\n  \
+        Add the 3-way-resolved returned message to every row:\n    \
+        csift agents @<uuid> --returned-message\n  \
+        Machine-readable flat rows (kind: session|run|agent):\n    \
+        csift agents . --format json\n\
+        \n\
         JSON SCHEMA (per --format json)\n  \
-          FLAT kind-tagged rows (envelope v2): a leading {kind:\"header\", …} line; \
-        per session one light {kind:\"session\", session_id, runs, agents} row (counts \
-        only - `agents` is EXACTLY the number of {kind:\"agent\"} rows that follow it, and \
-        the text tree prints that same set in that same order, so the two projections can \
-        never disagree; two copies of one session whose contents DIFFER keep both sidecars \
-        in scope, and the agent copies inside them take the same merge as any transcript - \
-        identical or prefix copies collapse to ONE row, only an agent whose OWN copies \
-        differ gets a row per copy, and those two share an id - the `copies` line above \
-        says why); each in-scope workflow run one {kind:\"run\", session_id, run_id, task_id, \
-        workflow_name, status, agent_count, duration_ms, total_tokens, total_tool_calls, \
-        default_model, started_utc, started_local} row followed by its member agent rows \
-        (a RUN row's `status` is the run MANIFEST's own `status` VERBATIM - \
-        `<session>/workflows/<run>.json`, which the runtime writes once the run ends: an \
-        OPEN set, not a csift enum; observed values include `completed`, `killed` and \
-        `failed`, distinct from an AGENT row's `status`, which takes the run's word only \
-        for a lane its run ended without completing); \
-        every agent its OWN {kind:\"agent\", …} row in tree PRE-ORDER (a parent row precedes \
-        its children; rebuild nesting from parent_agent_id + depth; there is no \
-        children[] array in JSON, the tree renders in TEXT mode); a closing \
-        {kind:\"summary\", sessions, runs, agents} terminator. Agent-row fields: {agent_id, \
-        path (the node's OWN transcript - two copies of one session carry two copies of \
-        each agent transcript, and where those copies diverge both rows survive sharing \
-        every other id, so the path is what \
-        names which lane a row is; the text tree prints a `transcript` line for exactly \
-        the ids that occur twice), \
-        shape, parent_session_id, parent_agent_id, spawn_tool_use_id, spawn_tool, \
-        workflow_id, agent_type, name, team_name, description, trigger_utc/_local, \
-        started_utc/_local, completed_utc/_local, last_activity_utc/_local, duration, \
-        depth, status, settled_by, pending_tool_use_id, pending_tool_name, pending_classification, \
-        pending_reason, pending_checker, \
-        pending_since_utc/_local, skipped_lines, fork_parent_last_uuid, \
-        fork_context_length} (+ control_hint and routing_id on a teammate row, and only \
-        there; the fork_* pair is non-null \
-        ONLY on a /fork child - the parent's last record uuid at fork time, feedable to \
-        `csift show @<parent_session_id> --uuid <it>`, and the carried context length; \
-        STALENESS: `pending_classification: awaiting-execution` means slow OR wedged OR \
-        abandoned; jsonl cannot tell them apart, and at corpus scale a lane pending for \
-        hours/days is overwhelmingly \"parent session ended, nobody is coming back\", not \
-        in-flight work: weigh `pending_since_utc` against now yourself; \
-        WHY the classification reads as it does: `pending_reason` is the harness's own \
-        reason tail for a predicted hoist, or csift's note `removal target needs the \
-        filesystem state at the time` when the deciding arm resolves paths csift does \
-        not have, and `pending_checker` names the path, the checker and the Claude Code \
-        generation the prediction ran under (`gen2 assumed` when the record carries no \
-        version); both are null on a pending call these lexical layers do not model; \
-        completed_utc/_local and duration are non-null ONLY when status is `completed`; \
-        a frozen/running lane is NOT done, and its tail instant lives in \
-        last_activity_utc/_local, which every timestamped lane carries (on a frozen lane \
-        it equals pending_since_utc); \
-        `--with-files` adds `files_changed`; `--returned-message`, implied by a single \
-        `--agent`, adds `returned_message` + `returned_message_source`: the NEWEST \
-        message the child EVER returned, source-tagged; on a frozen/running lane it \
-        PREDATES the pending call, so a lane can carry BOTH a returned_message and \
-        pending_*: the return is history, the pending_* fields are now; the TEXT render \
-        brands a non-completed lane's message inline (`history — predates the still-open \
-        lane, NOT the outcome`) so a clean-finale-sounding tail cannot pass as the ending. \
-        SEMANTICS: it answers \"what did the PARENT SESSION record as the return\", not \
-        \"what did the agent conclude\": a `sync-tool-result` source faithfully reports \
-        the parent's tool_result even when it is a terse sign-off (`Done.`, `Complete.`) \
-        plus the harness's appended continuation footer (`agentId: <id> (use SendMessage \
-        with to: '<id>', summary: '<5-10 word recap>' to continue this agent)` - the harness \
-        appends, it never truncates); the child's own final words are always \
-        `csift show @<agent-id> --turn -1..`). \
-        `agent_type` is \
-        the semantic agent ROLE string (e.g. `Explore`, `oh-my-claudecode:critic`); \
-        DISTINCT from `shape`, the on-disk transcript shape (builtin-task | workflow | \
-        teammate); `kind` is the envelope discriminator exclusively. ID-DOMAIN: `agent_id` \
-        IS this transcript's own id (the SAME concept other commands call `session_id`); \
-        re-feed `parent_session_id`, never the bare agent id. A single `--agent <hex>` \
-        grab emits the SAME envelope (header + session + the one agent row + summary); \
-        no bare-object exception. Every `_utc` field carries a paired `_local` \
-        (system-local ISO). The malformed-line count rides on each agent row's \
-        `skipped_lines`: a head/tail WINDOW census like `list`'s (lifecycle reads only the \
-        transcript's edges; full census: `csift stats @<agent-id>`). \
-        Idiom: jq 'select(.kind==\"agent\")' reaches every node.\n\n\
+        The output is FLAT kind-tagged rows in envelope v2, in this order.\n    \
+        header    a leading {kind:\"header\", …} line\n    \
+        session   per session, one light {kind:\"session\", session_id, runs, agents} row\n    \
+        run       per in-scope workflow run, one {kind:\"run\", session_id, run_id, task_id,\n              \
+        workflow_name, status, agent_count, duration_ms, total_tokens,\n              \
+        total_tool_calls, default_model, started_utc, started_local} row, followed\n              \
+        by its member agent rows\n    \
+        agent     every agent's OWN {kind:\"agent\", …} row, in tree PRE-ORDER\n    \
+        summary   a closing {kind:\"summary\", sessions, runs, agents} terminator\n\
+        \n  \
+        The session row carries counts only. Its `agents` is EXACTLY the number of\n  \
+        {kind:\"agent\"} rows that follow it, and the text tree prints that same set in that same\n  \
+        order, so the two projections can never disagree. Two copies of one session whose\n  \
+        contents DIFFER keep both sidecars in scope. The agent copies inside them take the same\n  \
+        merge as any transcript. Identical or prefix copies collapse to ONE row, and only an\n  \
+        agent whose OWN copies differ gets a row per copy. Those two rows share an id, and the\n  \
+        `copies` line above says why.\n\
+        \n  \
+        A RUN row's `status` is the run MANIFEST's own `status` VERBATIM, read from\n  \
+        `<session>/workflows/<run>.json`, which the runtime writes once the run ends. It is an\n  \
+        OPEN set, not a csift enum. Observed values include `completed`, `killed` and `failed`.\n  \
+        It is distinct from an AGENT row's `status`, which takes the run's word only for a lane\n  \
+        its run ended without completing.\n\
+        \n  \
+        In the agent rows a parent row precedes its children. Rebuild the nesting from\n  \
+        parent_agent_id + depth. There is no children[] array in JSON, and the tree renders in\n  \
+        TEXT mode. The agent-row fields are {agent_id, path, shape, parent_session_id,\n  \
+        parent_agent_id, spawn_tool_use_id, spawn_tool, workflow_id, agent_type, name,\n  \
+        team_name, description, trigger_utc/_local, started_utc/_local, completed_utc/_local,\n  \
+        last_activity_utc/_local, duration, depth, status, settled_by, pending_tool_use_id,\n  \
+        pending_tool_name, pending_classification, pending_reason, pending_checker,\n  \
+        pending_since_utc/_local, skipped_lines, fork_parent_last_uuid, fork_context_length}, plus\n  \
+        control_hint and routing_id on a teammate row and only there.\n    \
+        path              The node's OWN transcript. Two copies of one session carry two copies\n                      \
+        of each agent transcript, and where those copies diverge both rows\n                      \
+        survive sharing every other id. The path is what names which lane a\n                      \
+        row is. The text tree prints a `transcript` line for exactly the ids\n                      \
+        that occur twice.\n    \
+        fork_*            The pair is non-null ONLY on a /fork child. It holds the parent's last\n                      \
+        record uuid at fork time, feedable to\n                      \
+        `csift show @<parent_session_id> --uuid <it>`, and the carried context\n                      \
+        length.\n    \
+        pending_*         STALENESS. `pending_classification: awaiting-execution` means slow OR\n                      \
+        wedged OR abandoned, and jsonl cannot tell them apart. At corpus scale\n                      \
+        a lane pending for hours or days is overwhelmingly \"parent session\n                      \
+        ended, nobody is coming back\", not in-flight work. Weigh\n                      \
+        `pending_since_utc` against now yourself.\n                      \
+        WHY the classification reads as it does. `pending_reason` is the\n                      \
+        harness's own reason tail for a predicted hoist, or csift's note\n                      \
+        `removal target needs the filesystem state at the time` when the\n                      \
+        deciding arm resolves paths csift does not have. `pending_checker`\n                      \
+        names the path, the checker and the Claude Code generation the\n                      \
+        prediction ran under (`gen2 assumed` when the record carries no\n                      \
+        version). Both are null on a pending call these lexical layers do not\n                      \
+        model.\n    \
+        completed_*       completed_utc/_local and duration are non-null ONLY when status is\n                      \
+        `completed`. A frozen or running lane is NOT done. Its tail instant\n                      \
+        lives in last_activity_utc/_local, which every timestamped lane\n                      \
+        carries, and on a frozen lane it equals pending_since_utc.\n    \
+        files_changed     added by `--with-files`\n    \
+        returned_message  `--returned-message`, implied by a single `--agent`, adds\n                      \
+        `returned_message` + `returned_message_source`. It is the NEWEST\n                      \
+        message the child EVER returned, source-tagged. On a frozen or\n                      \
+        running lane it PREDATES the pending call, so a lane can carry BOTH a\n                      \
+        returned_message and pending_*. The return is history, and the\n                      \
+        pending_* fields are now. The TEXT render brands a non-completed\n                      \
+        lane's message inline\n                      \
+        (`history — predates the still-open lane, NOT the outcome`), so a\n                      \
+        clean-finale-sounding tail cannot pass as the ending.\n                      \
+        SEMANTICS. It answers \"what did the PARENT SESSION record as the\n                      \
+        return\", not \"what did the agent conclude\". A `sync-tool-result`\n                      \
+        source faithfully reports the parent's tool_result even when it is a\n                      \
+        terse sign-off (`Done.`, `Complete.`) plus the harness's appended\n                      \
+        continuation footer (`agentId: <id> (use SendMessage with to: '<id>',\n                      \
+        summary: '<5-10 word recap>' to continue this agent)`). The harness\n                      \
+        appends and never truncates. The child's own final words are always\n                      \
+        `csift show @<agent-id> --turn -1..`.\n    \
+        agent_type        The semantic agent ROLE string (e.g. `Explore`,\n                      \
+        `oh-my-claudecode:critic`). It is DISTINCT from `shape`, the on-disk\n                      \
+        transcript shape (builtin-task | workflow | teammate). `kind` is the\n                      \
+        envelope discriminator exclusively.\n    \
+        agent_id          ID-DOMAIN. `agent_id` IS this transcript's own id, the SAME concept\n                      \
+        other commands call `session_id`. Re-feed `parent_session_id`, never\n                      \
+        the bare agent id.\n    \
+        skipped_lines     The malformed-line count, a head/tail WINDOW census like `list`'s,\n                      \
+        because lifecycle reads only the transcript's edges. The full census\n                      \
+        is `csift stats @<agent-id>`.\n  \
+        A single `--agent <hex>` grab emits the SAME envelope (header, session, the one agent row,\n  \
+        summary), with no bare-object exception. Every `_utc` field carries a paired `_local`\n  \
+        (system-local ISO). Idiom: jq 'select(.kind==\"agent\")' reaches every node.\n\
+        \n\
         A TEAMMATE HAS TWO IDS AND BOTH ARE PRINTED\n  \
-          Its node line carries `routing: <Name>@<Team>` beside the transcript id, and its \
-        JSON row carries `routing_id`. Both need a name AND a team in the meta; with either \
-        missing the text line is omitted and the JSON field is null, never fabricated. The \
-        routing form is a form TaskStop takes (beside the bare name), and SendMessage refuses \
-        it (any `to` carrying `@`); SendMessage takes the bare name or the `a<Name>-<hex>` \
-        form, which is also what the \
-        hook payload and the transcript file carry. Only the routing form can collide, \
-        since two same-named teammates in one team share it, so csift keys on the \
-        transcript id and fails loud when a routing form matches more than one lane. Both \
-        are usable as an `@` target on every command.\n\n\
+        Its node line carries `routing: <Name>@<Team>` beside the transcript id, and its JSON row\n  \
+        carries `routing_id`. Both need a name AND a team in the meta. With either missing, the\n  \
+        text line is omitted and the JSON field is null, never fabricated. The routing form is a\n  \
+        form TaskStop takes (beside the bare name), and SendMessage refuses it (any `to` carrying\n  \
+        `@`). SendMessage takes the bare name or the `a<Name>-<hex>` form, which is also what the\n  \
+        hook payload and the transcript file carry. Only the routing form can collide, since two\n  \
+        same-named teammates in one team share it. csift therefore keys on the transcript id and\n  \
+        fails loud when a routing form matches more than one lane. Both ids are usable as an `@`\n  \
+        target on every command.\n\
+        \n\
         SEE ALSO\n  \
-          csift whoami @<agent-id>    the same lane seen from itself: self, parent, topology\n  \
-          csift whoami --peers        every LIVE lane in the projects root, all sessions\n  \
-          csift status @<uuid>        one live verdict with its evidence, not a tree\n  \
-          csift send @<agent-id> \"…\"  message one of these lanes on the csift channel"
+        csift whoami @<agent-id>    the same lane seen from itself: self, parent, topology\n  \
+        csift whoami --peers        every LIVE lane in the projects root, all sessions\n  \
+        csift status @<uuid>        one live verdict with its evidence, not a tree\n  \
+        csift send @<agent-id> \"…\"  message one of these lanes on the csift channel"
 )]
 pub struct AgentsArgs {
-    /// Project target (actual cwd or encoded dir) whose sessions' subagents to list, OR an
-    /// `@<uuid>` session token. Repeatable; with none, every project is scanned. `@<uuid>`
-    /// (8-4-4-4-12 hex) scopes to one session (so `csift agents @<uuid>` lists its subagents),
-    /// `@main`/`@trap:<marker>` resolve the calling session, and a `*.jsonl` file scopes to that transcript.
+    /// Project target (actual cwd or encoded dir) whose sessions' subagents to list.
+    ///
+    /// A target is a path or an `@` session token, and the argument repeats. With none, every
+    /// project is scanned. `@<uuid>` (8-4-4-4-12 hex) scopes to one session, so
+    /// `csift agents @<uuid>` lists its subagents. `@main` and `@trap:<marker>` resolve the
+    /// calling session, and a `*.jsonl` file scopes to that transcript.
     #[arg(
         value_name = "PATH",
+        verbatim_doc_comment,
         allow_hyphen_values = true,
         value_parser = parse_project_target
     )]
     pub paths: Vec<PathBuf>,
 
-    /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
-    /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed, exactly the ids csift
-    /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
-    /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
-    /// stage that found nothing) scopes to NOTHING: honest empty, exit 0, never a silent
-    /// widening to every project. The resolved ids then follow this command's normal
-    /// span rules, exactly as if they were `@` positionals: on the span-by-default
-    /// commands each session EXPANDS to its subagent transcripts (add `--no-subagents`
-    /// to pin to exactly the listed ids).
-    #[arg(long = "sessions-from", value_name = "FILE|-")]
+    /// Also scope to the session ids listed in FILE (`-` reads stdin).
+    ///
+    /// The ids are whitespace- or newline-separated uuid, uuid-prefix or agent-id tokens, bare
+    /// or `@`-prefixed, exactly the ids csift emits (`search -l`, JSON `transcript_ids` /
+    /// `parent_session_id`). They form a UNION with the positional targets, and each id
+    /// resolves fail-loud like an `@` positional. An EMPTY list (an upstream stage that found
+    /// nothing) scopes to NOTHING. The result is an honest empty with exit 0, never a silent
+    /// widening to every project. The resolved ids then follow this command's normal span
+    /// rules, exactly as `@` positionals would. On the span-by-default commands each session
+    /// EXPANDS to its subagent transcripts. Add `--no-subagents` to pin the scope to exactly
+    /// the listed ids.
+    #[arg(long = "sessions-from", value_name = "FILE|-", verbatim_doc_comment)]
     pub sessions_from: Option<std::path::PathBuf>,
 
     /// HIDDEN no-op subagent-span flag. `agents` has NO subagent-span control: it DISCOVERS
@@ -230,67 +278,94 @@ pub struct AgentsArgs {
     #[arg(long = "subagents", hide = true)]
     pub subagents: bool,
 
-    /// Only show subagents of this kind (repeatable). Default: all kinds. This is the
-    /// subagent TRANSCRIPT-SHAPE filter; its values are `builtin-task` | `workflow` |
-    /// `teammate`. It is NOT the automation-TRIGGER taxonomy (`background-command`/`agent`/
-    /// `monitor`/`task`/`workflow`) that `verbatim`/`search -t harness.notification` surface;
-    /// the two axes share only the literal token `workflow` (different meaning), so
-    /// `--shape monitor` is an invalid-value error by design. Ignored when `--agent <hex>`
-    /// is given (a direct grab).
-    #[arg(long = "shape", value_enum)]
+    /// Only show subagents of this kind (repeatable). The default is all kinds.
+    ///
+    /// This is the subagent TRANSCRIPT-SHAPE filter, and its values are `builtin-task` |
+    /// `workflow` | `teammate`. A workflow transcript sits at
+    /// `subagents/workflows/wf_*/agent-<hex>.jsonl`. A teammate
+    /// (`taskKind:"in_process_teammate"`) shares the built-in on-disk location
+    /// (`subagents/agent-<id>.jsonl`), and the meta.json `taskKind` is the discriminator. This
+    /// filter is NOT the automation-TRIGGER taxonomy
+    /// (`background-command`/`agent`/`monitor`/`task`/`workflow`) that `verbatim` and
+    /// `search -t harness.notification` surface. The two axes share only the literal token
+    /// `workflow`, with a different meaning, so `--shape monitor` is an invalid-value error by
+    /// design. The filter is ignored when `--agent <hex>` is given (a direct grab).
+    #[arg(long = "shape", value_enum, verbatim_doc_comment)]
     pub kinds: Vec<AgentKindFilter>,
 
-    /// Only show subagents whose `agent_type` EXACTLY matches (repeatable; e.g.
-    /// `--agent-type fork`, `--agent-type general-purpose`). Default: all types.
-    /// This is the DESCRIPTIVE type axis (the meta/spawn `agentType`, an open set),
-    /// orthogonal to `--shape` (the on-disk transcript-shape axis): a `/fork` child
-    /// is `--agent-type fork` but genuinely `--shape builtin-task`. A node with no
-    /// agent_type never matches an explicit filter. Ignored when `--agent <hex>` is
-    /// given (a direct grab).
-    #[arg(long = "agent-type", value_name = "TYPE")]
+    /// Only show subagents whose `agent_type` EXACTLY matches (repeatable).
+    ///
+    /// The default is all types. Examples are `--agent-type fork` and
+    /// `--agent-type general-purpose`. This is the DESCRIPTIVE type axis, the meta/spawn
+    /// `agentType`, an open set. It is orthogonal to `--shape`, the on-disk transcript-shape
+    /// axis. A `/fork` child is `--agent-type fork` but genuinely `--shape builtin-task`. A
+    /// node with no agent_type never matches an explicit filter. The filter is ignored when
+    /// `--agent <hex>` is given (a direct grab).
+    #[arg(long = "agent-type", value_name = "TYPE", verbatim_doc_comment)]
     pub agent_types: Vec<String>,
 
-    /// Lower time bound. WHEN grammar (system-local tz): relative `Ns`/`Nm`/`Nh`/`Nd`/`Nw`
-    /// = that long AGO (`45s`,`90m`,`2h`,`3d`,`1w`,`2mo`,`1y`; a leading `-` is tolerated); an ISO8601 instant
-    /// (`2026-06-01T05:00:00Z` / `…+10:00`); a BARE datetime (`2026-06-01T05:00:00`) = that
-    /// LOCAL wall-clock time; or a bare date (`2026-06-01`) = LOCAL MIDNIGHT. Filters by
-    /// TRIGGER time by default (`--order-by start|completion` switches axis).
-    #[arg(long, value_name = "WHEN")]
+    /// Lower time bound, read in the system-local time zone.
+    ///
+    ///   `Ns`/`Nm`/`Nh`/`Nd`/`Nw`   that long AGO (`45s`, `90m`, `2h`, `3d`, `1w`, `2mo`,
+    ///                             `1y`). A leading `-` is tolerated.
+    ///   ISO8601 instant           `2026-06-01T05:00:00Z` or `…+10:00`
+    ///   bare datetime             `2026-06-01T05:00:00` is that LOCAL wall-clock time
+    ///   bare date                 `2026-06-01` is LOCAL MIDNIGHT
+    /// The bound filters by TRIGGER time by default. `--order-by start|completion` switches the
+    /// axis.
+    #[arg(long, value_name = "WHEN", verbatim_doc_comment)]
     pub since: Option<String>,
 
-    /// Upper time bound (same WHEN grammar as --since). Same axis as `--since`.
-    #[arg(long, value_name = "WHEN")]
+    /// Upper time bound, in the same WHEN grammar as `--since`.
+    ///
+    /// It uses the same axis as `--since`.
+    #[arg(long, value_name = "WHEN", verbatim_doc_comment)]
     pub until: Option<String>,
 
-    /// The ORDERING axis: which timestamp sorts the tree AND bounds `--since`/`--until`.
-    /// `trigger` (DEFAULT: the true parent-tool_use spawn instant), `start` (the
-    /// subagent's first transcript record / child-head ts, which LAGS the trigger by
-    /// seconds), or `completion` (the last record). Named `--order-by` (not `--by`, which
-    /// reads like a projection) because it names the sort axis. (Sibling note: `files` uses
-    /// `--by` for a PROJECTION: a different meaning on a different subcommand.)
-    #[arg(long = "order-by", value_enum, default_value_t = AgentTimeAxis::Trigger)]
+    /// The ORDERING axis, the timestamp that sorts the tree AND bounds `--since`/`--until`.
+    ///
+    ///   trigger      the DEFAULT, the true parent-tool_use spawn instant (the correct "when
+    ///                was it triggered" axis). It falls back to the start timestamp for a
+    ///                subagent whose spawn could not be located.
+    ///   start        the subagent's first transcript record (the child-head timestamp), which
+    ///                LAGS the trigger by seconds
+    ///   completion   the last record
+    /// The flag is named `--order-by`, not `--by`, because it names the sort axis and `--by`
+    /// reads like a projection. The sibling `files` uses `--by` for a PROJECTION, a different
+    /// meaning on a different subcommand.
+    #[arg(
+        long = "order-by",
+        value_enum,
+        default_value_t = AgentTimeAxis::Trigger,
+        verbatim_doc_comment
+    )]
     pub order_by: AgentTimeAxis,
 
-    /// Grab ONE subagent by its id, bare or `@`-prefixed like every other id position (the
-    /// `agent_id` column): prints its full node incl. the returned
-    /// message (implies `--returned-message`) and, with `--with-files`, its files-changed.
-    /// This is a DIRECT id lookup: it BYPASSES `--since`/`--until`/`--order-by` and `--shape`
-    /// (a known id resolves regardless of when it ran or its shape), and just the matched
-    /// node is rendered (a tree of one, not the whole workflow tree). If the hex matches
-    /// nothing in scope, it is a hard ERROR with discovery guidance, not the ambiguous
-    /// `no subagents found`. Discover ids first with `csift agents @<uuid>` (the `agent_id`
-    /// column / JSON field).
-    #[arg(long, value_name = "HEX")]
+    /// Grab ONE subagent by its id, bare or `@`-prefixed like every other id position.
+    ///
+    /// The id is the `agent_id` column. The grab prints the full node, including the returned
+    /// message (it implies `--returned-message`), and with `--with-files` its files-changed
+    /// list. This is a DIRECT id lookup. It BYPASSES `--since`/`--until`/`--order-by` and
+    /// `--shape`, so a known id resolves regardless of when it ran or its shape, and just the
+    /// matched node is rendered, a tree of one and never the whole workflow tree. A hex that
+    /// matches nothing in scope is a hard ERROR with discovery guidance, never the ambiguous
+    /// `no subagents found`. Discover the ids first with `csift agents @<uuid>` (the `agent_id`
+    /// column or JSON field).
+    #[arg(long, value_name = "HEX", verbatim_doc_comment)]
     pub agent: Option<String>,
 
-    /// Attach each node's files-changed list (reuses the `files` extractors over the
-    /// subagent's own transcript). Off by default; it re-scans each transcript.
-    #[arg(long = "with-files")]
+    /// Attach each node's files-changed list.
+    ///
+    /// It reuses the `files` extractors over the subagent's own transcript. It is off by
+    /// default, because it re-scans each transcript.
+    #[arg(long = "with-files", verbatim_doc_comment)]
     pub with_files: bool,
 
-    /// Include each subagent's RETURNED MESSAGE (3-way resolved). Omitted by default
-    /// (a returned message can be large); always included for a single `--agent` grab.
-    #[arg(long = "returned-message")]
+    /// Include each subagent's RETURNED MESSAGE (3-way resolved).
+    ///
+    /// It is omitted by default, because a returned message can be large. A single `--agent`
+    /// grab always includes it.
+    #[arg(long = "returned-message", verbatim_doc_comment)]
     pub returned_message: bool,
 
     /// Emit JSON instead of the headered text format.
@@ -323,15 +398,12 @@ impl AgentsArgs {
 /// tree AND bounds the `--since`/`--until` window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
 pub enum AgentTimeAxis {
-    /// Filter on the TRUE TRIGGER instant: the parent `Task`/`Agent` tool_use timestamp
-    /// (the correct "when was it triggered" axis). The DEFAULT. Falls back to the start
-    /// timestamp for a subagent whose spawn could not be located.
+    /// the TRUE TRIGGER instant, the parent `Task`/`Agent` tool_use (DEFAULT)
     #[default]
     Trigger,
-    /// Filter on the subagent's START timestamp (first transcript record; lags the
-    /// trigger by seconds).
+    /// the subagent's START, its first transcript record
     Start,
-    /// Filter on the subagent's COMPLETION timestamp (last transcript record).
+    /// the subagent's COMPLETION, its last transcript record
     Completion,
 }
 
@@ -393,20 +465,17 @@ impl CountAxis {
 /// so the value spellings (`summary`/`dir`/`file`/`timeline`) ARE the variants' value names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
 pub enum FilesDetail {
-    /// Coarse TOP-LEVEL-prefix op rollup: buckets each path on its first few directory
-    /// segments (so a whole project tree collapses to one row), the smallest output and the
-    /// DEFAULT. Strictly coarser than `--by dir` (which keys on the FULL parent dir).
+    /// a coarse top-level-prefix op rollup, the smallest output (DEFAULT)
     #[default]
     #[value(name = "summary")]
     Summary,
-    /// One row per distinct directory (the FULL parent path) with per-op + distinct-file
-    /// counts, finer than `--by summary`'s top-level-prefix rollup.
+    /// one row per distinct directory (the FULL parent path)
     #[value(name = "dir")]
     ByDir,
-    /// One row per distinct file with per-op counts + first/last touch timestamps.
+    /// one row per distinct file, with first/last touch timestamps
     #[value(name = "file")]
     ByFile,
-    /// Full chronological list, one line per mutation (the verbose, opt-in mode).
+    /// the full chronological list, one line per mutation (opt-in)
     #[value(name = "timeline")]
     Timeline,
 }
