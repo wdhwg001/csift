@@ -2536,17 +2536,17 @@ difference has to clear.
 
 - `user.unsent` is documented as retroactive. A draft and its resend are the same record
   shape, with the same key set on 852 of 886 pairs, and nothing but identity and time
-  always differs. No successor line shape separates the two populations. Every shape that
-  reads zero after a control record reads zero because that window is cut at the next
-  assistant reply, and for no reason that has to do with drafts. The only discriminator is
-  therefore the later sibling. A hook running at prompt submit cannot apply the label,
-  because that sibling is the prompt being submitted. The closest approximation skips a
-  trailing turn-opener that no assistant record follows. It hides 92.2% of drafts but
-  wrongly skips 2.9% of genuine messages. SKILL's wrong-assumptions table now states it as a
-  heuristic and no longer implies it is the label. The census covered the full populations,
-  all 886 drafts, each joined to the survivor csift itself names, against all 2,595
-  `user.message` records of the 28 draft-carrying sessions. It is recorded as ledger claim
-  TURN-026, which carries the commands and the whole per-shape table.
+  always differs. No successor line shape separates the two populations. The shapes that
+  seem to separate them do so only because the window measured after each message ends at
+  the next assistant reply. The only discriminator is therefore the later sibling. A hook
+  running at prompt submit cannot apply the label, because that sibling is the prompt
+  being submitted. The closest approximation skips a trailing turn-opener that no
+  assistant record follows. It hides 92.2% of drafts but wrongly skips 2.9% of genuine
+  messages. SKILL's wrong-assumptions table now states it as a heuristic and no longer
+  implies it is the label. The census covered the full populations, all 886 drafts, each
+  joined to the survivor csift itself names, against all 2,595 `user.message` records of
+  the 28 draft-carrying sessions. It is recorded as ledger claim TURN-026, which carries
+  the commands and the whole per-shape table.
 
 ### Fixed
 
@@ -2593,20 +2593,22 @@ difference has to clear.
 
 - A bare `-t harness` admits the `type:"system"` lines. Those lines were gated behind an
   explicit selector, so the delivered record above could not have been reached at all. The
-  other five gated leaves keep the explicit-selector rule exactly. The per-record rule drops
-  every other system record the admission parsed. `gated_leaves_unreached` and its stderr
-  note now report what the scan actually parsed, where they used to report which selector
-  was typed. The note's leaf list is derived from the gated set and no longer typed out.
+  other five gated leaves, `user.queued`, `harness.meta.turn-duration`,
+  `harness.meta.away-summary`, `harness.meta.stop-hooks` and `harness.meta.snapshot`, keep
+  the explicit-selector rule exactly. The per-record rule drops every other system record
+  the admission parsed. `gated_leaves_unreached` and its stderr note now report what the
+  scan actually parsed, where they used to report which selector was typed. The note's
+  leaf list is derived from the gated set and no longer typed out.
 
 - Slash commands the model never sees are now documented. Three families leave nothing on
   disk, so finding no wrapper record is not evidence a command was not run. `/btw`,
   `/tasks` (= `/bashes`) and `/release-notes` return skip on every normal exit. Any panel
-  closed with Escape writes nothing, whatever its own option was. `/rewind`
-  (= `/checkpoint`/`/undo`) and `/stop` take the same path through the `local` result
-  map. A record on disk is not always a record the model saw either. `/release-notes`
-  appends a harness notice and then returns skip, so the notice is rendered to the human
-  and dropped by the assembler. SKILL's wrong-assumptions table carries both rows. This is
-  recorded as ledger claims TURN-027 through TURN-030 and MISC-031.
+  closed with Escape writes nothing, whatever its own option was. `/rewind` (=
+  `/checkpoint`/`/undo`) and `/stop` leave nothing either, by the same route. A record on
+  disk is not always a record the model saw either. `/release-notes` appends a harness
+  notice and then returns skip, so the notice is rendered to the human and dropped by the
+  assembler. SKILL's wrong-assumptions table carries both rows. This is recorded as ledger
+  claims TURN-027 through TURN-030 and MISC-031.
 
 ## [0.11.0] - 2026-09-06
 
@@ -2615,14 +2617,15 @@ official channel cannot reach, and it can tell afterwards whether the message ar
 
 ### Changed
 
-- The read-only law becomes a writers law, and this is BREAKING. Through 0.10.5 csift wrote nothing
-  at all. From 0.11.0 exactly three commands write, `send`, `deliver` and `ack`. They write
-  exactly one place, a `csift-channel` directory csift creates in the session's own sidecar
-  folder. They never write a transcript, the team mailbox, the cross-session messaging
-  socket, the session registry or any settings file. csift does not install its hook
-  either. `deliver --recipe` prints the block, and you paste it. Every other subcommand
-  still only reads. Nothing that worked before stops working. The promise a reader had is
-  narrower now, though, and a narrower promise is a breaking one.
+- csift's promise to only read becomes a promise about who writes, and this is BREAKING.
+  Through 0.10.5 csift wrote nothing at all. From 0.11.0 exactly three commands write,
+  `send`, `deliver` and `ack`. They write exactly one place, a `csift-channel` directory
+  csift creates in the session's own sidecar folder. They never write a transcript, the
+  team mailbox, the cross-session messaging socket, the session registry or any settings
+  file. csift does not install its hook either. `deliver --recipe` prints the block, and
+  you paste it. Every other subcommand still only reads. Nothing that worked before stops
+  working. The promise a reader had is narrower now, which is why the change counts as
+  breaking.
 
 ### Added
 
@@ -2664,18 +2667,20 @@ official channel cannot reach, and it can tell afterwards whether the message ar
   can collide when two teammates share a name. The transcript form on disk never collides.
   csift resolves either, keys its own work on the transcript form, and now prints both
   wherever a teammate appears.
-- csift reads the settings cascade to answer whether a delivery hook will actually run in a
-  lane. It reads five scopes in Claude Code's own order, merges `env` per key, concatenates
-  `hooks` per event, unions plugin hook manifests, composes the policy tier first-wins, and
-  applies the three policy switches that can empty the whole hook set. What is not
-  observable from disk is listed as such. A gate verdict therefore says "unknown" with its
-  evidence and never implies the file scopes are the whole story. `plan` now reads its
-  `plansDirectory` through the same model, with its precedence unchanged.
+- csift reads the settings cascade to answer whether a delivery hook will actually run in
+  a lane. It reads five scopes in Claude Code's own order, merges `env` per key,
+  concatenates `hooks` per event, unions plugin hook manifests, composes the policy tier
+  first-wins, and applies the three policy switches that can empty the whole hook set
+  (`disableAllHooks` in the policy tier, `allowManagedHooksOnly`, and `disableAllHooks`
+  set outside the policy tier). What is not observable from disk is listed as such. A gate
+  verdict therefore says "unknown" with its evidence and never implies the file scopes are
+  the whole story. `plan` now reads its `plansDirectory` through the same model, with its
+  precedence unchanged.
 
 ## [0.10.5] - 2026-09-05
 
-This release corrects the introspection ledger, and four csift defects that the ledger's
-own drift verdicts had named and the previous release shipped around.
+This release corrects the introspection ledger. It also fixes four csift defects that the
+ledger had marked as drifted from Claude Code's behaviour and that 0.10.4 still shipped.
 
 ### Fixed
 
@@ -2695,14 +2700,14 @@ own drift verdicts had named and the previous release shipped around.
 - Search hits carry `refetch_uuid` beside `refetch`. A line number is a durable address
   only while the transcript is append-only, and three harness paths rewrite a live
   transcript in place. The uuid survives them.
-- Four statements csift printed or taught were wrong at 2.1.258, and they are corrected
-  with their dates. TaskStop resolves a teammate by its name or `name@team` from Claude
-  Code 2.1.198. The agents footer, the JSON control hint, the SKILL rows and the hook recipe
-  said it rejects every form. The file-history store is also written by an approved
-  in-place `sed` preview, where `recover --list-backups` said bash edits never land there.
-  The pending AskUserQuestion split is a timing outcome of the write frontier. It is
-  neither a question-count rule nor a 2.1.258 change, though a comment, a note, the help and
-  three documents said otherwise.
+- Four statements csift printed or taught were wrong at 2.1.258, and they are corrected,
+  each with the Claude Code version it holds from. TaskStop resolves a teammate by its
+  name or `name@team` from Claude Code 2.1.198. The agents footer, the JSON control hint,
+  the SKILL rows and the hook recipe said it rejects every form. The file-history store is
+  also written by an approved in-place `sed` preview, where `recover --list-backups` said
+  bash edits never land there. The pending AskUserQuestion split is a timing outcome of
+  the write frontier and not a question-count rule. It is also not a 2.1.258 change. A
+  comment, a note, the help and three documents said otherwise on both counts.
 
 ### Changed
 
@@ -2746,10 +2751,10 @@ tracing found in csift are fixed.
 - In `search`, `verbatim` and `show`, an AskUserQuestion answered through the freeform
   `toolUseResult.response` field classifies as `user.answer` and opens a turn like every
   other answer. That field is the binary's `The user responded: ...` branch, which leaves
-  `answers` empty. The AUQ unit renders the questions asked and a `response:` line. The
-  marker joins the answer prefixes and the verifiable synth needles, so the whole-file gate
-  stays sound. The idle-timeout branch (`No response after ...`) is not an answer and still
-  opens no turn.
+  `answers` empty. The AUQ unit renders the questions asked and a `response:` line.
+  csift's prefilter knows the new marker too, so it still never skips a file that holds
+  such an answer. The idle-timeout branch (`No response after ...`) is not an answer and
+  still opens no turn.
 - In `status` and `wait`, a completion pulse whose status is `blocked`, or any literal
   csift does not know, gets its own bucket (`N blocked`, `N with an unknown status`, JSON
   `blocked`, `other`). Claude Code's remote-agent notifier writes `blocked`. Such pulses
@@ -2866,18 +2871,18 @@ pid probe was compiled out there.
   parent's and carries the spawning tool_use itself. The spawn join named the child as its
   own parent, and the depth walk ran to its cycle cap. csift now reads the `parentAgentId`
   the harness writes into the child's meta.json, and it never accepts a node as its own
-  parent. Two more findings came from the audit. The parent's record of a subagent return
-  carries an appended continuation footer and no truncation, and the help and docs are
-  corrected. recover's Bash read anchors already reach built-in and teammate lanes, whose
-  results carry the `toolUseResult` echo. Only workflow lanes lack it, and the comment is
-  corrected.
+  parent. The same review corrected two documentation points. The parent's record of a
+  subagent return carries an appended continuation footer and no truncation, and the help
+  and docs are corrected. recover's Bash read anchors already reach built-in and teammate
+  lanes, whose results carry the `toolUseResult` echo. Only workflow lanes lack it, and
+  the comment is corrected.
 - In `search`, an inbound peer message relayed mid-turn carried no label at all. Claude
   Code 2.1.258 relays under three preambles. They are "Another Claude session sent a
-  message:", the same "while you were working:" form, and "A peer session sent a message
-  while you were working:". csift knew only the first, so 29 of 47 `<agent-message>`
-  records in the reference corpus were invisible to every census. All three are section
-  boundaries now. The corpus-wide `agent.communication.inbox` census moves from 8721 to
-  8750 records.
+  message:", the same sentence ending in "while you were working:", and "A peer session
+  sent a message while you were working:". csift knew only the first, so 29 of 47
+  `<agent-message>` records in the reference corpus were invisible to every census. All
+  three are section boundaries now. The corpus-wide `agent.communication.inbox` census
+  moves from 8721 to 8750 records.
 - In `search`, the third AskUserQuestion answer phrasing that Claude Code 2.1.258 writes
   ("The user answered: ...") is an answer marker and a turn opener. The unanswered branch
   ("The user did not answer the questions.") never is. The retired "User has answered your
@@ -2904,8 +2909,8 @@ pid probe was compiled out there.
   claim-specific.
 - The README gains badges for the verified Claude Code version and the crate-wide mutation
   score. The score is cargo-mutants over the whole crate, killed mutants over every viable
-  mutant, counting a mutant that hangs the suite as killed. The release notes carry the
-  caught-only floor and the timeout share.
+  mutant, counting a mutant that hangs the suite as killed. The release notes also give
+  the score with timeouts not counted, and the share of mutants that timed out.
 - `harness.meta.system` is the 34th label. It is a gated catch-all for every other
   `type:"system"` subtype the harness writes for its own UI and never sends to the model.
   Examples are the `informational` warning that Remote Control disconnected after an account
@@ -2916,7 +2921,7 @@ pid probe was compiled out there.
 
 ### Changed
 
-- README highlight 8 is laid out as short lines.
+- The README's eighth highlight is laid out as short lines.
 - The documentation records the re-measured laws. They cover the registry status
   vocabulary `busy | shell | idle | waiting` and what each value means, the `claude -p` row
   with a null status, and the multi-question AskUserQuestion flush. They also cover the
@@ -2973,14 +2978,14 @@ csift used to skip become five new searchable leaves.
   jsonl line types become searchable, classifiable leaves. `user.queued` is a
   queue-operation line carrying the human's text. The queue event (enqueue, popAll, or
   remove with its reason) rides the label zone and JSON `queue_operation` /
-  `queue_reason`. `harness.meta.turn-duration` renders the turn_duration record as
-  "[turn duration: 1m 5s . durationMs=64911 messageCount=908
-  pendingBackgroundAgentCount=2]". That is the structured body behind the REPL's "Done in
-  Ns" line, which never lands on disk itself. `harness.meta.away-summary` is the
-  model-generated recap shown on return after five minutes away.
-  `harness.meta.stop-hooks` is the Stop-hook execution ledger. `harness.meta.snapshot`
-  covers file-history snapshot and delta lines. All five are LLM-invisible by the same
-  instrument as the compaction boundary, because none carries a message field.
+  `queue_reason`. `harness.meta.turn-duration` renders the turn_duration record as "[turn
+  duration: 1m 5s . durationMs=64911 messageCount=908 pendingBackgroundAgentCount=2]".
+  That is the structured body behind the REPL's "Done in Ns" line, which never lands on
+  disk itself. `harness.meta.away-summary` is the model-generated recap shown on return
+  after five minutes away. `harness.meta.stop-hooks` is the Stop-hook execution ledger.
+  `harness.meta.snapshot` covers file-history snapshot and delta lines. All five are
+  invisible to the model for the same reason as the compaction boundary. None carries a
+  message field.
 - `search` follows the gated-leaf law. A promoted leaf is parsed only when an explicit
   `-t` reaches it (the full path, a glob, or the `harness.meta` prefix) or a show address
   names the line. A bare scan never parses those lines, measured at 1.03x, which is noise.
@@ -3005,23 +3010,23 @@ binding matches Claude Code's own rule, `list` names a forked clone's origin, `s
 shows what is actually moving, and metachar regex searches stop paying full price.
 
 - `recover` gains Bash content anchors. The deterministic shell subset now replays as
-  first-class content where it used to replay as boundaries. Writes anchor per segment. The
-  anchoring writes are a quoted-delimiter heredoc via cat/tee, literal echo/printf, and
-  `truncate -s 0`. A quoted-delimiter heredoc body is byte-verbatim in the transcript, and
-  an unquoted delimiter is admitted only with an expansion-free body. The dominant real
-  shape, write-the-file-then-run-it in one compound command, therefore anchors. A compound
-  command additionally demands a clean result echo, with empty stderr and no interrupt. Only
-  the last segment owns the exit code, and a failing write always says so on stderr. A
-  second touch of the same resolved path anywhere in the command refuses the anchor. Reads
-  anchor as single simple commands only (cat, `head -n N`, `sed -n 'A,Bp'`) under the
-  completeness gate. A window from line 1 that hits EOF is the whole file. A byte-known
-  `>>` append is placed only onto a complete newline-terminated buffer, and otherwise it is
-  disclosed as `bash_append_unplaced`. Some shapes are deliberately not anchors, because
-  they were measured or cannot be placed. They are tail, `sed -i`, variable targets, and
-  interpreter and ssh heredocs. Coverage counts `bash-read-anchor` / `bash-write-anchor`,
-  and segment provenance names `bash-heredoc` / `bash-cat` / `bash-write`. A real
-  heredoc-then-run python tool went from "no recoverable history" to 33/33 lines recovered
-  verbatim.
+  first-class content where it used to replay as boundaries. Writes anchor per segment.
+  The anchoring writes are a quoted-delimiter heredoc via cat/tee, literal echo/printf,
+  and `truncate -s 0`. A quoted-delimiter heredoc body is byte-verbatim in the transcript,
+  and an unquoted delimiter is admitted only with an expansion-free body. The dominant
+  real shape, write-the-file-then-run-it in one compound command, therefore anchors. A
+  compound command additionally demands a clean result echo, with empty stderr and no
+  interrupt. Only the last segment owns the exit code, and a failing write always says so
+  on stderr. A second touch of the same resolved path anywhere in the command refuses the
+  anchor. Reads anchor as single simple commands only (cat, `head -n N`, `sed -n 'A,Bp'`)
+  under the completeness gate. A window from line 1 that hits EOF is the whole file. A
+  byte-known `>>` append is placed only onto a complete newline-terminated buffer, and
+  otherwise it is disclosed as `bash_append_unplaced`. Some shapes are deliberately left
+  as boundaries, because measurement showed them unsafe to replay or their target cannot
+  be placed. They are tail, `sed -i`, variable targets, and interpreter and ssh heredocs.
+  Coverage counts `bash-read-anchor` / `bash-write-anchor`, and segment provenance names
+  `bash-heredoc` / `bash-cat` / `bash-write`. A real heredoc-then-run python tool went
+  from "no recoverable history" to 33/33 lines recovered verbatim.
 - `plan` gets a correctness fix. csift bound only via the `plan_mode` attachment, while
   Claude Code itself binds by the first record carrying a valid slug. On a forked clone,
   with attachments stripped and slug records kept, csift answered "no plan" for a session
@@ -3033,10 +3038,11 @@ shows what is actually moving, and metachar regex searches stop paying full pric
   `compact_boundary` was minted by copying another session at that compaction. That is a
   background-job fork, with uuids preserved, timestamps predating the file and the slug
   stripped. The rule showed zero false positives on a 61-file real dir, and file-birthtime
-  rules were refuted. The row annotates the fork and names the origin session. A prose quote
-  of the boundary uuid or a co-clone can never win the join. JSON gains `is_clone` /
-  `clone_of` / `clone_boundary_uuid`. A documented corollary follows. A clone double-counts
-  its inherited records on every spanning surface until it is scoped away.
+  rules were refuted. The row annotates the fork and names the origin session. Another
+  transcript that merely quotes the boundary uuid in prose, or a second clone of the same
+  origin, is never taken for the origin. JSON gains `is_clone` / `clone_of` /
+  `clone_boundary_uuid`. A documented corollary follows. A clone double-counts its
+  inherited records on every spanning surface until it is scoped away.
 - `status` child lanes gain a `generating` state. A tail record younger than 300s whose
   last assistant `stop_reason` is not `end_turn` is mid-generation. Measured, intra-lane
   record gaps reach p99.9 = 295s, while dead lanes sit 31h+ out. The old 15s mtime window
@@ -3142,8 +3148,8 @@ totals drop.
   with genuinely different per-file usage. Printed totals drop accordingly.
 - `stats` gains a narration census. `narration_blocks` per model gives block counts only,
   because the token split is not derivable from the jsonl and none is invented.
-  `unknown_thinking_tags` surfaces a signature tag that is neither `thinking` nor
-  `narration` without a csift release.
+  `unknown_thinking_tags` counts signature tags that are neither `thinking` nor
+  `narration`, so a new tag shows up before any csift release models it.
 - The narration decode is byte-gated on the hot path. A signature containing none of the
   tag's three base64 alignments skips the decode, which keeps large-corpus search at its
   previous speed.
@@ -3218,8 +3224,8 @@ and output where they stated a wrong mechanism or a fabricated certainty.
 - Images are easier to discover. The first image-bearing row per run (search and show)
   carries a paste-ready extraction hint in input id forms, with a `#N` handle as the bare
   number. The search footer gains a capability note. `search --help` and `verbatim --help`
-  gain SEE ALSO sections naming `csift image`. A fleet incident drove this one. It
-  published "images are unreadable" without ever testing extraction.
+  gain SEE ALSO sections naming `csift image`. The change came from an incident in which a
+  group of agents reported "images are unreadable" without ever testing extraction.
 - Errored tool results are visible. Hit JSON carries `is_error`, the text render decorates
   an errored result with `[error]`, and a new `--count-by result` axis buckets `ok` |
   `error`. The closed `pairing` enum is untouched. Pairing answers "did a result come
@@ -3300,17 +3306,18 @@ output, and it extracted the cwd and freshness mechanisms from the Claude Code 2
 binary and validated them on 18,185 commands (SPEC 4.9).
 
 The improvement was measured on that corpus. 19.4% of Bash calls mutate a persistent file.
-csift's full-target attribution of those mutations rises from 27.1% to a measured 77.0%
+csift's full-target attribution of those mutations rises from 27.1% to 77.0%, the measured
 ceiling. `recover`'s join of a relative operand against an absolute `--file` closes from
 95.84% to 99.65%.
 
 The resolution stays deterministic, and nothing is guessed. Every resolved path carries an
-explicit resolution class. `absolute` means typed absolute. `cwd-joined` means joined to the
-record's own `cwd` field, data Claude Code wrote, with zero inference. `cd-tracked` means
-literal in-command cds, a lexical inference validated at 99.65% against Claude Code's own
-modified-file hints. `unresolved` means kept verbatim and disclosed, and never fabricated
-into a path. Commands whose file sets are not in the command text are counted and
-disclosed, and never attributed.
+explicit resolution class. `absolute` means typed absolute. `cwd-joined` means joined to
+the record's own `cwd` field, data Claude Code wrote, with zero inference. `cd-tracked`
+means literal in-command cds, a lexical inference validated at 99.65% against Claude
+Code's own modified-file hints, a separate measurement that happens to read the same
+figure. `unresolved` means kept verbatim and disclosed, and never fabricated into a path.
+Commands whose file sets are not in the command text are counted and disclosed, and never
+attributed.
 
 - `files` uses the resolved spelling as a bash row's `path`, so relative and absolute
   spellings of one file share every bucket. Timeline JSON rows gain `resolution`,
@@ -3396,8 +3403,8 @@ disclosed, and never attributed.
   files/recover, do not run on PowerShell records. A pending PowerShell lane classifies as
   awaiting-execution, and structured Read/Write/Edit attribution is unaffected. One more
   finding is recorded. CC 2.1.228's dangerous-rm has evolved past the ported generation,
-  with fixpoint substitution stripping and a tree-sitter bail at 64+ command substitutions.
-  A port refresh is a tracked follow-up.
+  and now strips command substitutions repeatedly until none remain, and gives up parsing
+  at 64+ command substitutions. csift's port has not yet caught up.
 
 ## [0.7.3] - 2026-08-12
 
@@ -3456,11 +3463,11 @@ This release breaks the text surface. JSON output is unchanged.
   uuid-prefix token. A 12+-hex token keeps exact-agent-id semantics first, then falls back to
   a unique literal-prefix match.
 - The output geometry changes. A head `matches` banner follows the scope banner. It shows
-  the true totals, `oldest first`, the emitted window, and `undated last` when present. The
-  tail footer repeats the true pre-cap totals beside its drop accounting. The stderr
+  the true totals, `oldest first`, the emitted window, and `undated last` when present.
+  The tail footer repeats the true pre-cap totals beside its drop accounting. The stderr
   zero-match diagnosis discloses the malformed-line count, because an absence claim is
-  definitive for parseable lines only. The both-ends placement law joins SPEC section 0 as a
-  crate-wide design law.
+  definitive for parseable lines only. The rule that an output discloses its window at
+  both ends now applies to every command.
 - `--max-count` is signed. `N` keeps the earliest N of the chronological stream, `-N` keeps
   the latest N, and `0` stays uncapped. The kept exchanges still emit oldest-first among
   themselves. Both ends disclose the window, and the footer names the dropped side
@@ -3485,14 +3492,15 @@ This release breaks the text surface. JSON output is unchanged.
 
 ## [0.6.9] - 2026-07-14
 
-- Stage-1 candidate detection is serialization-tolerant, which is a correctness fix. Some
-  valid-JSON records are serialized differently from the compact wire format, with
-  whitespace around the colon, as python `json.dumps` defaults and a jq or editor
-  round-trip produce. Such a record used to vanish one layer before any malformed counter,
-  with no match, no count and zero disclosure. The role needles now route through shared
-  whitespace-tolerant matchers. Every other prefilter needle is serialization-safe by
-  construction, and the needle law is codified in AGENTS.md. Framing is unchanged, with one
-  record per line.
+- The first-stage filter that picks which lines to parse now tolerates other JSON
+  serializations, which is a correctness fix. Some valid-JSON records are serialized
+  differently from the compact wire format, with whitespace around the colon, as python
+  `json.dumps` defaults and a jq or editor round-trip produce. Such a record used to
+  vanish one layer before any malformed counter, with no match, no count and zero
+  disclosure. The role needles now route through shared whitespace-tolerant matchers.
+  Every other prefilter needle is serialization-safe by construction, and the rule for
+  choosing safe search needles is written down for contributors. Framing is unchanged,
+  with one record per line.
 
 ## [0.6.8] - 2026-07-14
 
@@ -3503,9 +3511,9 @@ This release breaks the text surface. JSON output is unchanged.
 - `list`'s malformed count is a disclosed window census and never a whole-file verdict.
   The note reads `… skipped (among the head/tail lines read — full census: csift stats)`,
   and `stats` is named the full-scan census authority.
-- A sidecar marker line the current schema cannot read, a pre-release fossil under old field
-  names, is counted as malformed. A line that is provably csift's own and still cannot be
-  interpreted never buys silence.
+- A sidecar marker line the current schema cannot read, a pre-release fossil under old
+  field names, is counted as malformed. Such a line is provably csift's own and still
+  cannot be read, so it is counted.
 
 ## [0.6.7] - 2026-07-14
 
@@ -3550,8 +3558,8 @@ This release converges the docs only.
 ## [0.6.4] - 2026-07-13
 
 - The removed `turns` name gets a tombstone error. A hidden variant always bails, naming
-  the rename (`verbatim`, same flags), and routes plain turn reading to
-  `show <target> --turn -3..`. It is a wall and never a shim, and it never runs.
+  the rename (`verbatim`, same flags), and routes plain turn reading to `show <target>
+  --turn -3..`. It does nothing except report the rename.
 - `agents` text brands a non-completed lane's `returned_message` inline
   (`history — predates the still-open lane, NOT the outcome`). A completed lane stays
   unbranded.
@@ -3573,8 +3581,8 @@ This release converges the docs only.
   flood guard caps only the rows.
 - `--count-by label` census keys pass the active `-t`/`-T` predicate. A dual-labeled
   record no longer leaks its filtered-out twin into the keys.
-- `show` rejects the span pair with the single-transcript rule. The legacy flat `-t` values
-  (`thinking`/`tool`/`tool-response`) name their successor path.
+- `show` reads one transcript, so it rejects `--subagents`/`--no-subagents`. The legacy
+  flat `-t` values (`thinking`/`tool`/`tool-response`) name their successor path.
 
 ## [0.6.2] - 2026-07-12
 
@@ -3608,9 +3616,9 @@ This release converges the docs only.
 - This is breaking for agents JSON. `completed_utc/_local` (+ `duration`) are non-null only when
   `status == "completed"`, because a frozen lane is never "done". Every timestamped lane
   gains the `last_activity_utc/_local` pair, the tail's newest-record instant.
-- `show`'s TARGET is a Vec, so a mistyped or foreign `--flag` is rejected by name and is
-  no longer consumed as the target. Two real targets get a pointed one-transcript arity
-  error.
+- `show` parses its target positional as a list, so a mistyped or foreign `--flag` is
+  rejected by name and is no longer consumed as the target. Two real targets get a pointed
+  one-transcript arity error.
 - Censuses count records and not per-section hits. A leaf tally now equals exactly what
   `-t <leaf>` surfaces.
 - `pairing` rides the tool block through the communication views. A frozen SendMessage is
@@ -3654,8 +3662,8 @@ This is a breaking rework with zero backward compatibility.
 - Slash-command wrappers are detected in both tag orders, and `<command-message>` first is
   current CC. A new-order wrapper no longer masquerades as human prose or opens a turn.
 - `list` rows gain `sidecar_present`, a tri-state elicitation evidence field. The `files`
-  JSON summary gains `sessions`. `verbatim` prints a per-session no-compaction note routing
-  to `show --turn`. `normalize_argv` locates the subcommand by scanning past root flags, so
+  JSON summary gains `sessions`. `verbatim` prints a per-session no-compaction note
+  routing to `show --turn`. csift locates the subcommand by scanning past root flags, so
   flag order is free in combination with `--claude-home`.
 
 ## [0.4.1] - 2026-07-11
@@ -3709,8 +3717,8 @@ This is a breaking rework with zero backward compatibility.
 This is a breaking ergonomics rework with zero backward compatibility, and one way per
 intent.
 
-- New `show` owns fetching. It is a record fetch by `--line`/`--uuid` (§), rendered full or
-  as `--raw` verbatim jsonl bytes, and `search --line/--uuid` are removed. New `stats` gives
+- New `show` owns fetching. It is a record fetch by `--line`/`--uuid`, rendered full or as
+  `--raw` verbatim jsonl bytes, and `search --line/--uuid` are removed. New `stats` gives
   one-scan per-session aggregates (tokens by model, tool counts, turns, span,
   compactions).
 - Envelope v2 arrives. Every `--format json` stream is one header line, kind-tagged rows
