@@ -12,8 +12,9 @@ use super::*;
         Every output line carries the JSONL LINE NUMBER of its source record, so an LLM can `Read`\n\
         the raw jsonl at that line.\n\
         \n\
-        SIX MUTUALLY-EXCLUSIVE MODES (exactly one applies)\n\
-        The default RESTORE takes no flag. The other five are the flags of the mode group.\n\
+        SIX MUTUALLY-EXCLUSIVE MODES\n\
+        Exactly one mode runs. RESTORE is the default and takes no flag, and the other five each\n\
+        have a flag. At most one of those five flags may be passed (the MODE FLAGS section below).\n\
         \n  \
         (default, no mode flag)\n      \
         RESTORE prints the file's FINAL content as raw restorable bytes, the bytes you would\n      \
@@ -28,21 +29,24 @@ use super::*;
         survived, each known line numbered, and leaves every unrecoverable run as an explicit\n      \
         `??? lines A..B unknown` gap. It suits a file that is GONE, was only partly read and\n      \
         was barely edited, when the goal is salvaging what survived and rewinding is not.\n      \
-        The output is identical to `--at @latest`, offered here as the dead-file salvage door.\n      \
+        The output is identical to `--at @latest`.\n      \
         Content invalidated by a `modified since read` boundary is dropped, never shown stale.\n  \
         --patches\n      \
         The segmented unified-diff history of `--file`. The range is split at INTEGRITY\n      \
         BOUNDARIES, the points where reconstruction across them is invalid. Each one is a\n      \
-        `File has been modified since read` harness error, an `originalFile` that disagrees\n      \
-        with the replayed buffer, an external `edited_text_file`, or a heuristic Bash mutation.\n      \
+        `File has been modified since read` harness error, an `originalFile` (the pre-edit\n      \
+        content an Edit or Write result records) that disagrees with the replayed buffer, an\n      \
+        `edited_text_file` attachment (Claude Code's notice that the file changed outside the\n      \
+        tool stream), or a heuristic Bash mutation.\n      \
         Each segment and each boundary carries its jsonl line, turn and timestamp. This is the\n      \
         CHANGES view. It rewinds a still-present file to an older state over a\n      \
         `--since`/`--until` window, and it is most useful when ONLY this session touched the\n      \
         file and never read it in full.\n  \
         --at <WHEN>\n      \
         The PARTIAL, line-numbered snapshot of `--file` as the LLM saw it at <WHEN>. WHEN takes\n      \
-        the same relative, ISO and bare-date grammar as `--since` (`45s`/`90m`/`2h`/`3d`/`1w`,\n      \
-        ISO8601, a bare date meaning local midnight) plus three recover-only forms,\n      \
+        the same relative, ISO and bare-date grammar as `--since` (`45s`, `90m`, `2h`, `3d`,\n      \
+        `1w`, `2mo`, `1y`, ISO8601, a bare date meaning local midnight) plus three\n      \
+        recover-only forms,\n      \
         `@turn:<N>`, `@line:<N>` and `@latest`. Unlike restore, `--at` prints a PARTIAL\n      \
         snapshot. Known lines carry their number, unknown regions are marked\n      \
         `??? lines A..B unknown`, and gaps are NEVER fabricated. `--at @latest` is the\n      \
@@ -58,13 +62,14 @@ use super::*;
         It is a listing only. Its content is never merged into a reconstruction.\n\
         \n\
         The TARGET selects the sessions. `@<uuid>` names one session, and a project path or encoded\n\
-        directory names every session under it. Subagent transcripts are spanned by default, because\n\
-        OMC fan-out edits happen in subagents. `--no-subagents` restricts the scan to the top-level\n\
-        session.\n\
+        directory names every session under it. Subagent and workflow-agent transcripts are spanned\n\
+        by default, because work fanned out to them edits files in their own transcripts.\n\
+        `--no-subagents` restricts the scan to the top-level session.\n\
         \n\
         WINDOWING\n\
-        `--turn (N|A..B|N..|-k)` is inclusive and counts turns from 0 in genuine-user order. It\n\
-        intersects with `--since`/`--until` (ISO8601 or relative), so both filters apply.\n\
+        `--turn (N|A..B|N..|-k)` is inclusive and counts turns from 0. The `--turn` entry below\n\
+        says which records open a turn. It intersects with `--since`/`--until` (ISO8601 or\n\
+        relative), so both filters apply.\n\
         `--file-lines (N|A..B|N..|-k)` further restricts the output to a 1-based span of FILE lines.\n\
         `--out <PATH>` writes the reconstructed artifact (the restored content, the snapshot or the\n\
         concatenated patches) verbatim to a file. In restore mode stdout then stays empty and a note\n\
@@ -73,7 +78,7 @@ use super::*;
         Reconstruction is NECESSARILY PARTIAL and NEVER fabricates. An unseen line is an explicit\n\
         gap, an edit with no anchor is a coverage hole, and a Bash touch is a heuristic boundary,\n\
         never an authoritative one. Nothing is truncated silently.",
-    after_help = "MODE (at most one, and the default is restore)\n  \
+    after_help = "MODE FLAGS (at most one, and none means restore)\n  \
         `--salvage`, `--patches`, `--at <WHEN>`, `--coverage` and `--list-backups` are MUTUALLY\n  \
         EXCLUSIVE, so passing two (`--coverage --patches`, say) is a parse error. With none of\n  \
         them the default RESTORE applies. It hands back the file's final content, or it FAILS\n  \
@@ -143,15 +148,16 @@ use super::*;
         `sed -i` refuses the anchor, because segment order is not replayed within one command. A\n  \
         read or a mode change of the path (`wc -l`, `chmod +x`) leaves the anchor standing.\n\
         \n  \
-        Variable targets stay in the boundary lanes. So do interpreter heredocs, because a script\n  \
-        is not file content, and ssh-fed heredocs, because they write to a REMOTE filesystem. An\n  \
-        admitted write anchor supersedes its own heuristic bash-mutation boundary. A byte-known\n  \
-        `>>` append is PLACED only onto a complete newline-terminated buffer. Anywhere else it is\n  \
-        disclosed as a `bash_append_unplaced` boundary (content known, position unknowable).\n  \
-        `tail` output cannot be placed in a line-keyed buffer without the file length, so it is\n  \
-        deliberately not an anchor, and `sed -i` rewrites are likewise left heuristic. Coverage\n  \
-        counts the admitted anchors as `bash-read-anchor`/`bash-write-anchor`, and segment\n  \
-        provenance names the class (`bash-heredoc`/`bash-cat`/`bash-write`).\n\
+        A write to a variable target stays a heuristic bash-mutation boundary. So does an\n  \
+        interpreter heredoc, because a script is not file content, and an ssh-fed heredoc,\n  \
+        because it writes to a REMOTE filesystem. An admitted write anchor supersedes its own\n  \
+        heuristic bash-mutation boundary. A byte-known `>>` append is PLACED only onto a complete\n  \
+        newline-terminated buffer. Anywhere else it is disclosed as a `bash_append_unplaced`\n  \
+        boundary (content known, position unknowable). `tail` output cannot be placed in a\n  \
+        line-keyed buffer without the file length, so it is deliberately not an anchor, and\n  \
+        `sed -i` rewrites are likewise left heuristic. Coverage counts the admitted anchors as\n  \
+        `bash-read-anchor`/`bash-write-anchor`, and segment provenance names the class\n  \
+        (`bash-heredoc`/`bash-cat`/`bash-write`).\n\
         \n\
         FILE-HISTORY SNAPSHOTS (Claude Code's own backups, adopted as rebase anchors)\n  \
         Claude Code snapshots every Edit/Write-tracked file per prompt and bumps its `version`\n  \
@@ -174,12 +180,12 @@ use super::*;
         own bookkeeping allows.\n\
         \n  \
         This runs for the `--file` TARGET on ANY path. `csift files` reports the same inference\n  \
-        only for the settings family, because a global timeline row per tracked path would flood\n  \
+        only for the settings files, because a global timeline row per tracked path would flood\n  \
         the output. A tool write and a silent write inside ONE snapshot interval merge into one\n  \
-        bump. The content comparison is the complete detector, and the version number alone is\n  \
-        not. The motivating producer is /rewind \"Restore code\", which writes NOTHING to the\n  \
+        bump, so only the content comparison catches the silent half of such a pair. The\n  \
+        /rewind \"Restore code\" action is one such silent writer, and it writes NOTHING to the\n  \
         transcript. The next prompt's `edited_text_file` attachment is the only other trace, and\n  \
-        it stays the authoritative boundary it already was.\n\
+        it stays an authoritative boundary.\n\
         \n\
         THE SURVIVAL AXIS\n  \
         The replay runs in FILE ORDER and stays that way. An Edit made on a branch the operator\n  \
@@ -189,8 +195,8 @@ use super::*;
         record off the surviving conversation is stamped `turn abandoned (root L<n>)` instead of a\n  \
         number. JSON gives it a NULL `turn_index` plus `survival` and `abandoned_root_line`, and a\n  \
         one-line disclosure says how many such events the window held. A `--turn` window still\n  \
-        admits them, by the live turn they physically follow. A window that silently dropped a\n  \
-        real write would reconstruct a state the disk never had.\n\
+        admits them, by the live turn they physically follow, so the window's reconstruction\n  \
+        includes every write that reached the disk inside it.\n\
         \n\
         FRESHNESS SIGNALS (Claude Code's own, adopted as boundaries)\n  \
         `staleReadFileStateHint` on a Bash result\n      \
@@ -200,25 +206,30 @@ use super::*;
         that attributes a formatter-class rewrite to concrete files.\n  \
         `staleRecovered` on a successful Edit\n      \
         The disk had drifted since the last read, and the edit still applied. It becomes an\n      \
-        authoritative `stale_recovered` annotation. Nothing is invalidated, and other changes\n      \
-        exist outside the stream.\n  \
+        authoritative `stale_recovered` annotation and invalidates nothing. The drift itself\n      \
+        happened outside the tool stream, so the transcript does not hold it.\n  \
         `edited_text_file` external-edit boundary\n      \
         When the boundary's window also ran a formatter-class command, the boundary's detail\n      \
-        names that command. The change may be the formatter's rewrite, so check the project's\n      \
-        conventions.\n  \
-        Failed ops (`String to replace not found`, `File does not exist`) are counted in the event\n  \
-        ledger and never replayed.\n\
+        names that command, because the change may be that formatter's rewrite.\n  \
+        Failed ops (`String to replace not found`, `File does not exist`) are counted among the\n  \
+        events and never replayed.\n\
         \n\
         JSON SCHEMA (per --format json)\n  \
-        EVERY mode, restore included, emits the envelope. One `{kind:\"header\",…}` line comes first\n  \
-        and one `{kind:\"summary\", file, mode, sessions, skipped_lines}` line comes last. That\n  \
-        summary carries the crossing set {crossing_budget, boundaries_crossed, budget_exhausted,\n  \
+        EVERY mode, restore included, emits the envelope, one header line first and one summary\n  \
+        line last. In every mode but `--list-backups` the header is {kind:\"header\", command,\n  \
+        sessions_in_scope, top_level_sessions, subagent_sessions, duplicate_transcripts,\n  \
+        duplicate_records_dropped, divergent_transcripts, unreadable_transcripts}, where the last\n  \
+        four count the copies of a transcript found under two project directories (merged,\n  \
+        records dropped by the merge, kept apart because they differ, unreadable), and the\n  \
+        summary is {kind:\"summary\", file, mode, sessions, skipped_lines}. That summary carries\n  \
+        the crossing set {crossing_budget, boundaries_crossed, budget_exhausted,\n  \
         boundaries_above_floor, floor_line, floor_cause} whenever `--cross-compactions` is\n  \
         non-zero. The set records what the survival walk stepped over to decide which replayed\n  \
         events are on the surviving conversation, and where it stopped. At `--cross-compactions 0`\n  \
-        the keys are absent. The text form of the set is two lines in every mode. Those lines go\n  \
-        to stdout in the four reporting modes, and to STDERR in the default restore mode, whose\n  \
-        stdout is the restored file.\n\
+        the keys are absent. The text form of the set is two lines. Those lines go to stdout\n  \
+        with `--salvage`, `--patches`, `--at` and `--coverage`, and to STDERR in the default\n  \
+        restore mode, whose stdout is the restored file. `--list-backups` scans no transcript and\n  \
+        prints neither.\n\
         \n  \
         The rows between the header and the summary depend on the mode.\n    \
         restore           One `{kind:\"restore\", file, complete, lines, boundaries, bash_events,\n                      \
@@ -232,7 +243,13 @@ use super::*;
         recoverable_lines, opaque_commands, powershell_commands,\n                      \
         suggested_search, …}`\n    \
         --at, --salvage   `{kind:\"snapshot\", lines, gaps, seen_total_lines, abandoned_events,\n                      \
-        boundaries, opaque_commands, powershell_commands, suggested_search, …}`\n  \
+        boundaries, opaque_commands, powershell_commands, suggested_search, …}`\n    \
+        --list-backups    a header {kind:\"header\", command, mode, file, hash, store,\n                      \
+        store_present}, where `hash` is the 16-hex store key of `--file` and\n                      \
+        `store_present` says whether the store directory exists, then one\n                      \
+        {kind:\"backup\", session_id, version, path, bytes, backup_utc,\n                      \
+        backup_local} row per stored checkpoint, then the summary\n                      \
+        {kind:\"summary\", backups, sessions}\n  \
         `abandoned_events` counts the replayed events that came from records off the surviving\n  \
         conversation. It is a share of what produced the coverage above, never subtracted from it.\n\
         \n  \
@@ -240,8 +257,9 @@ use super::*;
         abandoned_root_line, ts_utc, ts_local, cause, confidence, detail}`. `turn_index` is NULL\n  \
         on an abandoned record, and `abandoned_root_line` names its branch head. `line` is the\n  \
         replay/cutoff coordinate to feed to `--at @line:<N>`. `source_line` is the REAL jsonl line\n  \
-        in `source_session_id`, and that pair is what you feed to `csift show`. The two pairs\n  \
-        differ only after a cross-transcript merge.\n\
+        in `source_session_id`, and that pair is what `csift show` takes. `line` equals\n  \
+        `source_line` unless several transcripts were merged into one replay, which renumbers\n  \
+        `line` onto the merged sequence.\n\
         \n  \
         Every per-session row carries the id-domain discriminators `{session_id, is_subagent,\n  \
         parent_session_id}`. `is_subagent` flags a bare-hex subagent record. Re-feed\n  \
@@ -253,9 +271,10 @@ pub struct RecoverArgs {
     /// A target is a path or an `@` session token, and the argument repeats. With none, every
     /// project is scanned. `@<uuid>` (8-4-4-4-12 hex) scopes to one session, which is how
     /// `csift recover @<uuid> --file …` in the EXAMPLES works. `@<agent-id>` scopes to one
-    /// subagent and its subtree. The ids come from `csift agents`, and a subagent's WRITE gap
-    /// closes from the tool_use input. `@main` and `@trap:<marker>` resolve the calling
-    /// session, and a `*.jsonl` file scopes to that transcript.
+    /// subagent and its subtree, with ids from `csift agents`. A subagent's Write and Edit
+    /// results carry no copy of the content, so recover rebuilds those writes from the tool
+    /// call's own input instead. `@main` and `@trap:<marker>` resolve the calling session,
+    /// and a `*.jsonl` file scopes to that transcript.
     #[arg(
         value_name = "PATH",
         verbatim_doc_comment,
@@ -291,9 +310,10 @@ pub struct RecoverArgs {
     /// prints the count and the first ten candidates, with the rest counted. Replayed as one
     /// file, the candidates would stitch their edits into one buffer, or keep one file's
     /// history and drop the others'. Pass one of the candidates, or a longer suffix that names
-    /// exactly one. Every candidate the refusal prints replays when passed back. A candidate
-    /// that other candidates end with (a relative path from a transcript with no cwd) replays
-    /// that file alone, with a note on stderr.
+    /// exactly one. Every candidate the refusal prints replays when passed back. A
+    /// relative path from a transcript with no cwd can be a suffix of other candidates.
+    /// Passed back, it replays only the file recorded under that relative path, never the
+    /// longer paths ending with it, and a note on stderr says so.
     ///
     /// Paths are compared LEXICALLY, the target and every record path alike. `.` segments are
     /// dropped, and a run of `/` collapses to one (a leading `//` stays). So `./a/lib.rs` and
@@ -353,19 +373,20 @@ pub struct RecoverArgs {
     ///
     /// Setting this flag both selects the mode AND supplies its cutoff. WHEN uses the SAME
     /// grammar as `--since`, plus three recover-only forms.
-    ///   `Ns`/`Nm`/`Nh`/`Nd`/`Nw`   that long ago (`45s`, `90m`, `2h`, `3d`, `1w`)
+    ///   `N<unit>`                 that long ago, in the seven units `--since` lists (`45s`,
+    ///                             `90m`, `2h`, `3d`, `1w`, `2mo`, `1y`)
     ///   ISO8601 datetime          for example `2026-06-01T05:00:00Z`
     ///   bare date                 `2026-06-01` means LOCAL MIDNIGHT
-    ///   `@turn:<N>`               the snapshot as of the first line after genuine-user turn N.
-    ///                             Find N in the `<id>·t<n>` header of `csift search` text, or
-    ///                             in `turn_index` in any `--format json` record.
+    ///   `@turn:<N>`               the snapshot as of the first line after turn N, with turns
+    ///                             counted as the `--turn` entry counts them. Find N in the
+    ///                             `<id>·t<n>` header of `csift search` text, or in
+    ///                             `turn_index` in any `--format json` record.
     ///   `@line:<N>`               the snapshot as of JSONL TRANSCRIPT line N, the `L<n>` this
     ///                             tool's text prints and the `line` key its JSON carries. It
     ///                             is NOT a file line of `--file`. For a 1-based FILE-line span
     ///                             of `--file`, use `--file-lines` instead.
-    ///   `@latest`                 the FINAL reconstructed state, with no cutoff. It is the
-    ///                             clean way to ask for the last form without guessing a
-    ///                             timestamp past the last write.
+    ///   `@latest`                 the FINAL reconstructed state, with no cutoff, so no
+    ///                             timestamp past the last write has to be guessed
     /// A datetime bound is INCLUSIVE of events AT that instant.
     #[arg(long, value_name = "WHEN", group = "mode", verbatim_doc_comment)]
     pub at: Option<String>,
@@ -385,9 +406,10 @@ pub struct RecoverArgs {
     /// The listing has provenance bounds. Only the structured file tools and an approved
     /// in-place `sed` preview write to the store, so other shell writes and manual edits never
     /// land there. The store is PRUNED over time, and the `@vN` counters reset per session dir,
-    /// so they are never an order key. Absence therefore proves nothing, and a listing is NOT a
-    /// history. csift never merges checkpoint content into a reconstruction, because that
-    /// content has no transcript anchor. Inspect or copy a row's store path yourself.
+    /// so they are never an order key. A path with no row may still have been written, and
+    /// the rows are not a complete history of the file. csift never merges checkpoint content
+    /// into a reconstruction, because that content has no transcript anchor. Each row's store
+    /// path is a plain file, readable or copyable as it stands.
     #[arg(
         long = "list-backups",
         group = "mode",
@@ -420,8 +442,10 @@ pub struct RecoverArgs {
 
     /// Lower time bound, read in the system-local time zone.
     ///
-    ///   `Ns`/`Nm`/`Nh`/`Nd`/`Nw`   that many seconds, minutes, hours, days or weeks AGO
-    ///                             (`45s`, `90m`, `2h`, `3d`, `1w`)
+    ///   `N<unit>`                 that many units AGO. The seven units are `s` seconds, `m`
+    ///                             minutes, `h` hours, `d` days, `w` weeks, `mo` months
+    ///                             (30 days) and `y` years (365 days), as in `45s`, `90m`,
+    ///                             `2h`, `3d`, `1w`, `2mo`, `1y`
     ///   ISO8601 instant           `2026-06-01T05:00:00Z` or `…+10:00`
     ///   bare datetime             `2026-06-01T05:00:00` is that LOCAL wall-clock time
     ///   bare date                 `2026-06-01` is LOCAL MIDNIGHT that day
@@ -439,9 +463,9 @@ pub struct RecoverArgs {
     ///
     /// The span takes the shared range grammar (`N`, `A..B`, `N..`, `-k` for the last k lines)
     /// and filters the reconstructed line space, independently of the turn and time window. It
-    /// applies in `--patches`, `--at` and `--coverage`. The flag is named `--file-lines`
-    /// because `line` and `L` always mean a TRANSCRIPT jsonl line in csift. This is the one
-    /// flag that addresses the reconstructed FILE's lines.
+    /// applies in `--patches`, `--at` and `--coverage`. It is the one flag that addresses the
+    /// reconstructed FILE's lines. Everywhere else in csift `line` and `L<n>` mean a
+    /// TRANSCRIPT jsonl line.
     #[arg(
         long = "file-lines",
         value_name = "N|A..B|N..|-k",

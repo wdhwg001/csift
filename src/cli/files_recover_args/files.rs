@@ -8,7 +8,8 @@ use super::*;
     long_about = "Show which FILES and DIRECTORIES a session modified, and when.\n\
         \n\
         csift extracts file mutations from a session's transcript. It spans the session's subagents\n\
-        by default, because OMC fan-out edits happen in subagents. Mutations come from two sources.\n  \
+        by default, because work fanned out to subagents and workflow agents edits files in their\n\
+        transcripts. Mutations come from two sources.\n  \
         • AUTHORITATIVE  Edit / Write / MultiEdit (input.file_path) and NotebookEdit\n                   \
         (input.notebook_path). Create-vs-edit is resolved from the paired\n                   \
         tool_result, where `type:\"create\"` marks a new file.\n  \
@@ -36,29 +37,38 @@ use super::*;
         all reflect the filtered set. An invalid pattern is a hard error, and a filter that removes\n\
         everything yields the normal empty output.\n\
         \n\
+        EDIT-BEFORE-READ BOUNDARIES\n\
+        Every detail level closes with a section of Edit-before-Read boundaries. Each is a place\n\
+        where the harness rejected an Edit or Write with `File has been modified since read`,\n\
+        because the file changed outside the tool stream (a formatter, a git command, an outside\n\
+        editor) after the session last read it. Each row names the file, the jsonl line, the\n\
+        turn and the time. The coverage mode of `csift recover --file <path>` breaks one file's\n\
+        boundaries down further.\n\
+        \n\
         The TARGET selects the sessions. `@<uuid>` names one session, a project path or encoded\n\
         directory names every session under it, and with neither, all projects are scanned.\n\
-        Subagents are spanned by default, because OMC fan-out edits happen in subagents.\n\
-        `--no-subagents` restricts the scan to the TOP-LEVEL session only.\n\
+        Subagents and workflow agents are spanned by default. `--no-subagents` restricts the scan\n\
+        to the TOP-LEVEL session only.\n\
         \n\
         WINDOWING\n\
-        `--turn (N|A..B|N..|-k)` is inclusive and counts from 0 in genuine-user order. It intersects\n\
-        with `--since`/`--until`, so both filters apply. Time bounds accept ISO8601 (`2026-06-01`,\n\
-        `2026-06-01T05:00:00Z`) or a relative form (`2h`, `3d`, `90m`, `45s`, `1w`) meaning \"that\n\
-        long ago\" in the system-local timezone. A mutation with no timestamp never falls inside a\n\
-        bounded window.\n\
+        `--turn (N|A..B|N..|-k)` is inclusive and counts turns from 0. The `--turn` entry below\n\
+        says which records open a turn. It intersects with `--since`/`--until`, so both filters\n\
+        apply. Time bounds accept ISO8601 (`2026-06-01`, `2026-06-01T05:00:00Z`) or a relative\n\
+        form meaning \"that long ago\" in the system-local timezone (`45s`, `90m`, `2h`, `3d`,\n\
+        `1w`, `2mo`, `1y`, with all seven units listed under `--since`). A mutation with no\n\
+        timestamp never falls inside a bounded window.\n\
         \n\
         THE SURVIVAL AXIS\n\
         Turn numbers are the LIVE ones, the turns Claude Code's own conversation chain still\n\
-        reaches, and the same numbers `search` and `show` print. A mutation made on a branch the\n\
-        operator later rewound past, or under a prompt that was recalled and re-typed, belongs to\n\
-        no numbered turn. Its turn slot reads `abandoned (root L<n>)`, naming the branch head, and\n\
-        the row carries an `[abandoned]` marker (`[pre-cut]` above a compaction cut). The ROW\n\
-        STAYS. Disk truth is file order, and that write really did land. Dropping it would answer\n\
-        \"did this session write X?\" with a lie. The rollups count the share separately, as\n\
-        `(N from abandoned branches)`. A `--turn` window admits such a row by the live turn it\n\
-        physically follows, for the same reason. A window over a span must not silently omit a\n\
-        write that happened inside it.\n\
+        reaches (the global `--cross-compactions` entry says what the chain is), and the same\n\
+        numbers `search` and `show` print. A mutation made on a branch the operator later rewound\n\
+        past, or under a prompt that was recalled and re-typed, belongs to no numbered turn. Its\n\
+        turn slot reads `abandoned (root L<n>)`, naming the branch head, and the row carries an\n\
+        `[abandoned]` marker (`[pre-cut]` above a compaction cut). The ROW STAYS, because file\n\
+        order is disk truth and that write really did land. The rollups count the share\n\
+        separately, as `(N from abandoned branches)`. A `--turn` window admits such a row by the\n\
+        live turn it physically follows, so a window over a span keeps every write made inside\n\
+        it.\n\
         \n\
         Nothing is truncated silently. Skipped malformed lines are counted and surfaced.",
     after_help = "AT A GLANCE\n  \
@@ -86,14 +96,16 @@ use super::*;
         A machine-readable per-dir rollup:\n    \
         csift files . --format json --by dir\n\
         \n\
-        ACID TEST: \"how many distinct gap docs were touched, and how many /tmp docs were created?\"\n  \
-        Count the rows ending in gap-style docs:\n    \
-        csift files @<uuid> --by file\n  \
-        Filter `is_create==true`, with the path under /tmp:\n    \
-        csift files @<uuid> --by timeline --format json\n  \
+        WORKED EXAMPLE: \"how many distinct Markdown files were touched, and how many files were\n\
+        created under /tmp?\"\n  \
+        One row per Markdown file, so the row count answers the first half:\n    \
+        csift files @<uuid> --by file --regex '\\.md$'\n  \
+        The created files under /tmp, counted from the timeline rows:\n    \
+        csift files @<uuid> --by timeline --glob '/tmp/**' --format json \\\n      \
+        | jq -s 'map(select(.kind==\"mutation\" and .is_create)) | length'\n  \
         There is NO `op` value `create`. `op` is one of {bash, edit, write, multi_edit,\n  \
         notebook_edit, external_write}, and create-vs-edit is the SEPARATE `is_create` boolean. A\n  \
-        test for a created /tmp doc therefore filters `is_create==true` (optionally AND op in\n  \
+        test for a created /tmp file therefore filters `is_create==true` (optionally AND op in\n  \
         {write, multi_edit, notebook_edit}), never `op==\"create\"`.\n  \
         BOTH the per-mutation `op` and `is_create` keys live ONLY in `--by timeline` JSON. A\n  \
         `--by file` row carries per-op COUNT fields (write/edit/bash/multi_edit/notebook_edit/total)\n  \
@@ -101,14 +113,29 @@ use super::*;
         create-vs-edit or to filter by op.\n\
         \n\
         JSON SCHEMAS (per --format json)\n  \
-        --by timeline : one object per mutation: {session_id, is_subagent, parent_session_id,\n      \
-        line, path, op, ts_utc, ts_local, turn_index, survival, abandoned_root_line,\n      \
-        is_create, heuristic, resolution, path_verbatim, command_errored, detail}\n      \
-        plus a trailing summary object. The summary carries the crossing set\n      \
-        {crossing_budget, boundaries_crossed, budget_exhausted, boundaries_above_floor,\n      \
-        floor_line, floor_cause} whenever `--cross-compactions` is non-zero. The set records\n      \
-        what the walk stepped over to decide each row's `survival`, and where it stopped. At\n      \
-        `--cross-compactions 0` those keys are absent. The row keys read as follows.\n\
+        The stream is one header line, the rows of the chosen `--by` level, the boundary rows,\n  \
+        and one summary line, in that order.\n  \
+        header        : {kind:\"header\", command, sessions_in_scope, top_level_sessions,\n      \
+        subagent_sessions, duplicate_transcripts, duplicate_records_dropped,\n      \
+        divergent_transcripts, unreadable_transcripts}. The last four describe a transcript\n      \
+        found under two project directories. They count the copies merged, the records the\n      \
+        merge dropped, the copies kept apart because their contents differ, and the copies\n      \
+        csift could not read.\n  \
+        boundary      : one {kind:\"boundary\", session_id, is_subagent, parent_session_id, path,\n      \
+        line, turn_index, survival, abandoned_root_line, cause, ts_utc, ts_local} row per\n      \
+        Edit-before-Read boundary, in every `--by` level. `cause` names what was refused, and\n      \
+        it reads `modified_since_read`.\n  \
+        summary       : {kind:\"summary\", sessions, distinct_files, total_mutations,\n      \
+        edit_before_read_boundaries, skipped_lines, detail_level}. `sessions` counts the\n      \
+        distinct OWNING sessions, and `detail_level` repeats the `--by` value. The summary also\n      \
+        carries the crossing set {crossing_budget, boundaries_crossed, budget_exhausted,\n      \
+        boundaries_above_floor, floor_line, floor_cause} whenever `--cross-compactions` is\n      \
+        non-zero. The set records what the walk stepped over to decide each row's `survival`,\n      \
+        and where it stopped. At `--cross-compactions 0` those keys are absent.\n  \
+        --by timeline : one object per mutation: {kind:\"mutation\", session_id, is_subagent,\n      \
+        parent_session_id, line, path, op, ts_utc, ts_local, turn_index, survival,\n      \
+        abandoned_root_line, is_create, heuristic, resolution, path_verbatim, command_errored,\n      \
+        detail}. The row keys read as follows.\n\
         \n      \
         survival         live | pre-cut | abandoned. An ABANDONED mutation was made on a\n                       \
         branch the conversation was later rewound past. It has a NULL\n                       \
@@ -146,32 +173,28 @@ use super::*;
         file's file-history version jumped with no tool record in the\n                       \
         interval, so Claude Code itself rewrote the file (/model, /config,\n                       \
         plugin toggles) or an outside editor did. Such rows are reported ONLY\n                       \
-        for the settings family (`.claude/settings*.json`). The tracked set\n                       \
+        for the settings files (`.claude/settings*.json`). The tracked set\n                       \
         spans thousands of ordinary paths and the harness writes bookkeeping\n                       \
-        constantly, so wider reporting would flood every timeline (58,115\n                       \
-        such jumps over 1,121 paths in one measured corpus).\n                       \
+        constantly, so wider reporting would flood every timeline.\n                       \
         `csift recover --file <path>` reads the SAME instrument on any single\n                       \
         path, where that flood cannot arise. The row's detail names the\n                       \
         version transition and the uncovered interval. A version-counter\n                       \
         RESET (a process restart) starts a new generation and is never\n                       \
         reported as a write.\n      \
         command_errored  true flags a mutation kept from a bash chain whose tool_result\n                       \
-        errored. Part of the chain failed and which arms ran is unknowable,\n                       \
+        errored. Part of the chain failed and which parts ran is unknowable,\n                       \
         so the row is disclosed instead of dropped.\n\
         \n  \
-        --by file  : one object per file: {session_id, is_subagent, parent_session_id, path,\n      \
-        write, edit, bash, multi_edit, notebook_edit, external_write, abandoned, total,\n      \
-        distinct_files, first_utc, first_local, last_utc, last_local}\n      \
-        plus a trailing summary object. is_subagent + parent_session_id discriminate the id\n      \
-        domain on EVERY grouped view, as on --by timeline. A subagent row's session_id is a\n      \
-        bare hex, so re-feed parent_session_id. `abandoned` is a SHARE of `total`, never a\n      \
-        subtraction. It counts how many of this group's mutations came from records off the\n      \
-        surviving conversation.\n\
+        --by file  : one object per file: {kind:\"file\", session_id, is_subagent,\n      \
+        parent_session_id, path, write, edit, bash, multi_edit, notebook_edit, external_write,\n      \
+        abandoned, total, distinct_files, first_utc, first_local, last_utc, last_local}.\n      \
+        is_subagent + parent_session_id discriminate the id domain on EVERY grouped view, as on\n      \
+        --by timeline. A subagent row's session_id is a bare hex, so re-feed\n      \
+        parent_session_id. `abandoned` is a SHARE of `total`, never a subtraction. It counts\n      \
+        how many of this group's mutations came from records off the surviving conversation.\n\
         \n  \
-        --by dir / --by summary : the same per-op count keys and the same {session_id,\n      \
-        is_subagent, parent_session_id} discriminators. Each group is one `kind:\"dir\"` /\n      \
-        `kind:\"bucket\"` row with the group named in `path`, followed by a trailing summary\n      \
-        {distinct_files, total_mutations, skipped_lines, detail_level}."
+        --by dir / --by summary : the same keys as --by file. Each group is one `kind:\"dir\"` /\n      \
+        `kind:\"bucket\"` row with the group named in `path`."
 )]
 pub struct FilesArgs {
     /// Project targets (actual cwd or encoded dir) whose sessions' file mutations to report.
@@ -207,8 +230,9 @@ pub struct FilesArgs {
 
     /// Report only the top-level `<uuid>.jsonl` session's mutations, excluding subagents.
     ///
-    /// Subagent mutations are attributed by default (built-in Task/Agent-tool, OMC and Workflow
-    /// agents), which matters because OMC fan-out edits happen in subagents. This is the one
+    /// Subagent mutations are attributed by default (built-in Task/Agent-tool agents and the
+    /// workflow agents whose transcripts sit under `subagents/workflows/<run>/`), which matters
+    /// because work fanned out to them edits files in their own transcripts. This is the one
     /// flag that narrows the span. `--subagents` only restates the default.
     #[arg(long = "no-subagents", verbatim_doc_comment)]
     pub no_subagents: bool,
@@ -283,8 +307,10 @@ pub struct FilesArgs {
 
     /// Lower time bound, read in the system-local time zone.
     ///
-    ///   `Ns`/`Nm`/`Nh`/`Nd`/`Nw`   that many seconds, minutes, hours, days or weeks AGO
-    ///                             (`45s`, `90m`, `2h`, `3d`, `1w`)
+    ///   `N<unit>`                 that many units AGO. The seven units are `s` seconds, `m`
+    ///                             minutes, `h` hours, `d` days, `w` weeks, `mo` months
+    ///                             (30 days) and `y` years (365 days), as in `45s`, `90m`,
+    ///                             `2h`, `3d`, `1w`, `2mo`, `1y`
     ///   ISO8601 instant           `2026-06-01T05:00:00Z` or `…+10:00`
     ///   bare datetime             `2026-06-01T05:00:00` is that LOCAL wall-clock time
     ///   bare date                 `2026-06-01` is LOCAL MIDNIGHT that day

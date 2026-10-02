@@ -20764,8 +20764,8 @@
         },
         {
           "path": "src/cli/files_recover_args/recover.rs",
-          "lines": "195-205",
-          "snippet": "        FRESHNESS SIGNALS (Claude Code's own, adopted as boundaries)\\n  \\\n        `staleReadFileStateHint` on a Bash result\\n      \\\n        Claude Code itself reporting, BY NAME, that the command modified files in its read\\n      \\\n        set. The paths are relative to the shell cwd and are resolved before matching. The\\n      \\\n        hint becomes an authoritative HARD `hint_modified` boundary, and it is the one signal\\n      \\\n        that attributes a formatter-class rewrite to concrete files.\\n  \\\n        `staleRecovered` on a successful Edit\\n      \\\n        The disk had drifted since the last read, and the edit still applied. It becomes an\\n      \\\n        authoritative `stale_recovered` annotation. Nothing is invalidated, and other changes\\n      \\\n        exist outside the stream.\\n  \\\n        `edited_text_file` external-edit boundary\\n      \\"
+          "lines": "201-211",
+          "snippet": "        FRESHNESS SIGNALS (Claude Code's own, adopted as boundaries)\\n  \\\n        `staleReadFileStateHint` on a Bash result\\n      \\\n        Claude Code itself reporting, BY NAME, that the command modified files in its read\\n      \\\n        set. The paths are relative to the shell cwd and are resolved before matching. The\\n      \\\n        hint becomes an authoritative HARD `hint_modified` boundary, and it is the one signal\\n      \\\n        that attributes a formatter-class rewrite to concrete files.\\n  \\\n        `staleRecovered` on a successful Edit\\n      \\\n        The disk had drifted since the last read, and the edit still applied. It becomes an\\n      \\\n        authoritative `stale_recovered` annotation and invalidates nothing. The drift itself\\n      \\\n        happened outside the tool stream, so the transcript does not hold it.\\n  \\\n        `edited_text_file` external-edit boundary\\n      \\"
         }
       ],
       "states": [
