@@ -1,1820 +1,1884 @@
 # Changelog
 
-All notable changes to csift are documented in this file, newest first — one
-entry per released version, written in that version's release commit. Pre-1.0
-SemVer: a BREAKING surface change bumps the MINOR version; a non-breaking
-surface change bumps the PATCH.
+This file records the notable changes to csift, newest version first. Each version
+gets one entry, written in the commit that releases it. csift is pre-1.0 and follows
+SemVer in its pre-1.0 form. A breaking surface change bumps the MINOR version, and a
+non-breaking surface change bumps the PATCH.
 
 ## [0.13.0] - 2026-09-26
 
 ### Added
 
-- **A PDF page says which page it is.** A `Read` with a `pages` parameter returns one image
-  element per requested page, so `csift image` has listed and extracted those pages all
-  along - as rows indistinguishable from a screenshot. The page number is on no key of the
-  element: the harness's own mapper writes a successful page bare and labels only a page it
-  failed to render, and the offset lives once on the carrying record as
-  `toolUseResult.firstPage`. csift derives the page as that offset plus the element's
-  position among the content elements after the leading text, counted over POSITIONS rather
-  than over images, so a failed page in the middle does not shift the pages after it. Text
-  rows gain ` p<N>` beside the media type and the document's basename once per record group
-  (one transcript, one line, one document);
-  JSON rows gain `page` and `pdf_path`, the path verbatim as every other path field is.
-  The derivation is gated on the record's own result reading `parts` with a `firstPage` and
-  on the record carrying exactly one `tool_result` block, so a screenshot, a result written
-  before that key existed, and the REPL tool's re-emitted inner-`Read` pages (which carry no
-  offset and flatten several documents into one list) all read `page: null` rather than an
-  assumed page 1. Addressing does not move: `--id`, `--turn` and the extracted filename are
-  what they were, because the page is provenance and not an id. A whole-PDF `Read` returns a
-  `document` block rather than images and stays unlisted. The same fact reaches the
-  `agent.tool.result` unit as the exposed-keys family's `pdf_pages` - the label zone
-  `[pdf pages A-B of <basename>]`, JSON `{first, last, count, path}` - read through the one
-  function `image` reads, so `show --line` and `image` cannot disagree about which pages a
-  record carries; the existing `[N images: ...]` annotation and its extraction hint are
-  unchanged.
+- A PDF page now says which page it is. A `Read` with a `pages` parameter returns one
+  image element per requested page, and `csift image` has always listed and extracted
+  those pages. Until now each one looked exactly like a screenshot. No key on the element
+  carries its page number. The harness's own mapper writes a successful page bare and
+  labels only a page it failed to render, and the offset lives once on the carrying record
+  as `toolUseResult.firstPage`. csift now derives the page as that offset plus the
+  element's position among the content elements after the leading text. It counts
+  positions and not images, so a failed page in the middle does not shift the pages after
+  it. Text rows gain ` p<N>` beside the media type, with the document's basename once per
+  record group (one transcript, one line, one document). JSON rows gain `page` and
+  `pdf_path`, the path printed verbatim like every other path field. The derivation runs
+  only when the record's own result reads `parts` with a `firstPage` and the record
+  carries exactly one `tool_result` block. A screenshot, a result written before that key
+  existed, and the REPL tool's re-emitted inner-`Read` pages all read a null `page` in
+  place of an assumed page 1. Those REPL pages carry no offset and flatten several
+  documents into one list. Addressing does not move. `--id`, `--turn` and the extracted
+  filename stay as they were, because the page is provenance and not an id. A whole-PDF
+  `Read` returns a `document` block with no images and stays unlisted. The same fact
+  reaches the `agent.tool.result` unit as the exposed-keys family's `pdf_pages`, with the
+  label zone `[pdf pages A-B of <basename>]` and the JSON object `{first, last, count,
+  path}`. Both surfaces read it through the one function `image` uses, so `show --line`
+  and `image` cannot disagree about which pages a record carries. The existing
+  `[N images: ...]` annotation and its extraction hint are unchanged.
 
-
-- **One session id under two project directories is merged, and the merge says what it
-  dropped.** A renamed project whose directory was copied leaves one session id under two
-  encoded directories, and Claude Code reaches the same shape two ways of its own (the
-  `CLAUDE_CODE_PROJECT_DIR_NAME` override keeps the natural directory beside the overridden
-  one and searches both; a relocation whose fallback mover strands its source leaves the
-  transcript in the old place too) - its own resume lookup walks every project directory and
-  returns nothing rather than choose. csift used to resolve both copies and count the session
-  twice on every spanning surface, walking its whole sidecar twice with it. The copies now
-  collapse at the shared resolver, decided by the BYTES: identical, or one a strict byte
-  prefix of the other, merge onto the longest; copies that differ before the shorter one ends
-  merge into nothing and both stay in scope, because a turn number minted from one does not
-  address the other; a copy csift could not READ reads `unknown` and merges nothing either,
-  naming that copy and the error the filesystem returned. An mtime is never consulted.
-  The resolver names every merge on stderr,
-  `list`/`search`/`stats`/`files`/`recover`/`verbatim`/`image`/`agents` carry
-  `duplicate_transcripts` and `duplicate_records_dropped` in their JSON header - plus
+- One session id found under two project directories is now merged, and the merge says
+  what it dropped. A renamed project whose directory was copied leaves one session id
+  under two encoded directories. Claude Code reaches the same shape two ways of its own.
+  The `CLAUDE_CODE_PROJECT_DIR_NAME` override keeps the natural directory beside the
+  overridden one and searches both, and a relocation whose fallback mover strands its
+  source leaves the transcript in the old place too. Claude Code's own resume lookup walks
+  every project directory and returns nothing when it would have to choose. csift used to
+  resolve both copies, count the session twice on every spanning surface, and walk its
+  whole sidecar twice. The copies now collapse at the shared resolver, and the bytes
+  decide. Identical copies merge onto the longest, and so does a copy that is a strict
+  byte prefix of the other. Copies that differ before the shorter one ends merge into
+  nothing and both stay in scope, because a turn number minted from one does not address
+  the other. A copy csift could not read reads `unknown` and merges nothing either, and
+  the note names that copy and the error the filesystem returned. An mtime is never
+  consulted. The resolver names every merge on stderr. `list`, `search`, `stats`,
+  `files`, `recover`, `verbatim`, `image` and `agents` carry `duplicate_transcripts` and
+  `duplicate_records_dropped` in their JSON header. They also carry
   `divergent_transcripts`, the copies csift refused to merge, and `unreadable_transcripts`,
-  the copies it could not read, because the first two read 0 both when nothing was duplicated
-  and when a duplicate merged nothing - and a `copies` line
-  in text, and a `list` row carries `also_at` plus `duplicate_relation`. `show` keeps
-  refusing an address that resolves to two files and now names the paths. An `@<agent-id>`
-  target takes the same merge: a copied project directory carries the whole sidecar, so one
-  `agent-<hex>.jsonl` is on disk under two directories too.
-- **The merge runs once over the whole resolved set, so one transcript is one file however
-  many targets reached it.** `list @<uuid> @<agent-hex>` reaches one `agent-<hex>.jsonl`
-  down two paths - gathered from the session's sidecar, and found by the agent target under
-  both project directories - and merging each half separately let the two halves pick
+  the copies it could not read, because the first two keys read 0 both when nothing was
+  duplicated and when a duplicate merged nothing. Text output gains a `copies` line, and a
+  `list` row carries `also_at` plus `duplicate_relation`. `show` keeps refusing an address
+  that resolves to two files and now names the paths. An `@<agent-id>` target takes the
+  same merge, because a copied project directory carries the whole sidecar and so puts one
+  `agent-<hex>.jsonl` under two directories too.
+- The merge runs once over the whole resolved set, so one transcript is one file however
+  many targets reached it. `list @<uuid> @<agent-hex>` reaches one `agent-<hex>.jsonl`
+  down two paths. The session's sidecar yields it once, and the agent target finds it
+  under both project directories. Merging each half separately let the two halves pick
   different winners, so both copies survived and each row named the other as dropped. A
-  first pass still runs before the sidecars are gathered, so a dropped copy's whole sidecar
-  is never walked; everything that pass produced then goes through one final merge, which
-  reports only what it newly decided (a group that merged nothing is still there for it to
-  find, and one group is one note). The agent lookup collects every copy instead of the
-  first one the directory listing yields, and it finds them by probing each project
-  directory for the owning session's basename rather than walking every sidecar twice.
-- **One workflow run is one `kind:"run"` row, however many copies of the session discovered
-  it** - and a run's identity is the pair (session, run id), not the id alone. A copied
-  project directory carries the workflow manifests with it, so the same run was read once
-  per copy and printed once per copy. A run id is unique inside the session that minted it
-  and nothing makes it unique across sessions, so both the fold and the session a run
-  renders under now key on the owning session: two sessions naming one workflow id keep a
-  row each, where keying on the id alone dropped the second as though it were a copy.
-- **`csift agents` merges duplicated agent transcripts, like every other surface.** It
-  resolves top-level-only and walks the sidecars itself, so the resolver's merge never saw
-  them: a divergent session pair whose two sidecars held one byte-identical agent transcript
-  printed two lanes under a header saying nothing was duplicated, while `list` showed one row
-  and `search -c` counted the records once. All three agree now.
-- **Every `csift agents` row names its own transcript** (`path`, and a `transcript` line in
-  the text tree for the ids that occur twice). Two copies of one session carry two copies of
-  each agent transcript, and those rows are identical in every other field - the agent id
-  included - so without the path a consumer sees two lanes it cannot tell apart.
-- **`csift agents` counts what it prints.** The session count row's `agents` is now exactly the
-  number of `kind:"agent"` rows under it, and the text tree prints that same set in that same
-  order: both projections take one walk, whose visited set keys on node identity rather than on
-  the agent id. Two copies of one session whose contents differ keep both sidecars in scope and
-  their agent transcripts share an id, which the old walk deduped while the count row did not.
-- **`csift list` emits one row per session, not one per copy**, and `sessions_in_scope` counts
-  distinct sessions. BREAKING on a scope holding a duplicated session: the row count and every
-  spanning count change, and the header numbers with them.
+  first pass still runs before the sidecars are gathered, so a dropped copy's sidecar is
+  never walked. Everything that pass produced then goes through one final merge, which
+  reports only what it newly decided. A group that merged nothing is still there for the
+  final pass to find, and one group gets one note. The agent lookup now collects every
+  copy, where it used to stop at the first one the directory listing yielded. It finds
+  them by probing each project directory for the owning session's basename, with no
+  second walk over every sidecar.
+- One workflow run is one `kind:"run"` row, however many copies of its session found it.
+  A run's identity is the pair of session and run id, and the id alone no longer stands
+  for it. A copied project directory carries the workflow manifests with it, so the same
+  run used to be read and printed once per copy. A run id is unique inside the session
+  that minted it, and nothing makes it unique across sessions. The fold and the session a
+  run renders under now both key on the owning session. Two sessions naming one workflow
+  id keep a row each, where keying on the id alone dropped the second as though it were a
+  copy.
+- `csift agents` merges duplicated agent transcripts like every other surface. It
+  resolves top-level sessions only and walks the sidecars itself, so the resolver's merge
+  never saw those transcripts. A divergent session pair whose two sidecars held one
+  byte-identical agent transcript printed two lanes under a header saying nothing was
+  duplicated. In the same scope `list` showed one row and `search -c` counted the records
+  once. All three agree now.
+- Every `csift agents` row names its own transcript in `path`, and the text tree prints a
+  `transcript` line for the ids that occur twice. Two copies of one session carry two
+  copies of each agent transcript. Those rows are identical in every other field,
+  including the agent id, so without the path a consumer sees two lanes it cannot tell
+  apart.
+- `csift agents` counts what it prints. The session count row's `agents` is now exactly
+  the number of `kind:"agent"` rows under it, and the text tree prints that same set in
+  the same order. Both projections take one walk, and its visited set keys on node
+  identity. The agent id alone is not enough. Two copies of one session whose contents
+  differ keep both sidecars in scope, and their agent transcripts share an id. The old
+  walk deduped those while the count row did not.
+- `csift list` emits one row per session instead of one per copy, and `sessions_in_scope`
+  counts distinct sessions. This is BREAKING on a scope holding a duplicated session. The
+  row count changes, every spanning count changes, and the header numbers change with
+  them.
 
-- **`for` provenance on every emitted unit.** A `for` edge existed only where a record
-  carried a key naming a target, so an assistant reply, a thinking block, a tool call and
-  its result - most of a transcript - had no provenance at all. `for_root` now names the
-  record that opened a unit's turn plus the parent hops up to it, rendering `[root L12 +3]`
-  and nothing on the opener itself; its JSON is always `{line, uuid, hops, note}`, because
-  "this unit IS the opener", "the chain walked there in N hops", "the grouping placed it and
-  the links did not carry it" and "there is no opener above this unit" are four facts a
-  missing key could not separate. Two
-  engine relations join the vocabulary and ride JSON alone: `parent` (the `parentUuid`
-  link, which stands down when ANY OTHER edge on the same unit already names that same
-  TARGET - the test is on the target, never on who named it) and `result_of` (a tool
-  result's `tool_use_id`).
-- **The relation vocabulary is closed** (`EdgeKind`, nineteen words). Every family wrote
-  its word as a bare string at the call site, so the set was whatever six files happened to
-  contain - unenumerable, and impossible to census. No relation was renamed - every word is
-  the one its family already rendered - and the cross-family pin over the whole edge SET
-  landed first. Rendered bytes did move elsewhere in this version: an edge naming a CALL
-  now resolves through the tool index and prints the call's line where it used to print
-  the wire id with `not in this file`.
-- **`tool_use_id` on the two user-facing duals.** An answered AskUserQuestion and a refused
-  tool call are the person's message and a tool result at once, so their hit now carries the
-  API's id for the call it ANSWERS, where it read null. That is what the `result_of` edge
-  resolves; `pairing`, `tool_name` and `is_error` stay null on both, being the tool view of
-  a record whose richer view is the person's.
-- **`--count-by for-kind`**, the census over that vocabulary: which provenance relations a
-  scope carries. Multi-key like `label`, distinct per record, counting a relation whether
-  or not csift resolved its target.
-- **`--for <ADDR>`**, the reverse query: everything that is for one record, transitively.
-  The address is `L<line>` or a bare number (per file) or a record uuid, which finds its
-  record in whichever scanned transcript carries it; the closure itself is computed per
-  transcript. One query returns the reply a message drew, the results of the calls that
-  reply made, and the `<task-notification>` that reports on one of those two turns later;
-  the parent arm stops at a turn boundary, so the person's next question does not come back.
-  Three structural relations admit a row - the parent link, a result answering a member's
-  call, a record naming a member's call by id - and the rest of the vocabulary is not
-  reverse-walked. The summary gains `for_of` (`address`, `records`, `transcripts`).
-- **Every non-transcript line type says what it holds.** The head-and-body law landed with
-  twelve of the thirteen `harness.bookkeeping` leaves rendering the line alone, so a reader
-  who named one still read raw JSON. Sixteen of the eighteen line types now build a
-  `[<line type> key=value ...]` head from their own bytes, in the key order Claude Code's
-  own writer uses, and the head opens with the line's own `type` - which is how
+- Every emitted unit now carries `for` provenance. A `for` edge used to exist only where
+  a record carried a key naming a target. An assistant reply, a thinking block, a tool
+  call and its result, which make up most of a transcript, had no provenance at all.
+  `for_root` now names the record that opened a unit's turn plus the number of parent
+  hops up to it. It renders as `[root L12 +3]`, and nothing renders on the opener itself.
+  Its JSON is always `{line, uuid, hops, note}`, because four different answers need four
+  different shapes. The unit can be the opener, or the chain can have walked there in N
+  hops. The grouping can have placed it where the links did not carry it, or there can be
+  no opener above it at all. A missing key could not separate those. Two engine relations
+  join the vocabulary and ride JSON alone. `parent` is the `parentUuid` link, and it
+  stands down when any other edge on the same unit already names the same target. The test
+  is on the target and never on who named it. `result_of` is a tool result's
+  `tool_use_id`.
+- The relation vocabulary is closed as `EdgeKind`, with nineteen words. Every family used
+  to write its word as a bare string at the call site, so the set was whatever six files
+  happened to contain. Nobody could enumerate it or census it. No relation was renamed, and
+  every word is the one its family already rendered. The cross-family pin over the whole
+  edge set landed first. Rendered bytes did move elsewhere in this version. An edge naming
+  a call now resolves through the tool index and prints the call's line, where it used to
+  print the wire id with `not in this file`.
+- The two user-facing duals now carry `tool_use_id`. An answered AskUserQuestion and a
+  refused tool call are the person's message and a tool result at once. Their hit now
+  carries the API's id for the call it answers, where that key read null. The `result_of`
+  edge resolves through it. `pairing`, `tool_name` and `is_error` stay null on both,
+  because those keys belong to the tool view and the person's view is the richer one.
+- `--count-by for-kind` is the census over that vocabulary. It answers which provenance
+  relations a scope carries. It is multi-key like `label`, counts each relation once per
+  record, and counts a relation whether or not csift resolved its target.
+- `--for <ADDR>` is the reverse query. It returns everything that is for one record,
+  transitively. The address is `L<line>` or a bare number, both read per file, or a record
+  uuid, which finds its record in whichever scanned transcript carries it. The closure
+  itself is computed per transcript. One query returns the reply a message drew, the
+  results of the calls that reply made, and the `<task-notification>` that reports on one
+  of those calls two turns later. The parent arm stops at a turn boundary, so the person's
+  next question does not come back with it. Three structural relations admit a row. They
+  are the parent link, a result answering a member's call, and a record naming a member's
+  call by id. The rest of the vocabulary is not walked in reverse. The summary gains `for_of`,
+  carrying `address`, `records` and `transcripts`.
+- Every non-transcript line type now says what it holds. When the head-and-body law
+  landed, twelve of the thirteen `harness.bookkeeping` leaves rendered the line alone, so
+  a reader who named one still read raw JSON. Sixteen of the eighteen line types now build
+  a `[<line type> key=value ...]` head from their own bytes, in the key order Claude
+  Code's own writer uses. The head opens with the line's own `type`. That is how
   `mode`/`permission-mode`, `ai-title`/`agent-name` and the three artifact ledgers stay
-  apart in the output when their label does not tell them apart. The two `file-history`
-  forms keep the head built from the fields csift models: that one names the tracked path
-  and its version where a raw key walk could only print the snapshot object. Two rules
-  decide a head's values and there is no third: an account, organisation or record uuid
-  prints its first 8 characters, every other value is cut at 80 with the shared
-  `... (+N chars)` marker, an object printing as its sorted key list. The body is still
-  the line, so a key the head elides stays matchable; a fabricated head is not, so each
-  line type's own quoted value is registered as a synthesized-text marker under the same
-  predicate that admits the line - without it, four of five head-only patterns on a
-  21-line fixture read 0 instead of 1, and a default scan arms none of them.
-- **Five bookkeeping line types now say what they are FOR.** Four ride the shared
-  provenance edge: `last-prompt` -> `leaf` (its `leafUuid`), a file-history line ->
-  `versions` (its `messageId`), `fork-context-ref` -> `forked_from` (the record the forked
-  agent's prefix was cut at, with the parent session beside it, because that record lives
-  in another file), and `continued-in` -> `continued_in`, which names a whole TRANSCRIPT
-  and no record in it - the edge builder's session-only answer, rendering
-  `[for: continued_in @<session>]`, an `@` target you can feed straight back to csift. The
-  fifth names an INSTANT, which no target shape can carry without putting a timestamp in a
-  field documented as the target record's uuid, so `cost-state` stays the family's own
-  fact: `[checkpoint closes <instant>]` with JSON `checkpoint_closes_at_utc`,
-  `checkpoint_closes_at_local` and `checkpoint_join`, the `startTime + totalDuration` sum `list` joins a cleared session on
-  as `cleared_from`. Each renders its honest empty when the key it reads is absent, rather
-  than dropping the field. A `fork-context-ref` naming a parent session but no cut record
-  renders that session for the same reason.
-- **`[not delivered]` on every bookkeeping unit.** JSON `delivered` has always read false
-  for all thirteen leaves while the text surface said nothing, because the engine prints
-  that marker only for a record carrying a per-record delivery override and a bookkeeping
-  line's invisibility comes from its leaf. It is the engine's own marker, so both surfaces
-  spell it one way. `show --format json` gains four record-row keys with it: `for`,
-  `checkpoint_closes_at_utc`, `checkpoint_closes_at_local` and `checkpoint_join`. The handover relation is not a fourth key:
-  it rides the shared `for` array as the edge `continued_in`, whose target names the child
-  SESSION and no record in it, so a `continued-in` line's row carries that edge and no
-  `continued_in` key of its own.
+  apart in the output when their label does not separate them. The two `file-history`
+  forms keep the head built from the fields csift models. That head names the tracked path
+  and its version, where a raw key walk could only print the snapshot object. Two rules
+  decide a head's values, and there is no third. An account, organisation or record uuid
+  prints its first 8 characters. Every other value is cut at 80 characters with the shared
+  `... (+N chars)` marker, and an object prints as its sorted key list. The body is still
+  the whole line, and that keeps a key the head leaves out matchable. A fabricated head is not part of
+  the line, so each line type's own quoted value is registered as a synthesized-text
+  marker under the same predicate that admits the line. Without that registration, four
+  of five head-only patterns on a 21-line fixture read 0 instead of 1, and a default scan
+  arms none of them.
+- Five bookkeeping line types now say what they are for. Four ride the shared provenance
+  edge. `last-prompt` points to `leaf` (its `leafUuid`), and a file-history line points to
+  `versions` (its `messageId`). `fork-context-ref` points to `forked_from`, the record the
+  forked agent's prefix was cut at, with the parent session beside it because that record
+  lives in another file. `continued-in` points to `continued_in`, which names a whole
+  transcript and no record in it. That is the edge builder's session-only answer, and it
+  renders as `[for: continued_in @<session>]`, an `@` target you can feed straight back to
+  csift. The fifth line type names an instant. No target shape can carry an instant
+  without putting a timestamp in a field documented as the target record's uuid.
+  `cost-state` therefore stays the family's own fact. It renders as `[checkpoint closes <instant>]`
+  with the JSON keys `checkpoint_closes_at_utc`, `checkpoint_closes_at_local` and
+  `checkpoint_join`. The instant is the `startTime + totalDuration` sum that `list` joins a
+  cleared session on as `cleared_from`. Each of the five renders its honest empty when the
+  key it reads is absent, and the field never drops out. A `fork-context-ref` naming a
+  parent session but no cut record renders that session for the same reason.
+- Every bookkeeping unit now carries `[not delivered]`. JSON `delivered` has always read
+  false for all thirteen leaves, while the text surface said nothing. The engine prints
+  that marker only for a record carrying a per-record delivery override, and a bookkeeping
+  line is invisible because of its leaf. The marker is the engine's own, so both surfaces
+  spell it one way. `show --format json` gains the record-row keys `for`,
+  `checkpoint_closes_at_utc`, `checkpoint_closes_at_local` and `checkpoint_join` with it.
+  The handover relation adds no key of its own. It rides the shared `for` array as the
+  edge `continued_in`, whose target names the child session and no record in it. A
+  `continued-in` line's row therefore carries that edge and no `continued_in` key.
 
+- A thinking block now says what it is and which side wrote it, through four label-zone
+  markers. `[no summary text]` marks `agent.thinking.omitted` and `[redacted thinking]`
+  marks `agent.thinking.redacted`. Those two are the API's own textless answers.
+  `[cancelled stream salvage]` marks the one thinking shape the client mints, which keeps
+  `agent.thinking.summary` and stays delivered. `[thinking removed by the client]` marks
+  an `agent.message.plain` block whose whole trimmed text is `[Thinking removed]`, so those
+  three words never read as the assistant speaking.
+- Every thinking block unit carries two new per-hit JSON keys. `signature_len` is the
+  character length of the block's own `signature`. It reads `0` when the field is present
+  and empty, and null when the block carries no such field. Absent and empty are different
+  shapes, and the salvage discriminator rests on exactly that difference.
+  `thinking_text_absent` rides `agent.thinking.omitted` alone. Both are named in
+  `search --help` and `show --help`.
 
-- **A thinking block says what it is, and which of the two wrote it.** Four label-zone
-  markers: `[no summary text]` on `agent.thinking.omitted` and `[redacted thinking]` on
-  `agent.thinking.redacted`, the API's own textless answers; `[cancelled stream salvage]`
-  on the one client-minted thinking shape, which keeps `agent.thinking.summary` and stays
-  delivered; and `[thinking removed by the client]` on an `agent.message.plain` block whose
-  whole trimmed text is `[Thinking removed]`, so those three words never read as the
-  assistant speaking.
-- **Two per-hit JSON keys on every thinking block unit.** `signature_len` is the character
-  length of the block's own `signature` - `0` when the field is present and empty, `null`
-  when the block carries no such field, because absent and empty are different shapes and
-  the salvage discriminator rests on exactly that one. `thinking_text_absent` rides
-  `agent.thinking.omitted` alone. Both are named in `search --help` and `show --help`.
-
-
-- **Each `harness.system.*` event kind renders the fields that make it useful.** The old
-  catch-all head named the subtype and threw the payload away: a refusal rendered its banner
-  sentence and dropped both model ids, the category and the rewind target, and an `api_error`
-  rendered a head with no status, no retry counter and no word about what failed. Now `refusal`
-  reads `[refusal <subtype>] originalModel=... fallbackModel=...|none apiRefusalCategory=...`
-  (the `none` is printed rather than elided, because the absence of a second model is what
-  separates the two subtypes; with no source line to read the head stops at the subtype rather
-  than reporting a key it never looked at), `api-error` reads `[api-error status=... type=<kind>
-  retry N/M in Xms]` plus the failure's own wording, each read where its own shape puts
-  it (a connection failure keeps the wording in `error.message` and names no kind; an HTTP
-  failure names the kind in `error.type` and buries the wording two hops down, inside the
-  response body it kept), `notice` reads `[notice <level>]`, `kill`
-  reads `[kill]` (the record carries no payload on disk), `command` reads `[command]`, and the
-  scheduler's `harness.schedule.event` reads `[scheduled <when>] task=... cron=... prompt=...`.
-  Every one of those fields also rides JSON as its own key - `retried`, `original_model`,
+- Each `harness.system.*` event kind now renders the fields that make it useful. The old
+  catch-all head named the subtype and threw the payload away. A refusal rendered its
+  banner sentence and dropped both model ids, the category and the rewind target. An
+  `api_error` rendered a head with no status, no retry counter and no word about what
+  failed. A `refusal` now reads `[refusal <subtype>] originalModel=...
+  fallbackModel=...|none apiRefusalCategory=...`. The `none` is printed and never elided,
+  because the absence of a second model is what separates the two subtypes. With no source
+  line to read, the head stops at the subtype and reports no key it never looked at. An
+  `api-error` reads `[api-error status=... type=<kind> retry N/M in Xms]` plus the
+  failure's own wording, each read where its own shape puts it. A connection failure keeps
+  the wording in `error.message` and names no kind. An HTTP failure names the kind in
+  `error.type` and buries the wording two hops down, inside the response body it kept. A
+  `notice` reads `[notice <level>]`. A `kill` reads `[kill]`, because the record carries
+  no payload on disk. A `command` reads `[command]`. The scheduler's
+  `harness.schedule.event` reads `[scheduled <when>] task=... cron=... prompt=...`. Every
+  one of those fields also rides JSON as its own key (`retried`, `original_model`,
   `fallback_model`, `category`, `status`, `retry_attempt`, `max_retries`, `retry_in_ms`,
-  `error`, `task_id`, `cron`, `prompt` (cut at 200 characters) - and the head carries the same
-  value, because a key that reaches JSON alone is unsearchable.
-- **A leaf that NAMES another record says which one.** A refusal's `refusedUserMessageUuid` and
-  a delivered command's `parentUuid` ride the hit as a `for` fact: `[for: refused L42]` when
-  this transcript holds the named record, `[for: wraps <id8> (not in this file)]` when it does
-  not, and `[for: <kind> unknown (<reason>)]` when the record names none - so an edge is never
-  silently absent. A fire record's `taskId` and a fallback turn's banner take that last form on
-  purpose: the arming call is found by MATCHING an id inside a tool result and the banner
-  DESCENDS from its record, and neither is a lookup a uuid map can make. JSON `for` is an array,
-  one object per edge, each carrying `kind`, `basis`, `target` and `reason`.
-- **A turn the API served from a FALLBACK model names both models.** Its sole content block is
-  the API's `fallback` block, written in place of the text, and nothing in the harness renders
-  it - so a reader had no way to learn the turn was served by a different model. It now carries
-  `[served by <to.model>, fell back from <from.model>]` in the label zone plus JSON `served_by`
-  and `fell_back_from`, the one place a transcript keeps the pre-fallback model. The ids are
-  read off the parsed block, so a scanned unit and an addressed one carry the same fact; a
-  record whose only block is that one still emits nothing on a scan, because there is no text
-  to match or excerpt.
-- **`search --help` and `show --help` carry the family's surface**: a SYSTEM LEAVES region
-  naming every render form, marker word, `for` kind and per-hit key, and fifteen key rows on the
-  `show` record-row table.
+  `error`, `task_id`, `cron`, and `prompt` cut at 200 characters). The head carries the
+  same value, because a key that reaches JSON alone is unsearchable.
+- A leaf that names another record now says which one. A refusal's
+  `refusedUserMessageUuid` and a delivered command's `parentUuid` ride the hit as a `for`
+  fact. It renders `[for: refused L42]` when this transcript holds the named record,
+  `[for: wraps <id8> (not in this file)]` when it does not, and `[for: <kind> unknown
+  (<reason>)]` when the record names none. An edge is therefore never silently absent. A
+  fire record's `taskId` and a fallback turn's banner take that last form on purpose. The
+  arming call is found by matching an id inside a tool result, and the banner descends from
+  its record. A uuid map can make neither lookup. JSON `for` is an array with one object
+  per edge, each carrying `kind`, `basis`, `target` and `reason`.
+- A turn the API served from a fallback model now names both models. Its sole content
+  block is the API's `fallback` block, written in place of the text, and nothing in the
+  harness renders it. A reader had no way to learn that a different model served the turn.
+  The unit now carries `[served by <to.model>, fell back from <from.model>]` in the label
+  zone, plus JSON `served_by` and `fell_back_from`. That is the one place a transcript
+  keeps the pre-fallback model. The ids are read off the parsed block, so a scanned unit
+  and an addressed one carry the same fact. A record whose only block is that one still
+  emits nothing on a scan, because it has no text to match or excerpt.
+- `search --help` and `show --help` carry the system family's surface. A SYSTEM LEAVES
+  region names every render form, marker word, `for` kind and per-hit key, and the `show`
+  record-row table gains fifteen key rows.
 
-
-- **The exposed keys: what a record says about the CALL behind it.** Claude Code stamps a
-  record with which agent definition, skill, plugin and MCP tool the request ran under,
-  which API request and which content block of its response it is, why the call failed,
-  what a person typed refusing a tool, which scheduled task submitted the prompt and which
-  hook run closed it. csift parsed none of it, so a reader who wanted any of it fell back
-  to `--raw`. Every one of them now rides every `search` hit and every `show` record row as
-  JSON - `attribution`, `request_id`, `api_block_index`, `tool_ends_turn`, `user_feedback`,
-  `api_failure`, `interrupted_message_id`, `hook_run_id`, `scheduled_task_id`,
-  `scheduled_fire_id` - and four of them render a label-zone tag: `[via skill X]`,
-  `[ends turn]`, `[feedback: ...]` and the api-failure headline. An address carries exactly
-  what a scan does. A missing key means this record does not say, never no - and so does a
-  key of an unexpected JSON type, which costs its own key and never the record: every one of
-  the eighteen decodes leniently, so a record carrying `"apiBlockIndex":"3"` still emits with
-  its text searchable instead of being booked malformed. They ride the record as ONE struct
-  behind ONE pointer, read by the same serde pass that builds it, so the row every parsed
-  line of every scan carries grows by 8 bytes rather than by the 216 eighteen fields cost:
-  `size_of::<Record>()` moves from 1,368 to 1,376 and the allocation is paid only by a record
-  that names a key. Measured against the tip before it on 56 acid (row, size) pairs, every
-  ratio inside a same-binary control band of 0.2467 and the compacted class reading a mean
-  of 1.0153.
-- **The session a record was minted in, where that is not the session holding it.**
-  A record carries two session ids under two spellings, and they disagree exactly when a
-  record was hydrated here from another session's stream. `csift list --lineage` reports
-  those ids as `minted_elsewhere` with a count beside them, text row `minted`. It is the
-  fourth lineage link a row can carry and the only one a record states about itself, so it
-  carries no inference wording.
-- **An attachment unit says which record it is for.** Every attachment unit carries two
-  `for` edges and a producer fact: `attached_to` from the record's own `parentUuid`,
-  resolved to a LINE of this transcript through the chain's uuid map; `for_tool_use` from
-  the payload's inner `toolUseID`, which is a wire id no line carries, so the edge keeps
-  the id and says where it is not; and `[produced_by <command>]` from a hook run's own
-  command, JSON `produced_by:{command,hook_name,payload_type}`. The two edges fold into
-  the shared JSON `for` array. An edge whose key the line does not carry renders its
-  reason rather than disappearing, and all three ride an addressed record csift models no
-  leaf for as well.
-- **`search --help` and `show --help` name the attachment family's surface**, so the two
-  manuals stay at information parity with SKILL: an `ATTACHMENT LEAVES` region covering
-  the two bodies, the markers, the provenance facts and the matching rule, and the record
-  row's `body_source`, `human_turn_render_differs`, `produced_by` and `for` keys.
-- **Eight new provenance relations and one moved, all of them values csift already
-  computed.** The closed `for[]` vocabulary goes from nineteen words to twenty-seven: eight
-  are new words, and `reports` was already in the set and changed which records answer it
-  (the bullet below). The SURVIVAL axis contributes
-  four: `supersedes` names the message that replaced a recalled draft, `continues` the one
-  the conversation continued from after a rewind, `branches` the head of an abandoned
-  branch, and `replays` the surviving line a replay copy's uuid also names. A COMPACTION
-  event contributes three: `pairs` joins its boundary and its summary in both directions,
+- The exposed keys report what a record says about the call behind it. Claude Code stamps
+  a record with the agent definition, skill, plugin and MCP tool the request ran under. It
+  also stamps which API request and which content block of the response the record is, why
+  the call failed, and what a person typed when refusing a tool. It stamps which scheduled
+  task submitted the prompt and which hook run closed it. csift parsed none of it, so a
+  reader who wanted any of it fell back to `--raw`. Every one now rides every `search` hit
+  and every `show` record row as JSON: `attribution`, `request_id`, `api_block_index`,
+  `tool_ends_turn`, `user_feedback`, `api_failure`, `interrupted_message_id`,
+  `hook_run_id`, `scheduled_task_id` and `scheduled_fire_id`. Four of them also render a
+  label-zone tag (`[via skill X]`, `[ends turn]`, `[feedback: ...]` and the api-failure
+  headline). An address carries exactly what a scan does. A missing key means this record
+  does not say, and it never means no. A key of an unexpected JSON type means the same
+  thing and costs only its own key, never the record. All eighteen keys decode leniently,
+  so a record carrying `"apiBlockIndex":"3"` still emits with its text searchable and is
+  not booked malformed. The keys ride the record as one struct behind one pointer, read by
+  the same serde pass that builds the record. The row every parsed line of every scan
+  carries grows by 8 bytes, where eighteen inline fields would have cost 216.
+  `size_of::<Record>()` moves from 1,368 to 1,376, and only a record that names a key pays
+  for the allocation. Measured against the tip before it on 56 acid (row, size) pairs,
+  every ratio sat inside a same-binary control band of 0.2467, and the compacted class
+  read a mean of 1.0153.
+- `csift list --lineage` reports the session a record was minted in when that differs
+  from the session holding it. A record carries two session ids under two spellings, and
+  they disagree exactly when the record was hydrated here from another session's stream.
+  The row reports those ids as `minted_elsewhere` with a count beside them, under the text
+  row `minted`. It is the fourth lineage link a row can carry and the only one a record
+  states about itself. It therefore carries no inference wording.
+- An attachment unit now says which record it is for. Every attachment unit carries two
+  `for` edges and a producer fact. `attached_to` comes from the record's own `parentUuid`,
+  resolved to a line of this transcript through the chain's uuid map. `for_tool_use` comes
+  from the payload's inner `toolUseID`, a wire id no line carries, so the edge keeps the id
+  and says it is not in this file. `[produced_by <command>]` comes from a hook run's own
+  command, with the JSON object `produced_by:{command,hook_name,payload_type}`. The two
+  edges fold into the shared JSON `for` array. An edge whose key the line does not carry
+  renders its reason and stays visible. All three facts also ride an addressed record that
+  csift models no leaf for.
+- `search --help` and `show --help` name the attachment family's surface, so the two
+  manuals stay at information parity with SKILL. An `ATTACHMENT LEAVES` region covers the
+  two bodies, the markers, the provenance facts and the matching rule. The record-row
+  table names `body_source`, `human_turn_render_differs`, `produced_by` and `for`.
+- Eight new provenance relations arrive and one moves, all of them values csift already
+  computed. The closed `for[]` vocabulary grows from nineteen words to twenty-seven. Eight
+  words are new, and `reports` was already in the set and changed which records answer it
+  (see the next bullet). The survival axis contributes four. `supersedes` names the
+  message that replaced a recalled draft, and `continues` names the one the conversation
+  continued from after a rewind. `branches` names the head of an abandoned branch, and
+  `replays` names the surviving line a replay copy's uuid also names. A compaction event
+  contributes three. `pairs` joins its boundary and its summary in both directions.
   `precedes` is the `logicalParentUuid` the boundary carries in place of the null parent
-  every boundary has, and `preserves` names the head and the tail of the segment the
+  every boundary has. `preserves` names the head and the tail of the segment the
   compaction kept, as two edges. A paired resume placeholder gains `repairs`, naming the
   dangling prompt it was spliced in to answer.
 
-  No field moves, but one edge KIND does. `parent` stands down when ANY OTHER edge on the
-  same unit already names that same TARGET - the test is on the target, never on who named
-  it, so the engine's own `pairs` and `repairs` stand it down exactly as a family's word
-  does, both of them naming the record above. One relation, one edge. On the landmark
-  transcript that moves 83 units, `parent` 169,180 to 169,097, against 80 compaction
-  summaries and 3 paired resume placeholders; the `parentUuid` FIELD is untouched on every
-  one of them and `for_root` still names the turn each belongs to. COUNTING RULE: the
-  `--count-by for-kind` census over the whole transcript with an empty pattern, one row per
-  record per distinct relation word its edges name.
+  No field moves, but one edge kind does. `parent` stands down when any other edge on the
+  same unit already names the same target. The test is on the target and never on who
+  named it, so the engine's own `pairs` and `repairs` stand it down exactly as a family's
+  word does, since both name the record above. One relation gets one edge. On the landmark
+  transcript that moves 83 units, `parent` from 169,180 to 169,097, against 80 compaction
+  summaries and 3 paired resume placeholders. The `parentUuid` field is untouched on every
+  one of them, and `for_root` still names the turn each belongs to. The counting rule is
+  the `--count-by for-kind` census over the whole transcript with an empty pattern, one
+  row per record per distinct relation word its edges name.
 
-  Each edge is the machine-followable form of an answer the unit already
-  rendered for a person, so a consumer can walk `for[]` instead of parsing a marker word.
-  The four survival relations render no label-zone tag at all - each restates
-  `[abandoned]` / `[rewound]` / `[replay copy of L<n>]` or the draft-distance line - so they
-  ride JSON alone under the same gate `parent` and `result_of` already take, and a default
-  text scan builds none of them and renders every byte unchanged.
+  Each edge is the machine-followable form of an answer the unit already rendered for a
+  person, so a consumer can walk `for[]` and skip parsing a marker word. The four survival
+  relations render no label-zone tag at all. Each restates `[abandoned]`, `[rewound]`,
+  `[replay copy of L<n>]` or the draft-distance line, so they ride JSON alone under the
+  same gate `parent` and `result_of` already take. A default text scan builds none of them
+  and renders every byte unchanged.
 
-- **A notification pulse names the call it reports on, whichever carrier it rides.**
-  `reports` was read in the isMeta injection family, whose gate is the authorship flag, so
-  it answered only for the pulse wrapped in a notification FRAME: 95 of the 4,017
-  pulse-carrying records over one projects root. It is read at the engine now, off the
-  record's own text, so the 3,922 ordinary carriers answer too - and it resolves through the
-  tool index rather than printing a bare handle, because a `tool_use` id is a wire id and is
-  in no `uuid` field (2,470 pulses carry the tag; 2,459 of those name a call of the same
-  file, so 61% of pulses get an address). A pulse that names no tag says so rather than
-  dropping the edge; joining those through their `<task-id>` would reach 1,228 more, about
-  92%, and is a declared follow-on. The reader takes the same text the CLASSIFIER takes, so
-  a pulse whose content is a block array answers exactly as a string one does.
+- A notification pulse now names the call it reports on, whichever carrier it rides.
+  `reports` was read in the isMeta injection family, whose gate is the authorship flag.
+  It answered only for a pulse wrapped in a notification frame, which was 95 of the 4,017
+  pulse-carrying records over one projects root. It is now read at the engine, off the
+  record's own text, and the 3,922 ordinary carriers answer too. It resolves through the
+  tool index and no longer prints a bare handle, because a `tool_use` id is a wire id and
+  sits in no `uuid` field. Of the pulses, 2,470 carry the tag and 2,459 of those name a
+  call of the same file, which gives 61% of pulses an address. A pulse that names no tag
+  says so and keeps the edge. Joining those through their `<task-id>` would reach 1,228
+  more, about 92%, and is a declared follow-on. The reader takes the same text the
+  classifier takes, so a pulse whose content is a block array answers exactly as a string
+  one does.
 
-  COUNTING RULE, both halves - the FILE SET and the READING:
-  one row per RECORD whose `message.content`, read as the bare string or as the
-  newline-join of the content array's `text` blocks, carries `<task-notification>`; over
-  every `*.jsonl` under one projects root - the top-level transcripts AND the
-  `<uuid>/subagents/**` sidecar ones, excluding `journal.jsonl`, `elicitations.jsonl` and
-  anything under a `csift-channel/` directory. Both halves move the answer: the top-level
-  transcripts alone miss the sidecars, and a string-only reading gives 3,805 rows instead
-  of 4,017 and moves the FRAME count from 95 to 56. The corpus is live, so a re-run reads
-  a few more rows; the rule is what reproduces.
+  The counting rule has two halves, the file set and the reading. One row is one record
+  whose `message.content` carries `<task-notification>`, with the content read as the bare
+  string or as the newline-join of the content array's `text` blocks. The file set is
+  every `*.jsonl` under one projects root. It includes the top-level transcripts and the
+  `<uuid>/subagents/**` sidecar ones, and it excludes `journal.jsonl`,
+  `elicitations.jsonl` and anything under a `csift-channel/` directory. Both halves move
+  the answer. The top-level transcripts alone miss the sidecars, and a string-only reading
+  gives 3,805 rows instead of 4,017 and moves the frame count from 95 to 56. The corpus is
+  live, and a re-run reads a few more rows. The rule is what reproduces.
 
-- **The relation INVENTORY, in SPEC 4.12 and SKILL.** One table over every relation csift
-  can answer about a record: the twenty-seven `for[]` words, the relations that ride a FIELD
-  on another surface instead, and the ones nothing on disk names. Two rules decide which is
-  which, and both are now stated: a CROSS-FILE join is a field on the surface that owns it
-  (`clone_of` / `cleared_from` / `continued_in` / `minted_elsewhere` on `list`,
-  `spawn_tool_use_id` / `parent_agent_id` on `agents`, the verdict on `msg`), because an
-  edge's target names a session without carrying the re-feedable id trio; and a target that
-  is not a record - a command, an instant, a lane, an external file - is a per-family fact
-  with its own key. A drift test holds the table's `for[]` block to `EdgeKind` in both
-  directions.
+- The relation inventory is now in SPEC 4.12 and in SKILL. It is one table over every
+  relation csift can answer about a record. It lists the twenty-seven `for[]` words, the
+  relations that ride a field on another surface instead, and the ones nothing on disk
+  names. Two rules decide which is which, and both are now stated. A cross-file join is a
+  field on the surface that owns it (`clone_of` / `cleared_from` / `continued_in` /
+  `minted_elsewhere` on `list`, `spawn_tool_use_id` / `parent_agent_id` on `agents`, the
+  verdict on `msg`), because an edge's target names a session without carrying the
+  re-feedable id trio. A target that is not a record, such as a command, an instant, a
+  lane or an external file, is a per-family fact with its own key. A drift test holds the
+  table's `for[]` block to `EdgeKind` in both directions.
 
-- **The harness's nine TURN CONTINUATIONS all reach `harness.enforce.retry`.** A turn the
-  model does not finish is continued by the harness writing a whole message into it as an
-  `isMeta` user record, and the producer interns nine of them in one constant block
-  collected into one array whose single consumer is its own is-this-a-record-I-wrote
-  predicate, tested by membership. csift knew four - the redo nudges - and carried no leaf
-  at all for the other five: nothing on any scan, no census key, and the residue unit under
-  an address. The five are the two CLASSIFIER-STOP forms, written when a safety classifier
-  stops a response mid-turn and the turn continues once on the same model (the second is
-  the first plus a sentence about a call that was already running); the OUTPUT-TOKEN-LIMIT
-  resume; and the two MID-STREAM CUT-OFF forms, chosen by lane. All nine are matched by
-  WHOLE-MESSAGE equality rather than by prefix, because they are complete bodies and the
-  producer tests them that way - a longer body opening with one is a record quoting it -
-  and five carry an em dash, so a text retyped with an ASCII hyphen matches no record. The
-  leaf's description widens with its domain, to the harness continuing a turn the model did
-  not finish on its own instruction, and the shape inventory gains a row per event. The
-  classifier stop writes THREE records and only the continuation needed a rule: the notice
-  beside it is decided by its subtype and the refused assistant turn by its own blocks.
-- **The API refusal is a fact on the assistant unit it stopped.** `message.stop_details` is
-  the API's own structured account of why it stopped a response - a type, the classifier
-  band, the API's own sentence about it, and whether a fallback claimed a prefill. The
-  client builds none of it: it copies the object off the response frame onto every
-  assistant record of the turn, removes exactly one member it does not persist, and
-  constructs one of its own only on refusal paths that null every remaining member, so a
-  true prefill claim on disk came from the API. csift read none of it, and a refusal whose
-  only content block is a thinking block classified `agent.thinking.summary` with nothing
-  on any surface saying the API had refused. The exposed-keys family stamps it on every
-  emitted unit of a record that names at least one member: a label-zone tag
-  `[api <type>: <category>]`, and `stop_details` beside the coarse `stop_reason` on the
-  wire. The gate is the OBJECT and not the leaf, because a key is true of a record whatever
-  csift labelled it; an object whose every member is null is refused, because the absent key
-  already says what four nulls would. The tag is label-zone text and so display-only, like
-  the thinking family's: a pattern scan matches a unit's rendered section and never its
-  zone. Two members stay out of the model and reachable with `--raw` alone - one never
-  reaches disk, the other reaches it only as a null. `size_of::<Record>()` moves from 1,376
-  to 1,384, the object sitting behind its own pointer inside `message`.
-- **Two attachment payload types get their inventory rows.** Both carried no leaf, so
-  neither reached a scan even under `--attachments`, neither could be a key on
-  `--count-by attachment` (that axis reads emitted units), and each rendered as the
-  unmodeled unit under an address. `mcp_instructions_delta` is what the harness writes when
-  the set of MCP servers whose instructions belong in the request changes; its builder
-  returns nothing when the diff is empty, so a record exists only where the set moved. The
-  converter turns it into CONTENT - a `# MCP Server Instructions` section carrying the
-  blocks added, and a second section naming servers that disconnected - and persists that
-  conversion back as a top-level `rendered`, so it is `harness.context.listing` with the
-  model column true and the body rule takes the persisted conversion, which is what makes
-  injected server instructions findable by a pattern scan. `thinking_drop` is the harness's
-  accounting of the thinking blocks it dropped from a request - the model, the query
-  source, the counts, and why - and its converter arm is an explicit empty list, so it
-  joins `NEVER_CONVERTS`, reads `not delivered` whatever its leaf default says, takes
-  `harness.context.task` beside `thinking_stripped`, and falls to the verbatim payload,
-  which is the only place its numbers are. The HUMAN column on all three rows is read off
-  the transcript render's own hide set rather than inferred from the leaf, and that list
-  is per build: the verified build's hide set names `mcp_instructions_delta` and neither
-  of the two thinking payloads - it cannot, since neither name occurs anywhere in that
-  build - while the 2.1.278 hide set names all three. So the column on the two thinking
-  rows is a reading of the build that knows the types, which is also the correction to
+- All nine of the harness's turn continuations now reach `harness.enforce.retry`. When
+  the model does not finish a turn, the harness continues it by writing a whole message
+  into it as an `isMeta` user record. The producer interns nine such messages in one
+  constant block, collected into one array. That array's single consumer is the
+  producer's own is-this-a-record-I-wrote predicate, which tests by membership. csift knew
+  four of them, the redo nudges. It carried no leaf for the other five, so they showed on
+  no scan and had no census key, and an address rendered the residue unit. The five are
+  the two classifier-stop forms, the output-token-limit resume and the two mid-stream
+  cut-off forms. The classifier-stop forms are written when a safety classifier stops a
+  response mid-turn and the turn continues once on the same model. The second is the first
+  plus a sentence about a call that was already running. The two cut-off forms are chosen
+  by lane. All nine are matched by whole-message equality, because they are complete
+  bodies and the producer tests them that way. A longer body that opens with one is a
+  record quoting it. Five carry an em dash, so a text retyped with an ASCII hyphen matches
+  no record. The leaf's description widens with its domain, to the harness continuing a
+  turn the model did not finish on its own instruction, and the shape inventory gains a
+  row per event. The classifier stop writes three records, and only the continuation
+  needed a rule. The notice beside it is decided by its subtype, and the refused assistant
+  turn by its own blocks.
+- An API refusal is now a fact on the assistant unit it stopped. `message.stop_details`
+  is the API's own structured account of why it stopped a response. It holds a type, the
+  classifier band, the API's own sentence about it, and whether a fallback claimed a
+  prefill. The client builds none of it. It copies the object off the response frame onto
+  every assistant record of the turn and removes exactly one member it does not persist.
+  It constructs an object of its own only on refusal paths that null every remaining
+  member, so a true prefill claim on disk came from the API. csift read none of it. A
+  refusal whose only content block is a thinking block classified `agent.thinking.summary`,
+  and nothing on any surface said the API had refused. The exposed-keys family now stamps
+  the object on every emitted unit of a record that names at least one member. The label
+  zone carries `[api <type>: <category>]`, and the wire carries `stop_details` beside the
+  coarse `stop_reason`. The gate is the object and not the leaf, because a key is true of a
+  record whatever csift labelled it. An object whose every member is null is refused,
+  because the absent key already says what four nulls would. The tag is label-zone text and
+  therefore display-only, like the thinking family's. A pattern scan matches a unit's
+  rendered section and never its zone. Two members stay out of the model and are reachable
+  with `--raw` alone. One never reaches disk, and the other reaches it only as a null.
+  `size_of::<Record>()` moves from 1,376 to 1,384, with the object behind its own pointer
+  inside `message`.
+- Two attachment payload types get their inventory rows. Neither carried a leaf, and
+  neither reached a scan even under `--attachments`. Neither could be a key on
+  `--count-by attachment`, since that axis reads emitted units, and each rendered as the
+  unmodeled unit under an address. `mcp_instructions_delta` is what the harness writes
+  when the set of MCP servers whose instructions belong in the request changes. Its
+  builder returns nothing when the diff is empty, so a record exists only where the set
+  moved. The converter turns it into content, a `# MCP Server Instructions` section
+  carrying the blocks added plus a second section naming servers that disconnected. It
+  persists that conversion back as a top-level `rendered`. The type is therefore
+  `harness.context.listing` with the model column true, and the body rule takes the
+  persisted conversion. That is what makes injected server instructions findable by a
+  pattern scan. `thinking_drop` is the harness's accounting of the thinking blocks it
+  dropped from a request, with the model, the query source, the counts and the reason. Its
+  converter arm is an explicit empty list, so it joins `NEVER_CONVERTS` and reads
+  `not delivered` whatever its leaf default says. It takes `harness.context.task` beside
+  `thinking_stripped` and falls to the verbatim payload, which is the only place its
+  numbers are. The human column on all three rows is read off the transcript render's own
+  hide set, never inferred from the leaf, and that list differs per build. The verified
+  build's hide set names `mcp_instructions_delta` and neither of the two thinking
+  payloads. It cannot name them, since neither name occurs anywhere in that build. The
+  2.1.278 hide set names all three. The column on the two thinking rows is therefore a
+  reading of the build that knows the types. That reading also corrects
   `thinking_stripped`, whose column said unstated while a hide set answered for it.
-- **A bundled skill body that ships no files reaches `harness.context.skill`.** The
-  `Base directory for this skill:` line the leaf keys on is written by ONE wrapper in the
-  registrar, and only for a registration that names FILES: it materialises the directory
-  and prepends that line and a blank one to the first text block of the body the
+- A bundled skill body that ships no files now reaches `harness.context.skill`. The leaf
+  keys on the `Base directory for this skill:` line. One wrapper in the registrar writes
+  that line, and only for a registration that names files. The wrapper materialises the
+  directory and prepends that line and a blank one to the first text block of the body the
   registration returns. A registration with no files keeps its body getter untouched, so
-  the same kind of body reaches the same kind of record bare - and carried no leaf,
-  rendering `? unmodeled: user/text` under an address because its content is a text block
-  rather than a string. The leaf answers to a second content-start head, the
-  workflow-authoring reference's own, which is what the leaf already means; the prefix is
-  an artefact of shipping files rather than a property of the body. csift names the one
-  such body whose producer has been read and says so where the leaf is documented: the bare
-  bodies share no head, and the records carry no field saying which command expanded them -
-  the parent link names the command's own wrapper on three of the four measured records and
-  an attachment on the fourth.
-- **`whoami --to` predicts a send from the lane its positional names.** The prediction is
-  decided partly from the relation between sender and receiver, and the environment names
-  the top-level session in every lane, so a subagent got the prediction for a send from its
-  parent. `whoami @trap:<marker> --to @<lane>` and `whoami @<agent-id> --to @<lane>` now
-  print the positional's sections and then the prediction from that lane, where the pair
-  used to be refused. In JSON the positional's rows, the `reach` row and one summary
-  carrying both key sets make up one stream. With no positional the sender is still assumed to be
-  the top-level session, and the stderr note now says to name your own lane as the
-  positional.
-- **A quota's reset instant rides as the timestamp pair.** A rate-limited assistant
-  record's `api_failure.quota` carried `resets_at` as the harness writes it, bare epoch
-  seconds - the one instant on any csift surface with no `_utc` / `_local` pair and no unit.
-  It now carries `resets_at_utc` and `resets_at_local` in its place, and the label zone
-  reads `quota <window> resets <local instant>` in the one canonical local form, where it
-  read `quota <window>` and left the instant to JSON. `search --help`'s exposed-keys
-  section and `show --help`'s key table name the pair.
+  the same kind of body reaches the same kind of record bare. It carried no leaf and
+  rendered `? unmodeled: user/text` under an address, because its content is a text block
+  and not a string. The leaf now answers to a second content-start head, the
+  workflow-authoring reference's own, which is what the leaf already means. The prefix is
+  an artefact of shipping files and says nothing about the body. csift names the one such
+  body whose producer has been read, and says so where the leaf is documented. The bare
+  bodies share no head, and the records carry no field saying which command expanded them.
+  The parent link names the command's own wrapper on three of the four measured records
+  and an attachment on the fourth.
+- `whoami --to` predicts a send from the lane its positional names. The prediction
+  depends partly on the relation between sender and receiver. The environment names the
+  top-level session in every lane, so a subagent used to get the prediction for a send
+  from its parent. `whoami @trap:<marker> --to @<lane>` and `whoami @<agent-id> --to
+  @<lane>` now print the positional's sections and then the prediction from that lane.
+  The pair used to be refused. In JSON the positional's rows, the `reach` row and one
+  summary carrying both key sets make up one stream. With no positional the sender is
+  still assumed to be the top-level session, and the stderr note now says to name your own
+  lane as the positional.
+- A quota's reset instant rides as the timestamp pair. A rate-limited assistant record's
+  `api_failure.quota` carried `resets_at` the way the harness writes it, as bare epoch
+  seconds. It was the one instant on any csift surface with no `_utc` / `_local`
+  pair and no unit. The quota object now carries `resets_at_utc` and `resets_at_local` in
+  its place. The label zone reads `quota <window> resets <local instant>` in the one
+  canonical local form, where it used to read `quota <window>` and leave the instant to
+  JSON. `search --help`'s exposed-keys section and `show --help`'s key table name the
+  pair.
 
 ### Changed
 
-- **The root `--help` names every `floor_cause` value.** `floor_cause` was named as a key on
-  seven help pages and its value domain on none, which left `--help` thinner than `SKILL.md`
-  on a closed enum a consumer branches on. The global `--cross-compactions` doc now names all
-  eight, sorted by what a reader can do about each: only `budget-exhausted` is one a larger
-  budget can move, and only when that boundary's door is open. Help text is surface.
-- **The root `--help`'s newline pitfall said the opposite of what the binary does.** It read
+- The root `--help` now names every `floor_cause` value. Seven help pages named
+  `floor_cause` as a key, and none named its value domain. That left `--help` thinner than
+  `SKILL.md` on a closed enum a consumer branches on. The global `--cross-compactions` doc
+  now names all eight values, sorted by what a reader can do about each. Only
+  `budget-exhausted` is one a larger budget can move, and only when that boundary's door
+  is open. Help text is surface.
+- The root `--help`'s newline pitfall said the opposite of what the binary does. It read
   "Text-mode excerpts keep a record's LITERAL newlines (a multiline Bash command renders
-  as-is)", and the excerpt builder collapses every whitespace run to a single space, so a
-  text excerpt is ONE LINE per record. The pitfall it warned about was real and its mechanism
-  was inverted: a `head -N` cuts whole records off the end and takes the footer with them, it
-  does not cut into a record. The help now states the collapse, names the JSON `body` and
-  `--raw` as the two ways back to the newlines, and keeps the pipe advice on its true
-  footing. The same measurement corrects a second sentence, in `SKILL.md` alone: `body` keeps
-  the newlines of a render csift did not already flatten, and an opener it RECONSTRUCTS
-  (`user.message`, `user.answer`, `user.rejection`) is flattened a layer earlier, in the
-  model, so its `body` is flat too and `--raw` is the only way to its bytes. Help text is
-  surface.
-- **`whoami --help` named one summary terminator where the stream has three.** An ordinary
+  as-is)". The excerpt builder in fact collapses every whitespace run to a single space,
+  so a text excerpt is one line per record. The pitfall it warned about was real, and its
+  mechanism was inverted. A `head -N` cuts whole records off the end and takes the footer
+  with them. It does not cut into a record. The help now states the collapse, names the
+  JSON `body` and `--raw` as the two ways back to the newlines, and puts the pipe advice on
+  its true footing. The same measurement corrects a second sentence, in `SKILL.md` alone.
+  `body` keeps the newlines of a render csift did not already flatten. An opener csift
+  reconstructs (`user.message`, `user.answer`, `user.rejection`) is flattened a layer
+  earlier, in the model. Its `body` is flat too, and `--raw` is the only way to its bytes.
+  Help text is surface.
+- `whoami --help` named one summary terminator where the stream has three. An ordinary
   run closes `{identities, live_child_lanes, other_live_lanes}`, `--to` closes
-  `{queued, refused}`, and `--peers` closes `{peers}` - three shapes sharing no key, so a
-  consumer reading the terminator has to know which mode produced it. The help described it
-  as `{kind:"summary", identities}`, one key of the five; `SKILL.md` named two of the three.
-  Both now name all three. The same edit adds the clause the newline correction left out:
-  the JSON `body` is null unless the excerpt cap was lifted (`--no-truncate`, or a
-  `show --line`/`--uuid` address). Help text is surface.
-- **`SKILL.md` is rewritten as the always-current mastery manual.** It had become a ledger:
+  `{queued, refused}`, and `--peers` closes `{peers}`. The three shapes share no key, so a
+  consumer reading the terminator has to know which mode produced it. The help described
+  it as `{kind:"summary", identities}`, one key of the five, and `SKILL.md` named two of
+  the three. Both now name all three. The same edit adds the clause the newline
+  correction left out. The JSON `body` is null unless the excerpt cap was lifted
+  (`--no-truncate`, or a `show --line`/`--uuid` address). Help text is surface.
+- `SKILL.md` is rewritten as the always-current mastery manual. It had become a ledger.
   37 lines carried a csift version rider, so a reader had to work out which sentences
-  described the binary in front of them. It carries none now, and the Surface line against
-  `csift --version` is its only staleness detector. The order is orientation, then the
-  cross-cutting laws every command obeys (targeting, the five laws, labels, provenance,
-  survival), then the commands, then the machine surface, then the failure modes. Facts are
-  stated once and cross-referenced by section, which retires six duplicate clusters running
-  to four, five and six copies apiece; every retired spelling now lands in one section, so a
-  caller who errored on one has a single address. Two statements that had gone stale are
-  corrected against the binary: a text excerpt is one line per record, and sixteen of the
-  eighteen bookkeeping line types build their key=value head from their own bytes. It ships
-  at 59,591 tokens, 2,863 over the 56,728 it replaced (tiktoken `cl100k_base` throughout).
-  The rewrite itself landed at 56,687, so its dedup and rider removal paid for every section
-  it added; two correction rounds bought the rest - the retirement table grown to every
-  spelling the binary refuses, the crossing default's value, the label-zone tags the file
-  named nowhere on `search`/`show` and on thirteen other commands, the three empty-result
-  stderr lines it had never quoted, and the third summary `whoami` can close with. The two
-  73-row transparency tables and the relation inventory keep their exact rows, so every drift
-  test that pins them still holds in both directions. One header line moved: the shape
-  table's third column was the same escape-hatch command on all 73 rows, so it is stated once
-  above the table and the drift test's literal moves with it.
-- **The skill is a directory, `skills/csift/`, and the root `SKILL.md` is gone.** A body,
-  `skills/csift/SKILL.md`, routes by question and states the laws, targets and core read
-  paths; fifteen `references/*.md` hold the topics and their tables, opened when the body
-  routes there; three hook scripts ship in `scripts/` with their executable bit
-  (`compact-slice.sh` re-injects clipped turns after a compaction, `taskstop-teammate.sh`
-  redirects a failed TaskStop aimed at a teammate, `elicitation-marker.sh` records pending
-  questions to the sidecar). The body is 5,876 tokens by the create-skill validator's o200k
-  count, under its 6,000-token refactor gate, and the references total 67,046, read on
-  demand. The Surface line reads `Surface: csift 0.13.0`, as `csift --version` prints it.
-  Install from a clone with `ln -s "$PWD/skills/csift" ~/.claude/skills/csift`. The drift
-  tests that pinned the old file pin the reference that owns each table now.
-- **The survival walk now CROSSES a compaction boundary, under a budget, and every surface
-  says what it crossed.** Claude Code's loader reads `parentUuid` only, so it stops at a
-  `compact_boundary` and the whole history above the cut leaves the conversation; csift
-  stopped there too and flagged that region `pre-cut`. But the boundary names the record the
-  compaction re-anchored onto, in `logicalParentUuid`, and the conversation genuinely
-  continues across a compaction - the records above a cut are the same conversation, and
-  until the walk gets up there a turn the operator rewound past cannot be told apart from
-  history csift merely failed to resolve. The
-  walk now follows that link, up to N boundaries, set by the new GLOBAL flag
-  `--cross-compactions <N|all>` and honoured by every chain-walking command: `search`,
-  `show`, `stats`, `files`, `recover`, `verbatim`, `image`. Above a boundary it CROSSED the
-  ordinary rules apply, so a turn the operator rewound past above a cut is finally named for
-  what it is rather than filed as unresolved history; above the FLOOR everything off-chain
-  stays `pre-cut`. The DEFAULT is `--cross-compactions 3`, the measured value: on an idle
-  host budget 3 ran inside the same-binary noise band against budget 0 on every one of 95
-  chain-walking rows over a compacted transcript and the 397 MiB landmark (SPEC 7j carries
-  the rule and the numbers). This is a surface change on a compacted
-  transcript, and it moves records in BOTH directions: one whose survival was `pre-cut`
-  becomes `live` where the chain reaches it and `abandoned` where it does not, and a turn
-  that becomes abandoned leaves the numbering. Measured over eight transcripts (the seven
-  top-level ones of one projects root carrying a boundary between 9 and 21 MiB, plus the
-  397 MiB landmark), three of them move at the default: 490 emitted hits go `pre-cut` to
-  `live` on the landmark and 1,150 and 952 on the other two, while their whole-file
+  described the binary in front of them. It carries none now, and the Surface line,
+  checked against `csift --version`, is its only staleness detector. The order is
+  orientation first, then the cross-cutting laws every command obeys (targeting, the five
+  laws, labels, provenance, survival), then the commands, the machine surface and the
+  failure modes. Each fact is stated once and cross-referenced by section. That retires six
+  duplicate clusters running to four, five and six copies apiece. Every retired spelling
+  now lands in one section, so a caller who errored on one has a single address. Two
+  statements that had gone stale are corrected against the binary. A text excerpt is one
+  line per record, and sixteen of the eighteen bookkeeping line types build their
+  key=value head from their own bytes. It ships at 59,591 tokens, 2,863 over the 56,728 it
+  replaced (tiktoken `cl100k_base` throughout). The rewrite itself landed at 56,687, so its
+  dedup and rider removal paid for every section it added. Two correction rounds bought
+  the rest. They grew the retirement table to every spelling the binary refuses, and added
+  the crossing default's value and the label-zone tags the file named nowhere, on
+  `search`/`show` and on thirteen other commands. They also added the three empty-result
+  stderr lines it had never quoted and the third summary `whoami` can close with. The two
+  73-row transparency tables and the relation inventory keep their exact rows, so every
+  drift test that pins them still holds in both directions. One header line moved. The
+  shape table's third column was the same escape-hatch command on all 73 rows, so it is
+  stated once above the table, and the drift test's literal moves with it.
+- The skill is now a directory, `skills/csift/`, and the root `SKILL.md` is gone. The
+  body, `skills/csift/SKILL.md`, routes by question and states the laws, targets and core
+  read paths. Fifteen `references/*.md` hold the topics and their tables, opened when the
+  body routes there. Three hook scripts ship in `scripts/` with their executable bit.
+  `compact-slice.sh` re-injects clipped turns after a compaction. `taskstop-teammate.sh`
+  redirects a failed TaskStop aimed at a teammate. `elicitation-marker.sh` records pending
+  questions to the sidecar. The body is 5,876 tokens by the create-skill validator's o200k
+  count, under its 6,000-token refactor gate, and the references total 67,046 tokens, read
+  on demand. The Surface line reads `Surface: csift 0.13.0`, as `csift --version` prints
+  it. A clone installs it with `ln -s "$PWD/skills/csift" ~/.claude/skills/csift`. The
+  drift tests that pinned the old file now pin the reference that owns each table.
+- The survival walk now crosses a compaction boundary under a budget, and every surface
+  says what it crossed. Claude Code's loader reads `parentUuid` only, so it stops at a
+  `compact_boundary`, and the whole history above the cut leaves the conversation. csift
+  stopped there too and flagged that region `pre-cut`. The boundary does name the record
+  the compaction re-anchored onto, in `logicalParentUuid`, and the conversation genuinely
+  continues across a compaction. The records above a cut belong to the same conversation.
+  Until the walk gets up there, a turn the operator rewound past cannot be told apart from
+  history csift merely failed to resolve. The walk now follows that link up to N
+  boundaries. N is set by the new global flag `--cross-compactions <N|all>`, which every
+  chain-walking command honours: `search`, `show`, `stats`, `files`, `recover`, `verbatim`
+  and `image`. Above a boundary the walk crossed, the ordinary rules apply. A turn the
+  operator rewound past above a cut is finally named for what it is, where it used to be
+  filed as unresolved history. Above the floor, everything off-chain stays `pre-cut`. The
+  default is `--cross-compactions 3`, the measured value. On an idle host, budget 3 ran
+  inside the same-binary noise band against budget 0 on every one of 95 chain-walking rows
+  over a compacted transcript and the 397 MiB landmark. SPEC 7j carries the rule and the
+  numbers. This is a surface change on a compacted transcript, and it moves records in
+  both directions. A record whose survival was `pre-cut` becomes `live` where the chain
+  reaches it and `abandoned` where it does not, and a turn that becomes abandoned leaves
+  the numbering. The measurement covered eight transcripts, the seven top-level ones of
+  one projects root that carry a boundary and sit between 9 and 21 MiB, plus the 397 MiB
+  landmark. Three of them move at the default. 490 emitted hits go from `pre-cut` to
+  `live` on the landmark, and 1,150 and 952 on the other two, while their whole-file
   `abandoned_records` rise by 258, 1,231 and 1,135. `--cross-compactions 0` restores the
-  previous reading exactly - 32 of 32 streams byte-identical to a build that predates the
-  flag - and under it csift says nothing about crossing at all, neither a footer line nor a
-  JSON key. That equality is a measurement with one known exception rather than a law: a
-  boundary whose own `parentUuid` is non-null and names no record was crossed by the guard
-  the pre-flag walk kept for exactly that shape, and budget 0 does not cross it. No
-  transcript of the measured corpus carries one.
-  The footer is never silent otherwise: it names how many boundaries were stepped over, how
-  many were not, where the chain floor sits, WHY it sits there - a budget that ran out, or a
-  boundary whose door is shut, named by which of three facts shut it: the record is on no
-  line of the file, it is on a line the pre-boundary cut took out of the map, or it is on a
-  line the walk had already reached - and a flag value, but only after
-  probing whether one more unit of budget would actually move that floor: a budget can run
-  out AT a boundary whose own logical parent is gone, and there every larger budget lands on
-  the same record. JSON carries the same six facts as
-  `crossing_budget`, `boundaries_crossed`, `budget_exhausted`, `boundaries_above_floor`,
-  `floor_line` and `floor_cause`.
+  previous reading exactly. All 32 of 32 streams are byte-identical to a build that
+  predates the flag. Under it csift says nothing about crossing at all, neither a footer
+  line nor a JSON key. That equality is a measurement with one known exception, and it is
+  not a law. The guard the pre-flag walk kept for a boundary whose own `parentUuid` is
+  non-null and names no record crossed such a boundary, and budget 0 does not. No
+  transcript of the measured corpus carries one. Otherwise the footer is never silent. It
+  names how many boundaries were stepped over, how many were not, and where the chain
+  floor sits. It also says why the floor sits there. Either a budget ran out, or a
+  boundary's door is shut by one of three facts. The record can be on no line of the
+  file, on a line the pre-boundary cut took out of the map, or on a line the walk had
+  already reached. The footer offers a flag value only after probing whether one more unit
+  of budget would actually move that floor. A budget can run out at a boundary whose own
+  logical parent is gone, and there every larger budget lands on the same record. JSON
+  carries the same six facts as `crossing_budget`, `boundaries_crossed`,
+  `budget_exhausted`, `boundaries_above_floor`, `floor_line` and `floor_cause`.
 
-- **An unmodeled unit's excerpt elides an opaque `data` blob.** The key=value excerpt cuts
-  each value at 80 characters, so a base64 image source or a `redacted_thinking`
-  ciphertext swallowed the whole budget and the sibling keys that say what the shape is -
-  `media_type`, the block's own `type` - never printed. `data` is now elided by name at
+- An unmodeled unit's excerpt now elides an opaque `data` blob. The key=value excerpt cuts
+  each value at 80 characters. A base64 image source or a `redacted_thinking` ciphertext
+  swallowed the whole budget, and the sibling keys that say what the shape is, such as
+  `media_type` and the block's own `type`, never printed. `data` is now elided by name at
   every depth, as `headers` already was, and those keys print in its place.
-- **A pattern carrying a backslash matches the text csift renders.** The needle safety
-  predicate counted the double quote, the control characters and DEL but not the
-  backslash, which a raw jsonl line stores doubled - so `search 'C:\\Users\\dev'` reported a
-  definitive absence over text `show --line` put on screen, on an attachment's converted
-  body and on a plain user message alike. The predicate counts it now, which splits such a
-  run into needles that do occur in the raw bytes.
-- **Three JSON keys the help never named.** `show --help`'s record-row table did not carry
-  `superseded_draft`, and `search --help`'s hit schema carried neither `denial_kind` nor
-  `image_ids` - keys a consumer meets on the wire and cannot find on the page. All three
-  are named now, and a contract test asserts the direction: every key the two commands
-  emit is one their own `--help` names.
-- **The `for` array is named once on each help surface.** Four families each listed the
+- A pattern carrying a backslash now matches the text csift renders. The needle safety
+  predicate counted the double quote, the control characters and DEL. It did not count
+  the backslash, which a raw jsonl line stores doubled. `search 'C:\\Users\\dev'`
+  therefore reported a definitive absence over text that `show --line` put on screen, on
+  an attachment's converted body and on a plain user message alike. The predicate counts
+  it now, which splits such a run into needles that do occur in the raw bytes.
+- The help now names three JSON keys it never named. `show --help`'s record-row table did
+  not carry `superseded_draft`, and `search --help`'s hit schema carried neither
+  `denial_kind` nor `image_ids`. A consumer met those keys on the wire and could not find
+  them on the page. All three are named now. A contract test asserts the direction, so
+  every key the two commands emit is one their own `--help` names.
+- The `for` array is named once on each help surface. Four families each listed the
   shared provenance key in `show --help`'s record-row table under their own block, spelled
-  four different ways, so a consumer reading that enumeration read four keys; it is one
+  four different ways, so a consumer reading that enumeration read four keys. It is one
   row under the shared block now. `search --help`'s JSON schema listed every hit key
-  except `for`, so the array shipped on the wire and appeared in no list; it is there now.
-- **`scheduled_at` answers on the scheduler's own fire record too.** The field carried the
-  instant for the fired prompt and read null on the `harness.schedule.event` record - the
-  line the instant is written on. It now reads that line's own parenthesised tail, so the
-  key means one thing on both halves of the pair. The head still prints it.
-- **`show --format json` carries a record's queue facts.** `queue_operation` and
-  `queue_reason` reached a `search` hit and no `show` record row, so running a hit's own
-  `refetch` command answered null for a record the query it came from had just reported in
-  full. Both are on the row now and in `show --help`'s key table. The pair also has one
-  writer: the scan read the record and the address site hard-coded both to null.
-- **A leafless unit renders its facts on the text surface too.** An addressed record
+  except `for`, so the array shipped on the wire and appeared in no list. It is there now.
+- `scheduled_at` now answers on the scheduler's own fire record too. The field carried the
+  instant for the fired prompt and read null on the `harness.schedule.event` record, which
+  is the line the instant is written on. It now reads that line's own parenthesised tail,
+  so the key means one thing on both halves of the pair. The head still prints it.
+- `show --format json` carries a record's queue facts. `queue_operation` and
+  `queue_reason` reached a `search` hit and no `show` record row. Running a hit's own
+  `refetch` command answered null for a record that the query it came from had just
+  reported in full. Both keys are on the row now and in `show --help`'s key table. The
+  pair also has one writer now. The scan used to read the record while the address site
+  hard-coded both keys to null.
+- A leafless unit renders its facts on the text surface too. An addressed record that
   csift models no leaf for carried its family facts into JSON and dropped every one of
-  them from the label zone, so `show --line N` and `show --line N --format json`
+  them from the label zone. `show --line N` and `show --line N --format json` therefore
   disagreed about the same record. The label zone now renders the shape in place of the
   leaf path and the facts after it, exactly as a labelled unit does.
-- **A `for` edge cuts a uuid to its handle and prints every other id whole.** The label
-  zone cut an unresolved target to eight characters whatever it was. That is right for a
-  uuid - the first eight hex digits identify one and the compaction excerpt has printed
-  that handle for versions - and wrong for a wire id, whose head is the part they all
-  share: `hook-bb000000` became `hook-bb0` and `toolu_01zzreef` became `toolu_01`, keeping
-  the constant prefix and throwing away the whole distinguishing tail. The cut now applies
-  only to a uuid-shaped target. JSON is unchanged: `target.uuid` always carried the id
-  whole.
-- **An attachment unit renders the text the model received.** BREAKING: the body of a
-  `harness.hook.context` unit, and of every attachment unit whose record carries a
-  persisted conversion, is now that converted text rather than the joined content or the
-  payload JSON. The unit says which of the record's two copies it is showing -
-  `[rendered]` or `[payload]`, JSON `body_source` - and names itself beside it:
+- A `for` edge cuts a uuid to its handle and prints every other id whole. The label zone
+  cut an unresolved target to eight characters whatever it was. That is right for a uuid,
+  whose first eight hex digits identify it, and the compaction excerpt has printed that
+  handle for versions. It is wrong for a wire id, whose head is the part all of them
+  share. `hook-bb000000` became `hook-bb0` and `toolu_01zzreef` became `toolu_01`, which
+  kept the constant prefix and threw away the distinguishing tail. The cut now applies
+  only to a uuid-shaped target. JSON is unchanged, because `target.uuid` always carried the
+  id whole.
+- An attachment unit renders the text the model received. This is BREAKING. The body of
+  a `harness.hook.context` unit, and of every attachment unit whose record carries a
+  persisted conversion, is now that converted text. It used to be the joined content or
+  the payload JSON. The unit says which of the record's two copies it shows, `[rendered]`
+  or `[payload]`, with JSON `body_source`. It names itself beside that marker with
   `[hook <event> <name>]`, `[hook <event> <name> exit <code> <ms>ms]`,
-  `[context <payload type>]`, `[structured]`, `[mid-turn]`. A record carrying a
+  `[context <payload type>]`, `[structured]` or `[mid-turn]`. A record carrying a
   conversion is searchable by the converted text and no longer by the payload text it
-  replaced; `--raw` does not recover the difference (the backfill runs after the match
-  phase), so the way to the bytes is `csift show @<id> --line N --raw`. A
-  `queued_command` carrying a SECOND conversion for a human turn keeps the ordinary one
-  as its body and reports the difference (`[human-turn render differs]`, JSON
-  `human_turn_render_differs`), because which copy the model received depends on the turn
-  it was replayed into and the record does not say. The body DECODES a JSON string where
-  csift emitted the payload bytes unparsed, one parse per record: on two synthetic
-  200,000-line transcripts, seven interleaved rounds with a same-binary control in each,
-  a file whose every line carries a conversion costs 1.131x (control 1.033x) and one
-  where none does costs 1.068x (control 0.942x), while an ordinary scan of a transcript
-  with no attachment line reads 0.959x against a 0.967x control.
+  replaced. `--raw` does not recover the difference, because the backfill runs after the
+  match phase. The way to the bytes is `csift show @<id> --line N --raw`. A
+  `queued_command` carrying a second conversion for a human turn keeps the ordinary one as
+  its body and reports the difference (`[human-turn render differs]`, JSON
+  `human_turn_render_differs`). Which copy the model received depends on the turn the
+  record was replayed into, and the record does not say. The body decodes a JSON string
+  where csift used to emit the payload bytes unparsed, one parse per record. The cost was
+  measured on two synthetic 200,000-line transcripts, seven interleaved rounds with a
+  same-binary control in each. A file whose every line carries a conversion costs 1.131x
+  (control 1.033x), and one where none does costs 1.068x (control 0.942x). An ordinary
+  scan of a transcript with no attachment line reads 0.959x against a 0.967x control.
 
-- **One stamping site for every taxonomy family, and one place each edits.** The extension
+- Every taxonomy family now has one stamping site and one place it edits. The extension
   points on a search hit existed with nothing filling them, so each family would have cut
   its own dispatch through the same shared files. `family_facts` is that one seam, called
-  at both hit-construction sites, so a record fetched by `show --line` carries every fact
-  the same record carries under `search`. `search --help` becomes one section file per
-  family and `show --help`'s record-row key list is rendered from a table with a family
-  column. Splitting them moved no rendered byte; what the families then add is visible on
-  the page, and `search --help` carries the first of it - a `BOOKKEEPING LEAVES` region
-  stating the render law below. `show --help` renders exactly what it did, no family
-  having added a key yet.
-- **A bookkeeping unit renders its key=value head over its own bytes.** A summary is lossy,
-  and `search` matches rendered text, so a key only the head elided had stopped being
+  at both hit-construction sites. A record fetched by `show --line` therefore carries
+  every fact the same record carries under `search`. `search --help` becomes one section
+  file per family, and `show --help` renders its record-row key list from a table with a
+  family column. Splitting them moved no rendered byte. What the families then add is
+  visible on the page. `search --help` carries the first of it, a `BOOKKEEPING LEAVES`
+  region stating the render law in the next bullet. `show --help` renders exactly what it
+  did, since no family had added a key yet.
+- A bookkeeping unit renders its key=value head over its own bytes. A summary is lossy,
+  and `search` matches rendered text, so a key that only the head elided had stopped being
   findable at all. The head stays, the line's verbatim JSON follows it, and every key the
   head does not name is matchable again. The `harness.system.*` leaves are deliberately
-  outside the rule: an `api_error` line carries the whole HTTP response header set, which
-  csift prints on no path but `--raw`.
-- **A uuid a record NAMES resolves to that record's line.** `ClassifyCtx::line_of_uuid` is
-  backed by the chain's own uuid map rather than a second index, so an edge can render an
-  address; a caller with no row space gets an honest absence instead of a guessed line.
-- **A taxonomy family decides what its own lines SAY.** The facts seam had no render twin,
+  outside the rule. An `api_error` line carries the whole HTTP response header set, and
+  csift prints that set on no path but `--raw`.
+- A uuid that a record names now resolves to that record's line.
+  `ClassifyCtx::line_of_uuid` is backed by the chain's own uuid map and needs no second
+  index, so an edge can render an address. A caller with no row space gets an honest
+  absence and never a guessed line.
+- A taxonomy family now decides what its own lines say. The facts seam had no render twin,
   so a body was still decided in the shared chain. `family_render` dispatches by the leaf's
-  category to the family that owns it, ahead of the engine's generic arms, and four renders
-  moved into their families: the two attachment bodies, the bookkeeping head-and-body
-  composition, the six `type:"system"` event heads, and a thinking block's body. Not one
-  rendered byte moved - 122 of 122 corpus-derived commands compare byte-identical against a
-  build of the base commit, with the golden baseline and the whole suite beside them.
-- **One `for` edge, built one way.** Four families point at other records, and three had
-  each invented a different fact for it. There is now one: `for: <kind> L<n>` when this
-  transcript carries the uuid, the id with `(not in this file)` when it does not, and
-  `unknown (<reason>)` when the record names nothing - never a silently absent edge. Several
-  edges on one hit accumulate under the one `for` key instead of overwriting one another.
-- **A `headers` member reaches no rendered surface.** An `api_error` record carries the
-  failed request's whole HTTP response header set - a session cookie and an organization id
-  among 18 names - and the key=value excerpt csift falls back to for a line it models
-  nothing about printed it. Every `headers` member is now elided at every depth, `<elided>`
-  in its place so a reader learns the set is there, and `--raw` stays the one way to the
-  bytes.
-- **Two more payload types are marked as never reaching the model, and a result set moves
-  with them.** The harness's conversion table drops `goal_status` and
-  `async_hook_response_batch` outright; csift's `NEVER_CONVERTS` list had neither, so it
-  reported both as delivered. They are in it now, and the consequence is visible on three
-  surfaces. Measured on a `goal_status` attachment: `search -t harness.context` used to
-  return it and now returns nothing, with the empty-result probe naming
-  `harness.context.task` as where it went (the bare category face shows only what the model
-  received; the leaf's own `-t` still returns it); the hit's JSON `delivered` reads `false`
-  where it read `true`; and the rendered label zone gains `[not delivered]`. A query written
-  against the bare face has to name the leaf instead.
-- **A coordinator relay says where it came from.** Every other inbound message renders a
-  `from => to` arrow; this one rendered none. It now reads `coordinator => self`, and the
-  from is the literal word because the record carries no sender field: the harness builds
-  that origin object in two places and both build the one-key form.
+  category to the family that owns it, ahead of the engine's generic arms. Four renders
+  moved into their families. They are the two attachment bodies, the bookkeeping
+  head-and-body composition, the six `type:"system"` event heads, and a thinking block's
+  body. Not one rendered byte moved. 122 of 122 corpus-derived commands compare
+  byte-identical against a build of the base commit, with the golden baseline and the
+  whole suite beside them.
+- There is one `for` edge now, built one way. Four families point at other records, and
+  three had each invented a different fact for it. The one edge renders `for: <kind>
+  L<n>` when this transcript carries the uuid, and the id with `(not in this file)` when it
+  does not. It renders `unknown (<reason>)` when the record names nothing, so an edge is
+  never silently absent. Several edges on one hit accumulate under the one `for` key, where
+  they used to overwrite one another.
+- A `headers` member reaches no rendered surface. An `api_error` record carries the
+  failed request's whole HTTP response header set, which holds a session cookie and an
+  organization id among 18 names. The key=value excerpt csift falls back to for a line it
+  models nothing about used to print it. Every `headers` member is now elided at every
+  depth. `<elided>` stands in its place so a reader learns the set is there, and `--raw`
+  stays the one way to the bytes.
+- Two more payload types are marked as never reaching the model, and a result set moves
+  with them. The harness's conversion table drops `goal_status` and
+  `async_hook_response_batch` outright. csift's `NEVER_CONVERTS` list had neither, so it
+  reported both as delivered. They are in it now, and the consequence shows on three
+  surfaces, measured on a `goal_status` attachment. `search -t harness.context` used to
+  return it and now returns nothing, and the empty-result probe names
+  `harness.context.task` as where it went. The bare category face shows only what the
+  model received, and the leaf's own `-t` still returns it. The hit's JSON `delivered`
+  reads `false` where it read `true`, and the rendered label zone gains `[not delivered]`.
+  A query written against the bare face has to name the leaf instead.
+- A coordinator relay now says where it came from. Every other inbound message renders a
+  `from => to` arrow, and this one rendered none. It now reads `coordinator => self`. The
+  from side is the literal word because the record carries no sender field. The harness
+  builds that origin object in two places, and both build the one-key form.
 
-- **The `-t` label taxonomy is 17 categories over 73 leaves, split by producer.** The old
-  38-leaf space had one bag in it: `harness.meta` pooled hook-injected text, a hook run's own
-  record, a slash command's caveat, the loop tick, the end-of-turn telemetry and the
-  file-history instrument, and its `.attachment` and `.system` leaves were catch-alls for
-  everything else. A selector could not name what it wanted and a census could not say what a
-  scope held. The new space asks one question of every record, what wrote it, and the answer
-  is its category: `user`, `agent.{message,thinking,tool,communication}`, and under `harness`
-  the twelve producers `notification`, `compaction`, `command`, `interrupt`, `schedule`,
-  `resume`, `hook`, `context`, `enforce`, `turn`, `system` and `bookkeeping`. Renames land
-  one for one (`agent.message` becomes `agent.message.plain`, `agent.thinking` becomes
-  `agent.thinking.summary`, `harness.meta.loop` becomes `harness.schedule.tick`, the three
-  telemetry leaves become `harness.turn.*`, `harness.meta.snapshot` becomes
-  `harness.bookkeeping.file-history`); `harness.meta.hook` splits three ways by producer into
-  `harness.hook.context`, `harness.hook.feedback` and `harness.command.caveat`; and the two
-  catch-alls become per-value tables. `agent.message` and `agent.thinking` still parse - they
-  were leaf paths and are now categories, so they select their whole face.
-- **A bare CATEGORY narrows exactly as a bare ROLE does.** Both are the coarse "show me the
-  conversation" ask, so both select only the leaves whose content the model receives, while a
-  glob (`-t 'user.*'`) and an exact leaf path still reach every record. `harness.bookkeeping`
-  is the one category whose whole face is invisible: the bare form is accepted, matches
-  nothing by that law, and `search` prints one stderr note naming the remedy beside the
-  ordinary empty-result diagnosis (`empty_visible_face` in the JSON summary). A `-T` that
-  cancels your `-t` is still a hard error; an honest empty is not.
-- **`classify` became a dispatch over five mechanical family tables** - a top-level line
-  `type`, a `type:"system"` subtype, an attachment payload `type`, a content block's shape and
-  an isMeta user template - each a value in and a leaf out, with no look at the payload (the
-  v0.10.0 `classify/promoted.rs` is now `classify/bookkeeping.rs`, one of the five). Three
-  behaviour changes ride it, each a leaf reaching records that carried none: every
-  non-transcript line type now carries a `harness.bookkeeping.*` leaf, an attachment carries
-  the leaf of its own payload type rather than one catch-all, and a thinking block with no
-  summary text (`agent.thinking.omitted`) or a `redacted_thinking` block
-  (`agent.thinking.redacted`) takes its own leaf instead of both reading as plain reasoning.
-- **Every leaf the shape inventory records is one a record can carry.** The first pass at
+- The `-t` label taxonomy is now 17 categories over 73 leaves, split by producer. The old
+  38-leaf space had one bag in it. `harness.meta` pooled hook-injected text, a hook run's
+  own record, a slash command's caveat, the loop tick, the end-of-turn telemetry and the
+  file-history instrument. Its `.attachment` and `.system` leaves were catch-alls for
+  everything else. A selector could not name what it wanted, and a census could not say
+  what a scope held. The new space asks one question of every record, what wrote it, and
+  the answer is its category. The categories are `user`,
+  `agent.{message,thinking,tool,communication}`, and under `harness` the twelve producers
+  `notification`, `compaction`, `command`, `interrupt`, `schedule`, `resume`, `hook`,
+  `context`, `enforce`, `turn`, `system` and `bookkeeping`. Renames land one for one.
+  `agent.message` becomes `agent.message.plain`, `agent.thinking` becomes
+  `agent.thinking.summary`, and `harness.meta.loop` becomes `harness.schedule.tick`. The
+  three telemetry leaves become `harness.turn.*`, and `harness.meta.snapshot` becomes
+  `harness.bookkeeping.file-history`. `harness.meta.hook` splits three ways by producer,
+  into `harness.hook.context`, `harness.hook.feedback` and `harness.command.caveat`. The two
+  catch-alls become per-value tables. `agent.message` and `agent.thinking` still parse.
+  They were leaf paths and are now categories, so each selects its whole face.
+- A bare category narrows exactly as a bare role does. Both are the coarse "show me the
+  conversation" ask, so both select only the leaves whose content the model receives. A
+  glob (`-t 'user.*'`) and an exact leaf path still reach every record.
+  `harness.bookkeeping` is the one category whose whole face is invisible. The bare form is
+  accepted and matches nothing by that law. `search` prints one stderr note naming the
+  remedy beside the ordinary empty-result diagnosis, with `empty_visible_face` in the JSON
+  summary. A `-T` that cancels your `-t` is still a hard error. An honest empty is not.
+- `classify` became a dispatch over five mechanical family tables. They read a top-level
+  line `type`, a `type:"system"` subtype, an attachment payload `type`, a content block's
+  shape and an isMeta user template. Each takes a value in and gives a leaf out, with no
+  look at the payload. The v0.10.0 `classify/promoted.rs` is now `classify/bookkeeping.rs`,
+  one of the five. Three behaviour changes ride the dispatch, and each gives a leaf to
+  records that carried none. Every non-transcript line type now carries a
+  `harness.bookkeeping.*` leaf. An attachment carries the leaf of its own payload type in
+  place of one catch-all. A thinking block with no summary text
+  (`agent.thinking.omitted`) and a `redacted_thinking` block (`agent.thinking.redacted`)
+  each take their own leaf, where both used to read as plain reasoning.
+- Every leaf the shape inventory records is now one a record can carry. The first pass at
   the taxonomy advertised `harness.context.image`, `harness.context.skill` and the four
   `harness.enforce.*` leaves in its tables while nothing in the classifier could produce
-  them, and its drift test walked three of the five axes, so the gap did not show. The
-  isMeta-template table carries an arm per row now, each keyed on the literal its producer
-  writes, plus two structural ones: a relayed message whose `origin.kind` says `human` is
-  the person's own, and the coordinator relay takes the same leaf as a peer's. The
-  `[SYSTEM NOTIFICATION - NOT USER INPUT]` envelope is treated as a carrier rather than a
-  shape, so the background-task pulse inside it classifies by its own kind instead of
-  vanishing. A `<system-reminder>` matching no more specific template lands under the
+  them. Its drift test walked three of the five axes, so the gap did not show. The
+  isMeta-template table now carries an arm per row, each keyed on the literal its producer
+  writes. Two more arms are structural. A relayed message whose `origin.kind` says `human`
+  is the person's own, and the coordinator relay takes the same leaf as a peer's. The
+  `[SYSTEM NOTIFICATION - NOT USER INPUT]` envelope is treated as a carrier and not as a
+  shape, so the background-task pulse inside it classifies by its own kind and no longer
+  vanishes. A `<system-reminder>` matching no more specific template lands under the
   reminder leaf. An image-only record carries the leaf its text form carries, and the
-  `dynamic_skill` payload joins the listing family. The drift test covers all five axes
+  `dynamic_skill` payload joins the listing family. The drift test covers all five axes,
   with a hand-written specimen per row.
-- **`show --line N` never hard-misses a parseable line.** A shape csift models no leaf for
-  renders one unit reading `? unmodeled: <type[/subtype|/attachment.type]>` with a key=value
-  excerpt of the line's own top-level keys, and JSON carries `unmodeled` beside a null `label`
-  and an empty `labels`. Before this, every bookkeeping line type read as absent. A SCAN never
-  emits such a unit, so no census, count or `-t` result moves, and a line that is not a JSON
-  object at all is still a hard miss pointing at `--raw`.
-- **A message record with no text renders under an address instead of missing.** The 1:1
-  law reached the non-record line types but not the message lines: a `fallback` block, a
-  `document` block or an image with no caption produced no unit and the address bailed on
-  a line that is plainly there. Such a record renders now, and the unit names the axis its
-  leaf would have come from (`user/document`, `user/isMeta`). There is ONE unmodeled form:
+- `show --line N` never hard-misses a parseable line. A shape csift models no leaf for
+  renders one unit reading `? unmodeled: <type[/subtype|/attachment.type]>`, with a
+  key=value excerpt of the line's own top-level keys. JSON carries `unmodeled` beside a
+  null `label` and an empty `labels`. Before this, every bookkeeping line type read as
+  absent. A scan never emits such a unit, so no census, count or `-t` result moves. A line
+  that is not a JSON object at all is still a hard miss pointing at `--raw`.
+- A message record with no text now renders under an address. The 1:1 law reached the
+  non-record line types and missed the message lines. A `fallback` block, a `document`
+  block or an image with no caption produced no unit, and the address bailed on a line
+  that is plainly there. Such a record renders now, and the unit names the axis its leaf
+  would have come from (`user/document`, `user/isMeta`). There is one unmodeled form.
   `? (no label)` is gone, because it told a reader nothing a shape name does not. A record
-  that HAS a leaf and merely lacks text keeps its leaf, and an assistant turn the API
-  served from a fallback model takes `agent.message.plain` with an empty body.
-- **`-t user` and `-t agent` no longer parse every attachment line.** Two leaves an
-  attachment carries as a second view rather than as its kind - the human's mid-turn steer
-  and the model's structured answer - sat in the set that turns on the keep admitting every
-  attachment record, so the most ordinary selectors in the tool paid for lines they did not
-  want: 236 ms against a flagless scan's 70 ms on an 89 MB attachment-heavy transcript.
-  Each now has its own payload needle, and the three selectors run at flagless speed.
-- **The person's mid-turn steer reaches `-t user` again.** When someone types while a turn
-  is running, the harness folds the text in as a `queued_command` attachment and stamps its
+  that has a leaf and merely lacks text keeps its leaf. An assistant turn the API served
+  from a fallback model takes `agent.message.plain` with an empty body.
+- `-t user` and `-t agent` no longer parse every attachment line. Two leaves ride an
+  attachment as a second view and are not its kind, the human's mid-turn steer and the
+  model's structured answer. They sat in the set that turns on the keep admitting every
+  attachment record. The most ordinary selectors in the tool therefore paid for lines they
+  did not want, 236 ms against a flagless scan's 70 ms on an 89 MB attachment-heavy
+  transcript. Each leaf now has its own payload needle, and the three selectors run at
+  flagless speed.
+- The person's mid-turn steer reaches `-t user` again. When someone types while a turn is
+  running, the harness folds the text in as a `queued_command` attachment and stamps its
   provenance inside the payload, beside `commandMode`. csift read a record-level `origin`
-  that no line of that shape carries - 0 of 3,692 and 0 of 3,574 over two corpora, against
-  219 and 217 carrying `attachment.origin` - so the arm never fired and every steer
-  classified as harness context. It reads the payload now. The second half was quieter: the
-  leaf renders through the opener path, which an attachment has no `message{}` for, so even
-  when the arm did fire the record emitted nothing at all - no hit, no census key, no
-  `-t user` result, reachable only by an address. It falls through to the render seam now,
-  so it takes the attachment family's ordinary body rule like every other view of that
-  line: the conversion the harness persisted when the record carries one, marked
-  `[rendered]`, and the verbatim payload JSON otherwise. Measured over one projects root,
-  one parse per non-blank line: 20 of the 164 human-origin `queued_command` lines carry a
-  conversion.
-- **A flagless scan reaches the person's mid-turn steer too.** The needle that admits a
-  `queued_command` line was gated on an explicit selector, so `-t user` found the steer
-  and a bare `csift search` did not - and a flagless scan is a superset of `-t user`, so
-  that was the selector law broken rather than a cost saved. It takes the same gate the
-  csift-channel delivery keep has had since 0.11.0: on unless your `-t` excludes
-  `user.message`, which keeps `-t harness` paying nothing. The parse still decides - only
-  a payload whose own `origin.kind` reads `human` becomes `user.message`, and every other
+  that no line of that shape carries. Over two corpora 0 of 3,692 and 0 of 3,574 lines
+  carry it, against 219 and 217 that carry `attachment.origin`. The arm never fired, and
+  every steer classified as harness context. It reads the payload now. The second half of
+  the defect was quieter. The leaf rendered through the opener path, and an attachment has
+  no `message{}` for that path. Even when the arm did fire the record emitted nothing at
+  all, with no hit, no census key and no `-t user` result, and only an address reached it.
+  It now falls through to the render seam and takes the attachment family's ordinary body
+  rule, like every other view of that line. The body is the conversion the harness
+  persisted when the record carries one, marked `[rendered]`, and otherwise the verbatim
+  payload JSON. Measured over one projects root, one parse per non-blank line, 20 of the
+  164 human-origin `queued_command` lines carry a conversion.
+- A flagless scan reaches the person's mid-turn steer too. The needle that admits a
+  `queued_command` line was gated on an explicit selector, so `-t user` found the steer and
+  a bare `csift search` did not. A flagless scan is a superset of `-t user`, so that broke
+  the selector law and saved nothing worth saving. The needle now takes the gate the
+  csift-channel delivery keep has had since 0.11.0. It is on unless your `-t` excludes
+  `user.message`, which keeps `-t harness` paying nothing. The parse still decides. Only a
+  payload whose own `origin.kind` reads `human` becomes `user.message`, and every other
   `queued_command` stays `harness.context.task` behind its own gate. The model's own
-  `structured_output` answer takes the same gate for the same reason: `-t agent` reaches
+  `structured_output` answer takes the same gate for the same reason. `-t agent` reaches
   `agent.message.structured`, so a flagless scan cannot miss it. Those two leaves are the
-  only attachment-carried exceptions - both are words someone owned, a person's or the
-  model's - and the coarse keep is untouched, so a flagless scan still parses no other
-  attachment payload. The coarse keep being untouched cuts both ways, and the cost is
-  worth knowing: a selector reaching an attachment leaf that has NO needle of its own
-  still parses every attachment line, and a bare `-t harness` reaches those leaves, so
-  it pays that. Measured on an 85 MB transcript of 150,000 `file` attachment lines,
-  21 interleaved reps with a pattern that matches: `-t harness` reads 3.4x a flagless
-  scan (251.0 ms against 73.3 ms) and `-t harness.context.file` reads 359.5 ms. Forty
-  payload types cannot each carry a needle; the two that do are the two an ordinary
-  conversation query names.
-- **A relayed message reaches an ordinary scan, and every other leaf is now swept for the
-  same defect.** A coordinator's relay carries `agent.communication.inbox`, and the record
-  it rides is one the harness wrote into the conversation: isMeta, so it opens no turn.
+  only attachment-carried exceptions, since both are words someone owned, a person or the
+  model. The coarse keep is untouched, so a flagless scan still parses no other attachment
+  payload. That cuts both ways, and the cost is worth knowing. A selector reaching an
+  attachment leaf with no needle of its own still parses every attachment line, and a bare
+  `-t harness` reaches those leaves and pays for it. Measured on an 85 MB transcript of
+  150,000 `file` attachment lines, 21 interleaved reps with a pattern that matches,
+  `-t harness` reads 3.4x a flagless scan (251.0 ms against 73.3 ms) and
+  `-t harness.context.file` reads 359.5 ms. Forty payload types cannot each carry a
+  needle. The two that do are the two an ordinary conversation query names.
+- A relayed message reaches an ordinary scan, and every other leaf is now swept for the
+  same defect. A coordinator's relay carries `agent.communication.inbox`, and the record it
+  rides is one the harness wrote into the conversation. It is isMeta, so it opens no turn.
   The arm rendered through the opener path, which answers nothing for a record that opens
-  none, and the relay is no attachment either - so the record carried a delivered message
-  and emitted nothing at all: no hit, no census key, nothing under
+  none, and the relay is no attachment either. The record carried a delivered message and
+  emitted nothing at all, with no hit, no census key and nothing under
   `-t agent.communication.inbox`. 141 such records across 89 files of one projects root
-  (57 across 49 of a second) were reachable only by `csift show --line`. The arm falls
+  (57 across 49 of a second) were reachable only by `csift show --line`. The arm now falls
   back to the record's own text, which is what the peer relay beside it has always done.
   That makes twice in this release that a leaf was reachable only by an address, so the
-  pin is a SWEEP rather than a third one-off: for every specimen in the shape inventory, a
+  pin is a sweep and not a third one-off. For every specimen in the shape inventory, a
   flagless scan must emit exactly one hit for each record carrying a leaf the model
   receives. Two specimens have no text to emit and are named in the test with their
-  reasons - an image-only record is a picture, and an assistant turn the API served from a
-  fallback model wrote no text - keyed on the specimen and never on the leaf, since
-  `agent.message.plain` is the ordinary assistant message and exempting the leaf would
-  exempt the whole population the sweep exists to guard.
-- **`csift msg` prints a command that still runs.** Its lane listing recited the fact half
-  of its own join as `csift search '<id>' @<lane> --additional-context`, a flag this release
-  retires, so the one recipe a reader needs in order to check the channel without trusting
-  `msg` exited 1. It prints `-t harness.hook.context`, which is what the help has said all
+  reasons. An image-only record is a picture, and an assistant turn the API served from a
+  fallback model wrote no text. The exemption is keyed on the specimen and never on the
+  leaf. `agent.message.plain` is the ordinary assistant message, and exempting the leaf
+  would exempt the whole population the sweep exists to guard.
+- `csift msg` prints a command that still runs. Its lane listing recited the fact half of
+  its own join as `csift search '<id>' @<lane> --additional-context`. This release retires
+  that flag, so the one recipe a reader needs to check the channel without trusting `msg`
+  exited 1. It now prints `-t harness.hook.context`, which is what the help has said all
   along.
-- **`wait`'s activity census counts all four thinking leaves.** It named two of them one by
-  one, so the leaf split silently dropped the other two from the count; it keys on the
+- `wait`'s activity census counts all four thinking leaves. It named two of them one by
+  one, so the leaf split silently dropped the other two from the count. It keys on the
   category now.
-- **`harness.schedule.fire` changes its gate, not its meaning.** It keyed on
-  `promptSource:"system"`, a stamp the submit path puts on every isMeta submission; it now
+- `harness.schedule.fire` changes its gate and keeps its meaning. It keyed on
+  `promptSource:"system"`, a stamp the submit path puts on every isMeta submission. It now
   keys on the parent link to the `system`/`scheduled_task_fire` record the scheduler wrote
-  just before it, which is the only mark the producer leaves on the prompt itself. That fire
-  record gets a leaf of its own, `harness.schedule.event`.
-- **A shape inventory backs the taxonomy** (`model::inventory`): one row per on-disk shape on
-  those five axes - 22 top-level types, 11 system subtypes, 50 attachment payload types, 8
-  block types, 17 isMeta template families - each naming its leaf, its gate, whether the
-  harness converts it for the model and whether a person sees it. It is a record of the
-  mapping rather than a second one: a unit test walks every row back through the family table
-  that decides the leaf, and another asserts the shaped leaves and a hand-kept table of the
-  rest partition the leaf set exactly. The candidate gates and the generated SPEC and SKILL
-  tables all derive from it, so the honest-empties note can never name a stale leaf.
-- **The source tree is re-managed: command modules under `src/commands/`, the bash
-  lexical layers under `src/bash/`.** `src/` sat at both structure caps (20 counted
-  direct `.rs` files, 16 subfolders), which is a refactor gate rather than a number to
-  raise. `bash_danger*.rs` and `bash_mutations/` become `src/bash/danger.rs` +
-  `src/bash/danger/` and `src/bash/mutations.rs` + `src/bash/mutations/`; the thirteen
-  subcommand families move under `src/commands/`, leaving the crate root to the base
+  just before it, which is the only mark the producer leaves on the prompt itself. That
+  fire record gets a leaf of its own, `harness.schedule.event`.
+- A shape inventory (`model::inventory`) backs the taxonomy. It holds one row per on-disk
+  shape on those five axes, covering 22 top-level types, 11 system subtypes, 50 attachment
+  payload types, 8 block types and 17 isMeta template families. Each row names its leaf,
+  its gate, whether the harness converts it for the model and whether a person sees it. It
+  records the mapping and is never a second copy of it. A unit test walks every row back
+  through the family table that decides the leaf. Another asserts that the shaped leaves
+  and a hand-kept table of the rest partition the leaf set exactly. The candidate gates and
+  the generated SPEC and SKILL tables all derive from it, so the honest-empties note can
+  never name a stale leaf.
+- The source tree is re-managed. Command modules now live under `src/commands/`, and the
+  bash lexical layers under `src/bash/`. `src/` sat at both structure caps (20 counted
+  direct `.rs` files, 16 subfolders), and a cap that binds is a refactor gate, never a
+  number to raise. `bash_danger*.rs` and `bash_mutations/` become `src/bash/danger.rs` +
+  `src/bash/danger/` and `src/bash/mutations.rs` + `src/bash/mutations/`. The thirteen
+  subcommand families move under `src/commands/`, which leaves the crate root to the base
   layer they build on (`cli`, `model`, `parse`, `path`, `subagent`, `bash`, `chardiff`,
-  `text`, `time_window`, `timez`); and the four `model/classify_*.rs` siblings become
-  `model/classify/{support,promoted,channel,resume}.rs` under the engine that uses them,
-  with `Record::direction` moved verbatim into a fifth child so the engine stays under
-  the 600-line cap, and the engine's cases nested to match. Every path is respelled at
-  every call site, with no alias and no forwarding shim. No behaviour change.
-- **The isMeta INJECTION family says what each record was written FOR.** The harness writes
-  text into a turn shaped exactly like the operator's own message, and until now the label
-  said who wrote it and nothing said what it answers. Most units of the family now carry
-  one `for` edge (JSON `for`): `redoes` the assistant turn an enforce nudge sends the model
-  back to, `blocked` the turn a hook's feedback stopped, `fires` the scheduler event a fired
-  prompt came from, `reports` the tool_use a notification frame's pulse names, and
-  `attached_to` the record everything else was injected under. The line is resolved through
-  the chain's own uuid map, so an edge is an address rather than a uuid to go searching for;
-  a key that resolves to no line keeps the id and says so, and a record naming no such key
-  renders its REASON rather than dropping the edge. The two inbound relays are the case that
-  needs the reason: a coordinator relay and a peer relay carry one leaf, so the arm reads
-  `origin.kind` and each answers for its own shape - the coordinator's origin carries only
-  its kind, the peer's names the lane that sent it (`[peer lane <id>]`, JSON
-  `peer_sender_task_id`).
-- **A person's message the harness relayed is marked.** A message delivered into a running
-  lane is the person's own prose and takes `user.message` like any other, so on every
-  surface it was byte-identical to one they typed - while, being isMeta, it opens no turn.
-  It renders `[relayed]` and carries the JSON twin `relayed`, because a marker is
-  display-only and a machine consumer could otherwise not tell the two apart at all.
-- **`harness.hook.feedback` reaches every blocking-hook name.** One formatter writes the
-  template over a closed four-name table and csift matched only the name the corpus happens
-  to hold, so the first time a TeammateIdle, TaskCreated or TaskCompleted hook blocks, its
-  feedback would have landed in the isMeta residue - no leaf, no census key, reachable only
-  by an address.
-- **A bare `-t agent` gives you the model's structured answer too, and the help pages name
-  every key they emit.** `agent.message.structured` rides a `structured_output`
-  attachment, which the harness converts to nothing, so the record-level delivery verdict
-  read NOT delivered and the bare-face law took the leaf out of `-t agent` and
-  `-t agent.message` - a reader asking for the agent's messages got the plain half of a
-  two-leaf category and nothing saying the other half existed. It is now the ONE stated
-  exception to that law: the axis asks what the model RECEIVED and this is the leaf the
-  model WROTE, and the API gives a turn free text or a schema-bound answer and never both,
-  so the coarse ask answers with whichever the turn used. The FACT does not move - the
-  record was not delivered, so its `delivered` still reads false and the unit still renders
-  `[not delivered]`; only which face it belongs to. A glob and an exact leaf reached it all
-  along. Alongside it, both manuals now write every JSON key they name in backticks or in
-  their own key block, and the `search` hit schema gained `tool_use_id` and `source`, which
-  a hit carries and the schema had never listed.
+  `text`, `time_window`, `timez`). The four `model/classify_*.rs` siblings become
+  `model/classify/{support,promoted,channel,resume}.rs` under the engine that uses them.
+  `Record::direction` moved verbatim into a fifth child so the engine stays under the
+  600-line cap, and the engine's cases are nested to match. Every path is respelled at
+  every call site, with no alias and no forwarding shim. No behaviour changes.
+- The isMeta injection family now says what each record was written for. The harness
+  writes text into a turn shaped exactly like the operator's own message. The label said
+  who wrote it, and nothing said what it answers. Most units of the family now carry one
+  `for` edge (JSON `for`). `redoes` names the assistant turn an enforce nudge sends the
+  model back to, and `blocked` names the turn a hook's feedback stopped. `fires` names the
+  scheduler event a fired prompt came from, and `reports` names the tool_use a notification
+  frame's pulse names. `attached_to` names the record everything else was injected under.
+  The line is resolved through the chain's own uuid map, so an edge is an address you can
+  follow and not a uuid to go searching for. A key that resolves to no line keeps the id
+  and says so, and a record naming no such key renders its reason and keeps the edge. The
+  two inbound relays are the case that needs the reason. A coordinator relay and a peer
+  relay carry one leaf, so the arm reads `origin.kind`, and each answers for its own shape.
+  The coordinator's origin carries only its kind. The peer's names the lane that sent it
+  (`[peer lane <id>]`, JSON `peer_sender_task_id`).
+- A person's message that the harness relayed is now marked. A message delivered into a
+  running lane is the person's own prose and takes `user.message` like any other. On every
+  surface it was byte-identical to one they typed, although it opens no turn, being
+  isMeta. It renders `[relayed]` and carries the JSON twin `relayed`. A marker is
+  display-only, and without the key a machine consumer could not tell the two apart at
+  all.
+- `harness.hook.feedback` reaches every blocking-hook name. One formatter writes the
+  template over a closed four-name table, and csift matched only the name the corpus
+  happens to hold. The first time a TeammateIdle, TaskCreated or TaskCompleted hook
+  blocked, its feedback would have landed in the isMeta residue, with no leaf, no census
+  key, and only an address to reach it.
+- A bare `-t agent` now returns the model's structured answer too, and the help pages name
+  every key they emit. `agent.message.structured` rides a `structured_output` attachment,
+  which the harness converts to nothing. The record-level delivery verdict therefore read
+  not delivered, and the bare-face law took the leaf out of `-t agent` and
+  `-t agent.message`. A reader asking for the agent's messages got the plain half of a
+  two-leaf category and nothing saying the other half existed. The leaf is now the one
+  stated exception to that law. The axis asks what the model received, and this is the
+  leaf the model wrote. The API gives a turn free text or a schema-bound answer and never
+  both, so the coarse ask answers with whichever the turn used. The fact does not move.
+  The record was not delivered, so its `delivered` still reads false and the unit still
+  renders `[not delivered]`. Only the face it belongs to changes. A glob and an exact leaf
+  reached it all along. Alongside it, both manuals now write every JSON key they name in
+  backticks or in their own key block. The `search` hit schema gained `tool_use_id` and
+  `source`, which a hit carries and the schema had never listed.
 
-- **The provenance relation `hook run` is respelled `hook_run`.** `--count-by for-kind`
-  prints `<count>  <key>` per line like every other census axis, so a key with a space in
-  it cannot be read back by the whitespace split every reader of that surface writes, and
-  this was the only key in the closed vocabulary that carried one. The word says what it
-  said - the id a `stop_hook_summary` names is a hook RUN id, not the API tool_use id its
-  field name suggests - and the three surfaces move together: the census key, the
-  `[for: hook_run ...]` label-zone tag, and the JSON `for[].kind`. Neither spelling has
+- The provenance relation `hook run` is respelled `hook_run`. `--count-by for-kind`
+  prints `<count>  <key>` per line like every other census axis. A key with a space in it
+  cannot be read back by the whitespace split every reader of that surface writes, and
+  this was the only key in the closed vocabulary that carried one. The word means what it
+  meant. The id a `stop_hook_summary` names is a hook run id, and it is not the API
+  tool_use id its field name suggests. Three surfaces move together, the census key, the
+  `[for: hook_run ...]` label-zone tag and the JSON `for[].kind`. Neither spelling has
   shipped in a released binary.
 
-- **A retired `-t` spelling says WHY it is not a selector, beside where its records went.**
-  All thirteen are hard errors, and each message carries
-  `('<spelling>' <reason>, so this is: <successors>.)` ahead of the valid-selector list. The
-  middle column is a REASON rather than a release, because the only reader of that message
-  holds a binary on which the spelling is already gone: which release retired it changes
-  nothing, while the reason carries to the next spelling they guess. Three reasons cover the
-  thirteen rows. `thinking`, `tool` and `tool-response` are flat spellings and the taxonomy
-  is `role.category.leaf`. Seven share one clause - a category is decided by the producer
-  that wrote the record - and each says what it did against that rule: `harness.meta` pooled
-  several producers under one category; the five
+- A retired `-t` spelling now says why it is not a selector, beside where its records
+  went. All thirteen are hard errors, and each message carries `('<spelling>' <reason>,
+  so this is: <successors>.)` ahead of the valid-selector list. The middle column is a
+  reason and not a release, because the only reader of that message holds a binary on
+  which the spelling is already gone. Which release retired it changes nothing for them,
+  while the reason carries over to the next spelling they guess. Three reasons cover the
+  thirteen rows. `thinking`, `tool` and `tool-response` are flat spellings, and the
+  taxonomy is `role.category.leaf`. Seven share one clause, that a category is decided by
+  the producer that wrote the record, and each says what it did against that rule.
+  `harness.meta` pooled several producers under one category. The five
   `harness.meta.{loop,turn-duration,away-summary,stop-hooks,snapshot}` paths each named a
-  record by the category it was pooled in; `harness.schedule.continuation` put the resume
+  record by the category it was pooled in. `harness.schedule.continuation` put the resume
   loader's own prompt under the scheduler's. The last three,
   `harness.meta.{hook,attachment,system}`, pooled three or four producers under one leaf,
-  and a leaf names one shape. A retired prefix plus `.*` is the same retirement and is
-  looked up bare, so it prints the bare row's message. The set is a walkable table rather
-  than a match arm, which is what lets a test hold `SKILL.md` section 10 to these exact
-  successor strings row by row; SPEC's own copy of the table was two successors short on
-  `harness.meta` and one short on `harness.meta.hook`, and now prints what the errors print.
+  and a leaf names one shape. A retired prefix plus `.*` is the same retirement, is looked
+  up bare, and prints the bare row's message. The set is a walkable table and not a match
+  arm. That is what lets a test hold `SKILL.md` section 10 to these exact successor strings
+  row by row. SPEC's own copy of the table was two successors short on `harness.meta` and
+  one short on `harness.meta.hook`, and it now prints what the errors print.
 
-- **Every string a help page quotes is one the binary prints, and no page carries csift's
-  own chronology.** Measured over all eighteen pages (`csift --help` plus one per
+- Every string a help page quotes is one the binary prints, and no page carries csift's
+  own chronology. The measurement covered all eighteen pages (`csift --help` plus one per
   subcommand) against the last released binary, both invoked under the basename the usage
-  line echoes: 602 rendered non-blank lines differ counted once per PAGE - 215 only in the
-  older arm, 387 only in this one - or 479 counted once per distinct line TEXT, the two
-  figures differing by the lines that render on more than one page and by the two lines
-  of the `--claude-home` entry that `search --help` moved within its page, which a diff
-  reports as removed and added. The new root
-  `--cross-compactions` block is seven of those lines and renders on every page, so it is
-  126 of the first figure and 7 of the second, and on `ack`, `plan` and `send` it is the
-  whole difference; `search` carries 348 of the 602 by itself, its taxonomy block rewritten
-  leaf by leaf. Every other moved line falls in one of three classes. Most restate a change
-  this record already names one by one. ONE is a quoted string corrected to the bytes:
-  `list --help` quoted the subagent brand with one space where `list` prints two after the
-  word and two around the separator, so a reader matching the manual against the output
-  matched nothing. The REST carry no fact about the binary and are gone: csift's own
-  chronology (eleven version riders naming seven versions over five pages, one date on
-  which something was measured, and the sentences describing a past csift), a word for who
-  is asking rather than for what a flag does, and an example token, now in the
-  hand-patterned shape every fixture id in these documents uses. Each of those was
-  rewritten as the fact it was there to give, so a page reads correctly to someone who has
-  seen no other csift. Every date that remains is an EXAMPLE the grammar needs and belongs
-  to no release: twenty-three ISO8601 instants in the `--since`/`--until` blocks of five
-  pages, two more in the time-grammar list, the root page's timestamp-format sample, and
-  one synthetic record instant inside a rendered bookkeeping head.
+  line echoes. 602 rendered non-blank lines differ when counted once per page, 215 only in
+  the older arm and 387 only in this one. Counted once per distinct line text, 479 differ.
+  The two figures differ by the lines that render on more than one page, and by the two
+  lines of the `--claude-home` entry that `search --help` moved within its page, which a
+  diff reports as removed and added. The new root `--cross-compactions` block is seven of
+  those lines and renders on every page. It accounts for 126 of the first figure and 7 of
+  the second, and on `ack`, `plan` and `send` it is the whole difference. `search` carries
+  348 of the 602 by itself, its taxonomy block rewritten leaf by leaf. Every other moved
+  line falls into one of three classes. Most restate a change this record already names
+  one by one. One is a quoted string corrected to the bytes. `list --help` quoted the
+  subagent brand with one space where `list` prints two after the word and two around the
+  separator, so a reader matching the manual against the output matched nothing. The rest
+  carried no fact about the binary and are gone. They were csift's own chronology (eleven
+  version riders naming seven versions over five pages, one date on which something was
+  measured, and the sentences describing a past csift), a word for who is asking in place
+  of what a flag does, and an example token, now in the hand-patterned shape every fixture
+  id in these documents uses. Each was rewritten as the fact it was there to give, so a
+  page reads correctly to someone who has seen no other csift. Every date that remains is
+  an example the grammar needs and belongs to no release. There are twenty-three ISO8601
+  instants in the `--since`/`--until` blocks of five pages, two more in the time-grammar
+  list, the root page's timestamp-format sample, and one synthetic record instant inside a
+  rendered bookkeeping head.
 
-- **A manual quotes the brand its OWN command prints, because the subagent brand is four
-  strings.** One fact - this row is a subagent transcript, and its bare id is not a
-  re-feedable target - is spelled four ways across the seven surfaces that print it: `list`
-  writes `SUBAGENT  <hex>  ·  parent SESSION <uuid>`, two spaces after the word and two
-  around the separator; `files`, `recover`, `stats` and `verbatim` write one space after
-  the word and two around the separator; `show` writes one of each; and `image` suffixes
-  its row `  SUBAGENT <hex> · parent <uuid>`, with no `SESSION` at all. So `SKILL.md`'s
-  `list` row and SPEC's `image` row quote different strings and both are right, and a
-  manual that copied its sibling's would send a reader looking for bytes that surface never
-  writes. `SKILL.md` states the `body` field's full condition beside it: `body` is non-null
-  exactly where the excerpt cap was lifted, which is `search --no-truncate` and a
-  `show --line`/`--uuid` address, while `show --turn` is a WINDOW over the turn numbering
-  rather than an address, so its rows render through the ordinary excerpt budget and carry
-  a null `body`.
-- **A `.rs` comment carries a non-ASCII character only as a quotation of csift's own
-  rendering.** A glyph in a comment used to be either a quotation of what csift prints or
+- A manual now quotes the brand its own command prints, because the subagent brand is
+  four strings. One fact is spelled four ways across the seven surfaces that print it. The
+  fact is that this row is a subagent transcript and its bare id is not a re-feedable
+  target. `list` writes `SUBAGENT  <hex>  ·  parent SESSION <uuid>`, with two spaces after
+  the word and two around the separator. `files`, `recover`, `stats` and `verbatim` write
+  one space after the word and two around the separator. `show` writes one of each.
+  `image` suffixes its row with `  SUBAGENT <hex> · parent <uuid>`, with no `SESSION` at
+  all. `SKILL.md`'s `list` row and SPEC's `image` row therefore quote different strings,
+  and both are right. A manual that copied its sibling's would send a reader looking for
+  bytes that surface never writes. `SKILL.md` states the `body` field's full condition
+  beside it. `body` is non-null exactly where the excerpt cap was lifted, which is
+  `search --no-truncate` and a `show --line`/`--uuid` address. `show --turn` is a window
+  over the turn numbering and not an address, so its rows render through the ordinary
+  excerpt budget and carry a null `body`.
+- A `.rs` comment carries a non-ASCII character only as a quotation of csift's own
+  rendering. A glyph in a comment used to be either a quotation of what csift prints or
   the comment's own arrow, heading rule or ellipsis, and nothing in the character said
-  which. Now it is the first only: the glyph exactly as printed, inside a backtick span, and
-  the set a comment may quote is derived from what the binary prints (every non-ASCII
-  character in a string or char literal of a non-test source file under `src/`, decoded
-  through its escapes, plus every one in a clap `///` help doc), 26 glyphs. The pre-commit
-  gate enforces it (the character and the balance of the span; the em dash is one of the
-  printed glyphs, so the older outright ban on it is this rule read narrowly), and the
-  rewrite it required moved no byte of the release binary's strings or help pages: 2,027
-  comment lines carried such a character, 1,653 outside any quotation, and the tip carries 0
-  violations. `AGENTS.md` section 8 states the rule with its derivation.
-- **`recover --help` states the content-anchor rule for reads and writes apart.** It said
-  every anchor demands a single simple command and that pipes and chains stay in the
-  boundary lanes, which holds for a READ anchor only: a compound command's stdout names no
-  one file. A WRITE anchor is per segment of a pipe or a `;`, `&&`, `||` or newline chain,
-  so a heredoc write followed by a command that runs the file anchors - a clean
-  two-segment chain like that restores the file whole and counts one `bash-write-anchor` -
-  provided the whole command's result is clean and no other segment WRITES the same path:
-  a `cp` over the file refuses the anchor, while a `wc -l` or a `chmod +x` of it leaves it
-  standing. The page now says both.
-- **`send`'s receipt counts the body in the unit the budget is counted in.** The chunk
-  budget is UTF-16 code units, and the `message` line printed the body in characters beside
-  it, so a body of 6,000 emoji read `6000 char(s), 2 chunk(s) of 9200` - a size that fits
-  one chunk beside a count of two. The line now prints the body in both units and names the
-  budget's: `6000 char(s) / 12000 UTF-16 unit(s), 2 chunk(s) of 9200 UTF-16 units`, where an
-  ASCII body reads the same number twice. The JSON summary gains `message_utf16_units` and
-  `chunk_budget_utf16_units` beside `message_chars`.
-- **The `--turn` help says what turn 0 holds.** The `search`, `files`, `recover` and
-  `verbatim` pages called turn 0 the pre-first-user lead and said `1..N` skips it, but the
-  grouper folds that lead into the first opener's turn: turn 0 holds the first human
-  message, so `1..N` drops the first human turn as well. The four pages now say so and name
-  the five turn openers (a typed message, an answered AskUserQuestion, a tool rejection
-  carrying typed text, an inbound peer message, a `<task-notification>` pulse) where they
-  named three, adding that a slash command with arguments opens no turn. `stats --turn`
-  says its axis is the turn order with turn 0 holding the first opener's turn, where it
-  said genuine-turn order.
+  which. Now only the first use is allowed, with the glyph exactly as printed inside a
+  backtick span. The set a comment may quote is derived from what the binary prints. It
+  holds every non-ASCII character in a string or char literal of a non-test source file
+  under `src/`, decoded through its escapes, plus every one in a clap `///` help doc, 26
+  glyphs in all. The pre-commit gate enforces the character and the balance of the span.
+  The em dash is one of the printed glyphs, so the older outright ban on it is this rule
+  read narrowly. The rewrite the rule required moved no byte of the release binary's
+  strings or help pages. 2,027 comment lines carried such a character, 1,653 of them
+  outside any quotation, and the tip carries 0 violations. `AGENTS.md` section 8 states
+  the rule with its derivation.
+- `recover --help` states the content-anchor rule for reads and writes separately. It
+  said every anchor demands a single simple command and that pipes and chains stay in the
+  boundary lanes. That holds for a read anchor only, because a compound command's stdout
+  names no one file. A write anchor is per segment of a pipe or of a `;`, `&&`, `||` or
+  newline chain. A heredoc write followed by a command that runs the file therefore
+  anchors, and a clean two-segment chain like that restores the file whole and counts one
+  `bash-write-anchor`. The whole command's result must be clean, and no other segment may
+  write the same path. A `cp` over the file refuses the anchor, while a `wc -l` or a
+  `chmod +x` of it leaves the anchor standing. The page now says both.
+- `send`'s receipt counts the body in the unit the budget is counted in. The chunk budget
+  is UTF-16 code units, and the `message` line printed the body in characters beside it. A
+  body of 6,000 emoji read `6000 char(s), 2 chunk(s) of 9200`, a size that fits one chunk
+  beside a count of two. The line now prints the body in both units and names the
+  budget's unit, as `6000 char(s) / 12000 UTF-16 unit(s), 2 chunk(s) of 9200 UTF-16
+  units`. An ASCII body reads the same number twice. The JSON summary gains
+  `message_utf16_units` and `chunk_budget_utf16_units` beside `message_chars`.
+- The `--turn` help now says what turn 0 holds. The `search`, `files`, `recover` and
+  `verbatim` pages called turn 0 the pre-first-user lead and said `1..N` skips it. The
+  grouper actually folds that lead into the first opener's turn. Turn 0 holds the first
+  human message, so `1..N` drops the first human turn as well. The four pages now say so.
+  They name five turn openers where they named three, which are a typed message, an
+  answered AskUserQuestion, a tool rejection carrying typed text, an inbound peer message
+  and a `<task-notification>` pulse. They add that a slash command with arguments opens no
+  turn. `stats --turn` says its axis is the turn order with turn 0 holding the first
+  opener's turn, where it said genuine-turn order.
 
 ### Fixed
 
-- **The two textless thinking leaves rendered a body they do not have.** An
+- The two textless thinking leaves rendered a body they do not have. An
   `agent.thinking.redacted` unit printed the fabricated words `[redacted thinking]` as its
-  text - matchable text with no substring behind it in the raw line, which the literal
-  prefilter and the whole-file gate both reason about and which the law admits only through
-  a registered marker. An `agent.thinking.omitted` unit whose `thinking` field was
-  whitespace printed a run of spaces while promising none. Both bodies are EMPTY now, and
-  the consequence is stated rather than met: with nothing rendered, a pattern scan reaches
-  neither leaf - use an empty pattern plus an exact `-t`, `--count-by label`, or a `show`
-  address, and `--raw` for a redacted block's ciphertext.
+  text. That was matchable text with no substring behind it in the raw line. The literal
+  prefilter and the whole-file gate both reason about matchable text, and the law admits
+  fabricated text only through a registered marker. An `agent.thinking.omitted` unit whose
+  `thinking` field was whitespace printed a run of spaces while promising none. Both bodies
+  are empty now, and the consequence is stated. With nothing rendered, a pattern scan
+  reaches neither leaf. An empty pattern plus an exact `-t`, `--count-by label`, or a
+  `show` address reaches them, and `--raw` shows a redacted block's ciphertext.
 
-- **Three isMeta template arms could be claimed by a record that QUOTED them.** The
-  marker law says every such arm tests the text after one left trim, and the hook-feedback
-  and `<local-command-caveat>` arms tested the untrimmed string while the edit-failed-retry
-  notice tested `contains` - which on that path can only reach a record quoting the notice.
-  All three anchor now. Measured over two projects roots the emitted leaf moves for no
-  record, so this closes a hole rather than changing a count.
-- **A textless image record said nothing about what it was.** An isMeta record whose
-  content is image blocks and no text renders no text, so `show --line` on one answered
-  with the key=value excerpt of its own top-level keys and nothing else - the head of a
-  base64 payload among the values. It now carries its block counts in the label zone
-  beside that excerpt: `[context image-only: N image block(s), M document block(s)]`,
-  JSON `image_only`. The excerpt stays: it is the line's own keys, rendered by the path
-  every textless address takes.
+- Three isMeta template arms could be claimed by a record that quoted them. The marker
+  law says every such arm tests the text after one left trim. The hook-feedback and
+  `<local-command-caveat>` arms tested the untrimmed string. The edit-failed-retry notice
+  tested `contains`, which on that path can only reach a record quoting the notice. All
+  three anchor now. Measured over two projects roots, the emitted leaf moves for no record,
+  so this closes a hole and changes no count.
+- A textless image record now says what it is. An isMeta record whose content is image
+  blocks and no text renders no text. `show --line` on one answered with the key=value
+  excerpt of its own top-level keys and nothing else, with the head of a base64 payload
+  among the values. It now carries its block counts in the label zone beside that excerpt,
+  as `[context image-only: N image block(s), M document block(s)]` with JSON `image_only`.
+  The excerpt stays, because it is the line's own keys, rendered by the path every
+  textless address takes.
 
-- **An `api_error`'s response headers never reach a rendered or JSON output path.** The HTTP
+- An `api_error`'s response headers never reach a rendered or JSON output path. The HTTP
   shape of that record carries the response headers verbatim, cookie and organization id
-  included. The render names the status and the retry counters, the JSON `error` fact carries
-  the error's `type` and `message` and nothing else, and `--raw` prints the source line and is
-  the one documented way to the bytes.
-- **What an `api_error` says failed is searchable, on BOTH observed shapes.** The record
-  carries no `content` key at all, so the failure's kind rides the head and its wording is the
-  body; without them the statement of the failure was in the output under no pattern that
-  could reach it. Neither shape carries both at one level: the header-bearing HTTP shape keeps
-  the wording two hops down inside the response body it received, so reading one level printed
-  the kind and dropped the sentence.
-- **The whole-file gate re-renders from the record's source line.** Stage 2 of the gate is
-  the one place csift proves a negative, and it was re-rendering without the line - so for
-  a record whose text lives in fields the record model does not carry, it could prove a
-  file unmatchable on text the search would have produced.
-- **Four shape-inventory rows said a person sees a record they never saw.** The image
+  included. The render names the status and the retry counters. The JSON `error` fact
+  carries the error's `type` and `message` and nothing else. `--raw` prints the source line
+  and is the one documented way to the bytes.
+- What an `api_error` says failed is searchable on both observed shapes. The record
+  carries no `content` key at all, so the failure's kind rides the head and its wording is
+  the body. Without them, the statement of the failure was in the output under no pattern
+  that could reach it. Neither shape carries both at one level. The header-bearing HTTP
+  shape keeps the wording two hops down, inside the response body it received, so reading
+  one level printed the kind and dropped the sentence.
+- The whole-file gate re-renders from the record's source line. Stage 2 of the gate is the
+  one place csift proves a negative, and it re-rendered without the line. For a record
+  whose text lives in fields the record model does not carry, it could prove a file
+  unmatchable on text the search would have produced.
+- Four shape-inventory rows said a person sees a record they never saw. The image
   reference, the image block, the coordinator relay and the notification frame are all
-  isMeta user records, which the transcript render refuses unless their origin is one of
-  five kinds none of them writes. SPEC's inventory table and SKILL's identity cells follow,
-  and a drift test now compares the two row for row.
-- **Three more of those rows, and two payload types the harness drops.** `atis-latch` and
-  `fork-context-ref` read `indirect` and `queue-operation` read `yes`; reading every
-  occurrence of the three type literals in the shipped binary finds no reader that renders
-  any of them, so all three read `no`. Separately, `goal_status` and
-  `async_hook_response_batch` were missing from the never-convert set, and `goal_status`
-  carries a leaf that is otherwise visible - so csift reported such a record as delivered
+  isMeta user records. The transcript render refuses those unless their origin is one of
+  five kinds, and none of them writes one. SPEC's inventory table and SKILL's identity
+  cells follow, and a drift test now compares the two row for row.
+- Three more of those rows were wrong, and two payload types the harness drops were
+  missing. `atis-latch` and `fork-context-ref` read `indirect`, and `queue-operation` read
+  `yes`. Reading every occurrence of the three type literals in the shipped binary finds no
+  reader that renders any of them, so all three read `no`. Separately, `goal_status` and
+  `async_hook_response_batch` were missing from the never-convert set. `goal_status`
+  carries a leaf that is otherwise visible, so csift reported such a record as delivered
   where the converter drops it.
-- **The image-only arm tests authorship like every other injection arm.** A leaf saying the
-  harness wrote a record decided that from block shape alone. It now requires `isMeta`, the
-  conjunction the rest of the family already takes; all 94 such records carry the flag, so
-  what it decides is the shape that has yet to appear. A record without it renders
-  `? unmodeled: user/image` under an address.
-- **Doc surfaces that said things the code does not.** Two facts, each stated in more than
-  one place. `harness.hook.feedback` was described as the Stop hook's, where one builder
-  writes four prefixes (`Stop`, `TeammateIdle`, `TaskCreated`, `TaskCompleted`) - corrected
-  in the classify arm's own doc, in `search --help`'s leaf list and in the SPEC taxonomy
-  clause. And a redacted thinking block was described as a PLACEHOLDER, in
-  `model/automation.rs` and in the block loop's module doc: it renders an empty body, and
-  what it is rides the label zone as a marker, which is what keeps the fabricated word out
-  of matchable text.
-- **A stdout write that cannot land is reported now, instead of aborting the process.**
-  Piping a command into a reader that goes away - `| head`, a closed pipe - made `println!`
-  abort: exit 101 and a std panic message naming `library/std/src/io/stdio.rs` where csift's
-  own belongs, with a backtrace only under `RUST_BACKTRACE=1`. Through the shared buffered
-  stdout the failed write now takes the one error arm every other failure takes: exit 1 and
-  `csift: error: Broken pipe (os error 32)`. The rule is the WRITER that makes the failing
-  write and not the subcommand - a `println!` still aborts, so a surface whose rows are
-  buffered but whose FIRST stdout byte is a `println!` aborts at that byte. Inside a
-  buffered surface there is no exception: its `scope` and `copies` banners go through the
-  same writer as its rows, so one query has one answer for a closed pipe however wide its
-  scope. Reporting: `search` in all four of its forms, `show` rendered, `--raw`, `--turn`
-  and `--uuid`, `agents` in both projections, `files` in its three, `image` in both, and
-  every one of `verbatim`'s streams. Aborting: `list`, `stats`, `recover` in all six forms
-  measured, `status`, `wait`, `whoami`, `send`, `msg`, `deliver`, `show --branch-points`,
-  and `search`'s `-c` / `-l` / `--count-by`. `plan` with no binding and `ack` write no
-  stdout at all, and `csift --version` is clap's own writer and exits 0. What a reader that
-  stays receives does not move; only the failure path does.
+- The image-only arm tests authorship like every other injection arm. A leaf saying the
+  harness wrote a record decided that from block shape alone. It now also requires
+  `isMeta`, the conjunction the rest of the family already takes. All 94 such records carry
+  the flag, so what the change decides is the shape that has yet to appear. A record
+  without the flag renders `? unmodeled: user/image` under an address.
+- Doc surfaces stated two facts the code contradicts, each in more than one place.
+  `harness.hook.feedback` was described as the Stop hook's, where one builder writes four
+  prefixes (`Stop`, `TeammateIdle`, `TaskCreated`, `TaskCompleted`). That is corrected in
+  the classify arm's own doc, in `search --help`'s leaf list and in the SPEC taxonomy
+  clause. A redacted thinking block was described as a placeholder, in
+  `model/automation.rs` and in the block loop's module doc. It renders an empty body, and
+  what it is rides the label zone as a marker, which keeps the fabricated word out of
+  matchable text.
+- A stdout write that cannot land is now reported and no longer aborts the process.
+  Piping a command into a reader that goes away, such as `| head` or a closed pipe, made
+  `println!` abort. The process exited 101 with a std panic message naming
+  `library/std/src/io/stdio.rs` where csift's own message belongs, and with a backtrace
+  only under `RUST_BACKTRACE=1`. Through the shared buffered stdout, the failed write now
+  takes the one error arm every other failure takes, exit 1 and `csift: error: Broken pipe
+  (os error 32)`. The rule follows the writer that makes the failing write, never the
+  subcommand. A `println!` still aborts, so a surface whose rows are buffered but whose
+  first stdout byte is a `println!` aborts at that byte. Inside a buffered surface there is
+  no exception. Its `scope` and `copies` banners go through the same writer as its rows, so
+  one query has one answer for a closed pipe however wide its scope. These surfaces report
+  the error. They are `search` in all four of its forms, `show` rendered, `--raw`,
+  `--turn` and `--uuid`, `agents` in both projections, `files` in its three, `image` in
+  both, and every one of `verbatim`'s streams. These surfaces still abort. They are `list`,
+  `stats`, `recover` in all six forms measured, `status`, `wait`, `whoami`, `send`, `msg`,
+  `deliver`, `show --branch-points`, and `search`'s `-c` / `-l` / `--count-by`. `plan`
+  with no binding and `ack` write no stdout at all, and `csift --version` uses clap's own
+  writer and exits 0. What a reader that stays receives does not move. Only the failure
+  path does.
 
-- **A turn-companion record was counted as the person's own turn.** `turnCompanion` is the
-  harness's SECOND authorship stamp, on a `type:"user"` record it wrote to ACCOMPANY a turn
-  rather than receive from the person, and Claude Code's own is-this-the-person's-message
-  predicate excludes it beside `isMeta`, before it looks at the content at all. The two are
-  not one set: of the fourteen stamping sites in the verified build, twelve build an object
-  that carries `isMeta` and TWO do not - a mapper over a slash command's expansion messages,
-  and the tool-dispatch path for the extra `type:"user"` messages a tool returns beside its
-  result - and both spread an EXISTING record and add the one key, so a record carrying the
-  companion stamp and no meta flag is constructible from either. Reading `isMeta` alone made
-  such a record the operator's own turn: it opened a turn, shifted every later turn number
-  on that transcript, and moved the live-turn count every surface derives from the same
-  predicate - `search --count-by turn`, `stats`, the `<tok>·tN` headers and every `--turn`
-  window with them. `is_genuine_user` reads both flags now, so `opens_turn` opens no turn on
-  a companion, and `classify` reads them at the same arm, so the LABEL agrees with the
-  BOUNDARY: a record csift refuses to call the human is not `user.message` under a selector
-  either. A companion matching a template csift models keeps that template's leaf; one
-  matching none carries no leaf and renders `? unmodeled: user/turnCompanion` under an
-  address, naming the NARROWER stamp: the companion word describes exactly the records
-  that carry both, so it is the one a residue unit prints. The key rides the flattened,
-  boxed exposed-key struct rather than a field of `Record`, so it costs a record naming no
-  exposed key nothing and the row every parsed line of every scan carries does not grow; it
-  is the one exposed key read by a PREDICATE rather than projected as a fact, because what a
-  reader acts on is the leaf and the turn boundary it changes.
+- A turn-companion record was counted as the person's own turn. `turnCompanion` is the
+  harness's second authorship stamp. It sits on a `type:"user"` record the harness wrote
+  to accompany a turn, which the person never sent. Claude Code's own
+  is-this-the-person's-message predicate excludes it beside `isMeta`, before it looks at
+  the content at all. The two stamps are not one set. Of the fourteen stamping sites in the
+  verified build, twelve build an object that carries `isMeta`, and two do not. One is a
+  mapper over a slash command's expansion messages. The other is the tool-dispatch path for
+  the extra `type:"user"` messages a tool returns beside its result. Both spread an
+  existing record and add the one key, so either can construct a record carrying the
+  companion stamp and no meta flag. Reading `isMeta` alone made such a record the
+  operator's own turn. It opened a turn, shifted every later turn number on that
+  transcript, and moved the live-turn count every surface derives from the same predicate.
+  That count feeds `search --count-by turn`, `stats`, the `<tok>·tN` headers and every
+  `--turn` window. `is_genuine_user` reads both flags now, so `opens_turn` opens no turn
+  on a companion. `classify` reads them at the same arm, so the label agrees with the
+  boundary, and a record csift refuses to call the human is not `user.message` under a
+  selector either. A companion matching a template csift models keeps that template's
+  leaf. One matching none carries no leaf and renders `? unmodeled: user/turnCompanion`
+  under an address. It names the narrower stamp, because the companion word describes
+  exactly the records that carry both. The key rides the flattened, boxed exposed-key
+  struct and adds no field to `Record`. A record naming no exposed key pays nothing for it,
+  and the row every parsed line of every scan carries does not grow. It is the one exposed
+  key read by a predicate and not projected as a fact, because what a reader acts on is
+  the leaf and the turn boundary it changes.
 
-- **A uuid prefix longer than the first segment resolved nothing.** The grammar promised a
-  dash-less prefix of 4 to 11 hex, and the resolver compared it literally against the dashed
-  basename, so `@<first 9 hex>` held its ninth digit against the dash at position 8 and
-  failed with "no session or agent id starts with" while `@<first 8 hex>` resolved. The
-  dashed spelling had the mirror gap: a literal prefix of the uuid layout resolved from 12
-  characters up and was "not a recognized @-target" at 9 to 11. A prefix is now compared by
-  its hex digits, the dashes dropped on both sides, so `@1a2b3c4d5` and `@1a2b3c4d-5` name the
-  same sessions, and the dashed spelling is accepted from the first dash on (claim
-  PATH-016). Uniqueness is unchanged: two ids sharing the digits are still an error naming
-  both.
-- **The four edge shapes of the `@` hex grammar are decided, and each miss names the
-  rule.** A dashed prefix past 11 characters and a dash followed by one or two hex both
-  resolve by their digits. A dash-less run of 12 or more hex is an AGENT id - that agent,
-  or the one agent id it starts - and never a session, so a session prefix that long keeps
-  its dashes; the agent miss now says so. An agent-id prefix resolves (4 to 11 digits
-  through the shared prefix match, 12 to 16 through the agent fallback), and the
+- A uuid prefix longer than the first segment resolved nothing. The grammar promised a
+  dash-less prefix of 4 to 11 hex digits, and the resolver compared it literally against
+  the dashed basename. `@<first 9 hex>` held its ninth digit against the dash at position
+  8 and failed with "no session or agent id starts with", while `@<first 8 hex>` resolved.
+  The dashed spelling had the mirror gap. A literal prefix of the uuid layout resolved from
+  12 characters up and was "not a recognized @-target" at 9 to 11. A prefix is now compared
+  by its hex digits with the dashes dropped on both sides, so `@1a2b3c4d5` and
+  `@1a2b3c4d-5` name the same sessions. The dashed spelling is accepted from the first dash
+  on (claim PATH-016). Uniqueness is unchanged, and two ids sharing the digits are still an
+  error naming both.
+- The four edge shapes of the `@` hex grammar are decided, and each miss names the rule.
+  A dashed prefix past 11 characters and a dash followed by one or two hex digits both
+  resolve by their digits. A dash-less run of 12 or more hex digits is an agent id, either
+  that agent or the one agent id it starts, and never a session. A session prefix that
+  long keeps its dashes, and the agent miss now says so. An agent-id prefix resolves, 4 to
+  11 digits through the shared prefix match and 12 to 16 through the agent fallback. The
   unrecognized-target error lists `@<id-prefix>` and `@<agent-id>` with what each
   resolves.
-- **A cost checkpoint said it could not find the two numbers it carries.** The
-  `harness.bookkeeping.cost` fact read `startTime` as a string holding an ISO instant, and
-  the harness writes it as a number: the session start in epoch milliseconds, which its
-  own schema for the line declares `number().nonnegative().finite()`. So every
-  `cost-state` unit rendered `[checkpoint closes unknown (needs startTime and
-  totalDuration)]` with a null JSON instant, 96 of 96 lines on one projects
-  root, while `--raw` showed both keys on every one. The fact now reads the pair through
-  the same function `list`'s `/clear` join uses, so the instant a unit shows is the one
-  the join compares. The label prints it as local text,
-  `[checkpoint closes 2026-08-31 18:58:32.913 AEST(UTC+10)]`, and JSON carries the
-  instant as the pair `checkpoint_closes_at_utc` and `checkpoint_closes_at_local`. A value that is not a non-negative number reads as absent, the
-  line the harness's own readers refuse, and the empty label now says so: `(needs
+- A cost checkpoint said it could not find the two numbers it carries. The
+  `harness.bookkeeping.cost` fact read `startTime` as a string holding an ISO instant.
+  The harness writes it as a number, the session start in epoch milliseconds, and its own
+  schema for the line declares `number().nonnegative().finite()`. Every `cost-state` unit
+  therefore rendered `[checkpoint closes unknown (needs startTime and
+  totalDuration)]` with a null JSON instant, 96 of 96 lines on one projects root, while
+  `--raw` showed both keys on every one. The fact now reads the pair through the same
+  function `list`'s `/clear` join uses, so the instant a unit shows is the one the join
+  compares. The label prints it as local text,
+  `[checkpoint closes 2026-08-31 18:58:32.913 AEST(UTC+10)]`, and JSON carries the instant
+  as the pair `checkpoint_closes_at_utc` and `checkpoint_closes_at_local`. A value that is
+  not a non-negative number reads as absent, which is the line the harness's own readers
+  refuse. The empty label now says so with `(needs
   startTime and totalDuration as numbers)`. The `search --help` sample head showed
-  `startTime` as an ISO string and shows epoch milliseconds now (claims QT-042, QT-043).
-- **`search --help` tagged the structured answer as a gated leaf.** The leaf tree gave
-  `agent.message.structured` the gate word `[-t/att]`, which the page's own legend reserves
-  for an attachment leaf only a selector or `--attachments` admits. A flagless scan reaches
-  it through its own value needle (a session carrying two structured answers counts 2 under
-  the leaf in a plain `--count-by label`), so the tree now says `[scan/needle]`. A test
-  holds every leaf whose inventory rows all carry the default-needle gate to that word.
-- **The root help listed six `status` verdicts.** Its `status` entry named running,
-  waiting-children, waiting-hitl, idle-eot, stale-dead and unknown, and left out
+  `startTime` as an ISO string and now shows epoch milliseconds (claims QT-042, QT-043).
+- `search --help` tagged the structured answer as a gated leaf. The leaf tree gave
+  `agent.message.structured` the gate word `[-t/att]`. The page's own legend reserves that
+  word for an attachment leaf that only a selector or `--attachments` admits. A flagless
+  scan reaches this leaf through its own value needle. A session carrying two structured
+  answers counts 2 under the leaf in a plain `--count-by label`. The tree now says
+  `[scan/needle]`, and a test holds every leaf whose inventory rows all carry the
+  default-needle gate to that word.
+- The root help listed six `status` verdicts. Its `status` entry named running,
+  waiting-children, waiting-hitl, idle-eot, stale-dead and unknown. It left out
   `idle-background-open`, the verdict for a turn that ended with background tasks still
-  open, which `status --help` and the verdict enum both carry. The entry names all seven,
-  and a test holds it and the `status --help` verdict paragraph to the enum's own set.
-- **`recover --help` said FIVE modes and the parser holds six.** The head listed the default
-  restore plus four flags while the MODE section of the same page names five mutually
-  exclusive flags, `--list-backups` among them. The head now counts SIX - the default
-  restore and the five flags - and lists `--list-backups` with the others; a test reads
-  the count and the listed flags off the clap `mode` group.
-- **A file-history head printed its instant in UTC.** The `harness.bookkeeping.file-history`
-  head read `[file-history snapshot at 2026-09-01T05:49:11.520Z: ...]`, the one text
-  instant csift left in UTC, on every one of the 7,694 such units one projects root
+  open, which `status --help` and the verdict enum both carry. The entry names all seven
+  now, and a test holds it and the `status --help` verdict paragraph to the enum's own
+  set.
+- `recover --help` said five modes, and the parser holds six. The head listed the default
+  restore plus four flags. The MODE section of the same page names five mutually exclusive
+  flags, `--list-backups` among them. The head now counts six, the default restore and the
+  five flags, and lists `--list-backups` with the others. A test reads the count and the
+  listed flags off the clap `mode` group.
+- A file-history head printed its instant in UTC. The `harness.bookkeeping.file-history`
+  head read `[file-history snapshot at 2026-09-01T05:49:11.520Z: ...]`. It was the one
+  text instant csift left in UTC, on every one of the 7,694 such units one projects root
   carries. Both forms now print local text in the millisecond form the search and show
-  headers use - a delta's top-level `timestamp` and a snapshot's nested
-  `snapshot.timestamp`, the only instant that line carries - and the UTC string stays
-  matchable in the unit's verbatim JSON body (claim QT-025).
-- **A queue rider that quoted the channel envelope reached a flagless scan.** The
-  csift-channel keep admits any line carrying `csift-channel v1`, and a `queue-operation`
-  rider carries whatever its `<task-notification>` summary says, so a pulse that mentioned
-  the envelope surfaced as `harness.bookkeeping.queue` with no `-t` at all - 13 units on
-  one projects root. A `user.queued` or `harness.bookkeeping.*` record now survives only a
-  scan that reaches its own leaf; `-t harness.bookkeeping.queue` (or the family glob)
+  headers use. A delta reads its top-level `timestamp`, and a snapshot reads its nested
+  `snapshot.timestamp`, the only instant that line carries. The UTC string stays matchable
+  in the unit's verbatim JSON body (claim QT-025).
+- A queue rider that quoted the channel envelope reached a flagless scan. The
+  csift-channel keep admits any line carrying `csift-channel v1`. A `queue-operation`
+  rider carries whatever its `<task-notification>` summary says. A pulse that mentioned the
+  envelope therefore surfaced as `harness.bookkeeping.queue` with no `-t` at all, 13 units
+  on one projects root. A `user.queued` or `harness.bookkeeping.*` record now survives only
+  a scan that reaches its own leaf. `-t harness.bookkeeping.queue` (or the family glob)
   still emits the line, and an address still renders it (claim QT-005).
-- **`search --since -1y` was a usage error.** The WHEN grammar tolerates a leading `-`
-  and every other WHEN flag took the space form, but `search`'s `--since` and `--until`
-  lacked the hyphen-value allowance, so clap read `-1y` as an unknown short flag and
-  exited 2 (`unexpected argument '-1' found`) while `--since=-1y` worked. Both flags take
-  it now. `--turn` already did and `--max-count` reads a negative number by design.
-- **`--for` on an address that names no record read as an empty closure.**
-  `search --for L99999999` exited 0 with `for_of {records:0}` and the ordinary
-  zero-match note, so "nothing is for this line" and "this line does not exist" read
-  alike. An address that names no record in any transcript of the scope now fails as
-  `show` does, in the same words (`no such record(s): L99999999 - ...`); the test reads
-  the file's own bytes, so it does not depend on the pattern or the prefilter. A real
-  address whose closure matches nothing stays a definitive absence, exit 0.
-- **Two `wait --help` examples could not run as written.** `csift wait @main --until
-  auq` and `csift wait @<uuid> --until tool:Read:handover` omitted `--timeout`, which
-  `wait` requires, so both were errors when pasted. They carry `--timeout 600`, and a
-  test holds every `csift wait` example on the page to the required flag.
-- **A `show` record row lacked seven keys the `search` hit for the same record
-  carries.** A notification pulse fetched by its hit's own `refetch` came back without
-  `task_ids` and `orphan_kind`, and every row lacked `delivered`, `is_error`,
-  `denial_kind`, `resume_paired` and `scheduled_at`. Both surfaces now build their
-  shared keys through one projector, so a refetch answers every key the hit answered,
-  and `show --help`'s key list names the seven, plus the five draft-distance keys
-  (`superseding_line`, `superseding_uuid`, `diff_chars`, `diff_pct`, `diff_exact`) the
-  row already carried and the list never named.
-- **`status`'s stopped-agents note printed a raw UTC instant.** `N background agent(s)
-  were stopped by the user at 2026-06-07T05:10:00` was the one text instant on the
-  surface not in the canonical local form. It renders through the shared timestamp
-  helper now (`2026-06-07 15:10:00 AEST(UTC+10)` in that zone), at the second
-  precision the note's de-duplication already keyed on.
-- **The stopped-agents notice on the input queue read as the person's text.** Claude
-  Code queues the `N background agents were stopped by the user: ...` notice the way it
-  queues a typed prompt, and csift labelled that queue line `user.queued` (13 records on
-  one live root, 22 on a snapshot) while its delivered twin was already
-  `harness.notification.subagent`. The line keeps no key a person's lacks, so the
-  template itself refuses it, the predicate the delivered record is refused by; it
+- `search --since -1y` was a usage error. The WHEN grammar tolerates a leading `-`, and
+  every other WHEN flag took the space form. `search`'s `--since` and `--until` lacked the
+  hyphen-value allowance, so clap read `-1y` as an unknown short flag and exited 2
+  (`unexpected argument '-1' found`), while `--since=-1y` worked. Both flags take it now.
+  `--turn` already did, and `--max-count` reads a negative number by design.
+- `--for` on an address that names no record read as an empty closure.
+  `search --for L99999999` exited 0 with `for_of {records:0}` and the ordinary zero-match
+  note. "Nothing is for this line" and "this line does not exist" read alike. An address
+  that names no record in any transcript of the scope now fails as `show` does, in the same
+  words (`no such record(s): L99999999 - ...`). The test reads the file's own bytes, so it
+  does not depend on the pattern or the prefilter. A real address whose closure matches
+  nothing stays a definitive absence, exit 0.
+- Two `wait --help` examples could not run as written. `csift wait @main --until auq` and
+  `csift wait @<uuid> --until tool:Read:handover` omitted `--timeout`, which `wait`
+  requires, so both failed when pasted. They carry `--timeout 600` now, and a test holds
+  every `csift wait` example on the page to the required flag.
+- A `show` record row lacked seven keys that the `search` hit for the same record carries.
+  A notification pulse fetched by its hit's own `refetch` came back without `task_ids` and
+  `orphan_kind`. Every row lacked `delivered`, `is_error`, `denial_kind`, `resume_paired`
+  and `scheduled_at`. Both surfaces now build their shared keys through one projector, so a
+  refetch answers every key the hit answered. `show --help`'s key list names the seven,
+  plus the five draft-distance keys (`superseding_line`, `superseding_uuid`, `diff_chars`,
+  `diff_pct`, `diff_exact`) that the row already carried and the list never named.
+- `status`'s stopped-agents note printed a raw UTC instant. `N background agent(s)
+  were stopped by the user at 2026-06-07T05:10:00` was the one text instant on the surface
+  not in the canonical local form. It now renders through the shared timestamp helper, as
+  `2026-06-07 15:10:00 AEST(UTC+10)` in that zone, at the second precision the note's
+  de-duplication already keyed on.
+- The stopped-agents notice on the input queue read as the person's text. Claude Code
+  queues the `N background agents were stopped by the user: ...` notice the way it queues
+  a typed prompt. csift labelled that queue line `user.queued`, 13 records on one live root
+  and 22 on a snapshot, while its delivered twin was already
+  `harness.notification.subagent`. The line keeps no key a person's line lacks, so the
+  template itself refuses it, through the predicate that refuses the delivered record. It
   takes `harness.bookkeeping.queue` like every other rider (claim QT-005).
-- **`status` and `wait` answered a multi-session target for one session it picked.**
-  `csift status <project path>` resolved every session in the directory and reported
-  the first by sort order, with nothing saying so (on one live project directory, 23
-  sessions and a verdict for an idle one nobody named). Both commands now refuse a
-  target that resolves to more than one session id, naming the count and the target
-  grammar; copies of one session id still count as one.
-- **One agent id at both sidecar locations of one session was read in halves.** A workflow
+- `status` and `wait` answered a multi-session target for one session they picked.
+  `csift status <project path>` resolved every session in the directory and reported the
+  first by sort order, with nothing saying so. On one live project directory that meant 23
+  sessions and a verdict for an idle one nobody named. Both commands now refuse a target
+  that resolves to more than one session id, naming the count and the target grammar.
+  Copies of one session id still count as one.
+- One agent id at both sidecar locations of one session was read in halves. A workflow
   agent whose conversation continued past its run has a second transcript at the built-in
-  `subagents/agent-<id>.jsonl` beside its `subagents/workflows/<run>/` one (a continuation,
-  not a copy). `@<id>` read one half with nothing said, a `*.jsonl` path naming the built-in
-  file read the workflow file instead, and the note `list` printed for the pair called it
-  two project directories. Every route now takes one rule: `@<id>` reads both halves, a
-  path reads the file it names and names the other on stderr (two paths naming
-  byte-identical copies of one transcript still read as one), and the note says the pair
-  sits under one session's sidecar at the built-in and the workflow locations (claim
-  PATH-017; PATH-014 refined). `show @<id>` still refuses the pair and names both paths.
-- **`whoami --help`'s fallback recipe built `@null`.** Its second line read
-  `parent_session_id` off a `whoami` identity row, which the env form leaves null (the
-  environment names the top-level session in every lane, so it cannot say which lane
-  the caller is). The recipe reads the parent off the `agents` node instead and says
-  that `no subagent matched` means the env id is already the root; a test holds every
-  recipe on the page off the identity row's parent.
-- **`show`'s address miss spelled a range with a dash.** `csift show @<id> --line 99999..`
-  on a 5,003-line file failed with `no such record(s): L99999-5003`, while `--line`
-  refuses the `A-B` form it printed. Both fetch modes now name a missed range in a spelling
-  the parser accepts when pasted back: the grammar's own `A..B` for a range that resolved in
-  order, and the range as written for one that resolved backwards - `--line 99999..` misses
-  as `L99999.. (file has 5003 lines)`, where the resolved pair `L99999..5003` is a range
+  `subagents/agent-<id>.jsonl`, beside its `subagents/workflows/<run>/` one. The second is
+  a continuation and not a copy. `@<id>` read one half and said nothing. A `*.jsonl` path
+  naming the built-in file read the workflow file instead. The note `list` printed for the
+  pair called it two project directories. Every route now takes one rule. `@<id>` reads
+  both halves. A path reads the file it names and names the other on stderr, and two paths
+  naming byte-identical copies of one transcript still read as one. The note says the pair
+  sits under one session's sidecar, at the built-in and the workflow locations (claim
+  PATH-017, PATH-014 refined). `show @<id>` still refuses the pair and names both paths.
+- `whoami --help`'s fallback recipe built `@null`. Its second line read
+  `parent_session_id` off a `whoami` identity row, and the env form leaves that key null.
+  The environment names the top-level session in every lane, so it cannot say which lane
+  the caller is. The recipe now reads the parent off the `agents` node, and it says that
+  `no subagent matched` means the env id is already the root. A test holds every recipe on
+  the page off the identity row's parent.
+- `show`'s address miss spelled a range with a dash. `csift show @<id> --line 99999..` on
+  a 5,003-line file failed with `no such record(s): L99999-5003`, and `--line` refuses the
+  `A-B` form it printed. Both fetch modes now name a missed range in a spelling the parser
+  accepts when pasted back. A range that resolved in order uses the grammar's own `A..B`.
+  A range that resolved backwards is printed as written. `--line 99999..` misses as
+  `L99999.. (file has 5003 lines)`, because the resolved pair `L99999..5003` is a range
   `--line` refuses as reversed.
-- **`show` booked lines past the end of the file as non-record lines.** `--line 4995..5045`
-  on a 5,003-line transcript reported `records: 9, non_record_lines: 42`: the 42 lines
-  that do not exist were counted with the metadata lines that do. A range is now clamped
-  to the file and the overhang is its own count, JSON `lines_past_end` beside
-  `non_record_lines`, with a footer line (a stderr note under `--raw`) naming the file's
-  last line; the same address now reads `non_record_lines: 0, lines_past_end: 42`. A line
-  or range that starts past the end stays a miss, and the miss names the file's line
-  count in both fetch modes. `show --help` names the new key.
-- **`verbatim` let the last span flag win.** `csift verbatim @<id> --subagents
+- `show` booked lines past the end of the file as non-record lines. `--line 4995..5045` on
+  a 5,003-line transcript reported `records: 9, non_record_lines: 42`. The 42 lines that do
+  not exist were counted with the metadata lines that do. A range is now clamped to the
+  file, and the overhang gets its own count, JSON `lines_past_end` beside
+  `non_record_lines`. A footer line (a stderr note under `--raw`) names the file's last
+  line. The same address now reads `non_record_lines: 0, lines_past_end: 42`. A line or
+  range that starts past the end stays a miss, and the miss names the file's line count in
+  both fetch modes. `show --help` names the new key.
+- `verbatim` let the last span flag win. `csift verbatim @<id> --subagents
   --no-subagents` exited 0 and quietly reconstructed the top-level thread, while every
   other span command refuses the pair as a usage error. `verbatim` now declares the same
-  conflict and exits 2 on the pair in either order; `verbatim --help` no longer says
+  conflict and exits 2 on the pair in either order. `verbatim --help` no longer says
   `--no-subagents` cancels an earlier `--subagents`.
-- **`stats` counted its scope after the row cap.** `csift stats . --max-count 1 --format json`
-  headed its stream `sessions_in_scope: 1` while `csift list . --max-count 1` read 1,713 for
-  the same target: `stats` counted the rows it kept. The scope banner and the JSON header now
-  count the whole resolved scope before the cap trims the rows, the rule `list` already kept,
-  so the two commands report one scope for one target (after the change both read 1,722
-  for `.`).
-- **Smart-case read the letter in an escape as uppercase.** `\Sbash` searched
-  case-sensitively (38 records on one transcript, the `(?-i)\Sbash` count) because the `S`
-  of `\S` was taken for an uppercase letter, while `(?i)\Sbash` found 46. Smart-case now
-  reads the parsed pattern, ripgrep's rule: a letter the pattern spells counts, bare or in
-  a bracket class (`[A-Z]` stays case-sensitive), and `\S`, `\W`, `\D` and `\B` do not, so
-  `\Sbash` reads 46 and `\Wbash` 68. `search --help` states the rule.
-- **Two help recipes read the envelope's header first.** `csift status @<uuid> --format json
-  | jq .verdict` on `status --help` printed `null` (the header) before the verdict, and `csift
+- `stats` counted its scope after the row cap. `csift stats . --max-count 1 --format json`
+  headed its stream `sessions_in_scope: 1`, while `csift list . --max-count 1` read 1,713
+  for the same target, because `stats` counted the rows it kept. The scope banner and the
+  JSON header now count the whole resolved scope before the cap trims the rows, the rule
+  `list` already kept. The two commands report one scope for one target, and after the
+  change both read 1,722 for `.`.
+- Smart-case read the letter in an escape as uppercase. `\Sbash` searched case-sensitively,
+  38 records on one transcript (the `(?-i)\Sbash` count), because the `S` of `\S` was taken
+  for an uppercase letter. `(?i)\Sbash` found 46. Smart-case now reads the parsed pattern,
+  ripgrep's rule. A letter the pattern spells counts, bare or in a bracket class (`[A-Z]`
+  stays case-sensitive), and `\S`, `\W`, `\D` and `\B` do not. `\Sbash` now reads 46 and
+  `\Wbash` 68. `search --help` states the rule.
+- Two help recipes read the envelope's header first. `csift status @<uuid> --format json
+  | jq .verdict` on `status --help` printed `null` (the header) before the verdict. `csift
   msg <ID> --format json | jq .fact` on `msg --help` printed `null` around the fact. Both
   recipes now select the row that carries the key (`select(.kind=="verdict").verdict`,
-  `select(.kind=="msg").fact`), and a test holds every `jq` recipe on every help page to a row
+  `select(.kind=="msg").fact`). A test holds every `jq` recipe on every help page to a row
   select, `tail -1`, or `wait`'s single object.
-- **A malformed session-id variable was read as a session.** `CLAUDE_CODE_SESSION_ID=not-a-uuid
+- A malformed session-id variable was read as a session. `CLAUDE_CODE_SESSION_ID=not-a-uuid
   csift whoami` printed `session  not-a-uuid` and exited 0. Claude Code writes the calling
   session's own id there, a uuid on every build, so any other shape was set by something
   else. `whoami`, every `@main` resolution, `plan` with no target, `msg` and `ack` now read
-  the variables through one reader that refuses such a value, naming the variable, the value
-  and the `@<uuid>` remedy; an unset or blank variable still reads as not set. `@main`'s
-  note that it resolved the top-level session via the environment now follows the read, so
-  a refused or unset variable prints its refusal alone.
-- **An empty target token scoped to the current directory.** `csift search zzqq ""` searched
-  every session of the cwd's project (1,722 of them) and exited 0: the empty token was read
-  as the empty relative path. Sixteen target spots now refuse an empty or whitespace-only
-  target at parse time (exit 2) with the target grammar in the message: the twelve commands
-  that take a path target, and the four channel spots that take a lane as a string, where
-  `send "" <text>` had queued the message to the cwd's session and `whoami --to ""`
-  predicted a delivery to it (`msg --lane ""` and `ack --lane ""` were refused, by the
-  @-grammar at run time). An empty `$(...)` substitution is the usual source, and the
-  message says so. `search ""` as the PATTERN is unchanged.
-- **The three terminal modes said nothing about a zero-match search.** `csift search
+  the variables through one reader that refuses such a value. The refusal names the
+  variable, the value and the `@<uuid>` remedy. An unset or blank variable still reads as
+  not set. `@main`'s note that it resolved the top-level session via the environment now
+  follows the read, so a refused or unset variable prints its refusal alone.
+- An empty target token scoped to the current directory. `csift search zzqq ""` searched
+  every session of the cwd's project (1,722 of them) and exited 0, because the empty token
+  was read as the empty relative path. Sixteen target spots now refuse an empty or
+  whitespace-only target at parse time (exit 2), with the target grammar in the message.
+  They are the twelve commands that take a path target, and the four channel spots that
+  take a lane as a string. There `send "" <text>` had queued the message to the cwd's
+  session, and `whoami --to ""` predicted a delivery to it. `msg --lane ""` and
+  `ack --lane ""` were already refused, by the @-grammar at run time. An empty `$(...)`
+  substitution is the usual source, and the message says so. `search ""` as the PATTERN is
+  unchanged.
+- The three terminal modes said nothing about a zero-match search. `csift search
   zzqqnothing @<id> -c` printed `0` and no diagnosis, and `-l`, `--count-by` and `--raw`
-  were as silent, while the ordinary render framed the same absence on stderr as definitive
-  and, under a label filter, named the labels the pattern does occur under. Every mode now
-  prints that diagnosis on stderr; stdout is unchanged.
-- **`agents --agent` refused the `@` sigil.** `csift agents @<uuid> --agent @<agent-id>`
-  failed with `no subagent matched id` while every other id position takes the sigil and
+  were as silent. The ordinary render framed the same absence on stderr as definitive and,
+  under a label filter, named the labels the pattern does occur under. Every mode now
+  prints that diagnosis on stderr, and stdout is unchanged.
+- `agents --agent` refused the `@` sigil. `csift agents @<uuid> --agent @<agent-id>`
+  failed with `no subagent matched id`, while every other id position takes the sigil and
   the error's own remedy prints ids beside `@<uuid>`. The flag now takes the id bare or
-  `@`-prefixed and both grab the same node; `agents --help` says so. One sigil is all it
-  takes: a token still carrying an `@` after it (`@@<id>`, a `<Name>@<Team>` routing form)
-  is refused as no agent id, where it was searched for and reported unmatched.
-- **`search --for L<n>` walked every transcript in scope.** A line number names a record in
-  one file, yet `csift search "" --for L42` with no target closed over line 42 of every
-  transcript under the projects root (1,308,495 output lines on one machine), and over a
+  `@`-prefixed, and both grab the same node. `agents --help` says so. One sigil is all it
+  takes. A token still carrying an `@` after it (`@@<id>`, a `<Name>@<Team>` routing form)
+  is refused as no agent id, where it used to be searched for and reported unmatched.
+- `search --for L<n>` walked every transcript in scope. A line number names a record in
+  one file. `csift search "" --for L42` with no target still closed over line 42 of every
+  transcript under the projects root, 1,308,495 output lines on one machine. Over a
   session with subagents it mixed a different record's closure from each file. A line
-  address now needs a scope that resolves to exactly one transcript and is refused with the
-  count otherwise; a uuid address, which names its record in any scope, is unchanged.
-- **`agents` called a lane completed in the middle of its work.** A subagent whose newest
-  record was a RETURNED tool_result (the model still writing its next block) read
-  `completed`, with `completed_utc` set to that record's instant, because the end-of-turn
-  check walked back to an earlier turn's text; a running lane measured that way while
+  address now needs a scope that resolves to exactly one transcript, and it is refused
+  with the count otherwise. A uuid address names its record in any scope and is
+  unchanged.
+- `agents` called a lane completed in the middle of its work. A subagent whose newest
+  record was a returned tool_result, with the model still writing its next block, read
+  `completed`, and `completed_utc` was set to that record's instant. The end-of-turn check
+  had walked back to an earlier turn's text. A running lane was measured that way while
   `status` counted it live in the same minute. The verdict now comes from the newest
-  meaningful record, the one the frozen-lane check already reads: an assistant text ending
-  its turn is `completed`, a returned tool_result (or a text stamped `stop_reason:
-  "tool_use"`, whose call is still to come) is `running` with no completion instant. On one
+  meaningful record, the one the frozen-lane check already reads. An assistant text ending
+  its turn is `completed`. A returned tool_result, or a text stamped `stop_reason:
+  "tool_use"` whose call is still to come, is `running` with no completion instant. On one
   root 150 of 10,947 lanes move from `completed` to `running`, every one stopped mid-turn
-  hours ago (127 by an interrupt); `running` is documented as "still running, or
+  hours ago, 127 of them by an interrupt. `running` is documented as "still running, or
   interrupted" (claim SUB-034). `agents --help` states the rule.
-- **`status` counted a finished workflow's agents as in flight forever.** On a session
-  whose 31 workflow runs had all ended, `status` read `1399 lane(s), 145 live (144 workflow
-  agent(s) in flight)`: it summed `started` minus `result` over every journal, and an agent
-  that failed writes `failed` instead, while one killed with its run writes neither. The
-  in-flight count now covers only runs with no manifest yet (the harness writes a run's
-  manifest once it ends) and counts `failed` as a close, and a workflow lane is settled by
-  its ended run or its journal's closing line before its tail is read; the same session
-  reads `1399 lane(s), 1 live` (claim TAIL-008). An open agent whose own lane is already
-  live by its tail is counted once, not again through its journal's `started` line.
-  `agents` reads the same rule before a lane's tail: on that session it had called 42
-  workflow lanes `running` that `status` settled, and now calls none; `agents --help`
+- `status` counted a finished workflow's agents as in flight forever. On a session whose
+  31 workflow runs had all ended, `status` read `1399 lane(s), 145 live (144 workflow
+  agent(s) in flight)`. It summed `started` minus `result` over every journal. An agent
+  that failed writes `failed` instead, and one killed with its run writes neither. The
+  in-flight count now covers only runs with no manifest yet, since the harness writes a
+  run's manifest once the run ends, and it counts `failed` as a close. A workflow lane is
+  settled by its ended run or its journal's closing line before its tail is read. The same
+  session reads `1399 lane(s), 1 live` (claim TAIL-008). An open agent whose own lane is
+  already live by its tail is counted once, and not again through its journal's `started`
+  line. `agents` reads the same rule before a lane's tail. On that session it had called 42
+  workflow lanes `running` that `status` settled, and it now calls none. `agents --help`
   states the rule.
-- **`agents` called a lane its run killed, or its journal failed, `completed`.** A workflow
-  lane settled by its run read `completed` with a completion instant whatever the run said:
-  a lane of a run whose manifest reads `killed`, and a lane its journal closes with
-  `failed`, looked exactly like a lane that returned. The run's word now decides: the
-  agent's journal line first (`result` completed, `failed` failed), else the ended run's
-  manifest status verbatim, so such a lane reads `killed` or `failed`, carries no
-  `completed_utc` or `duration`, and names why - JSON `settled_by`, and the same words in
-  brackets on the text row, as `status` words a settled lane. A lane that returned before
-  its run was killed still reads `completed`. On the live root 224 of 10,992 lanes move:
-  120 to `failed` by their journal line, 101 to `killed` and 3 to `failed` by their run's
-  manifest (claim SUB-034).
-- **`files` joined an unexpanded shell variable onto the cwd.** A script writing
+- `agents` called a lane `completed` when its run killed it or its journal failed it. A
+  workflow lane settled by its run read `completed`, with a completion instant, whatever
+  the run said. A lane of a run whose manifest reads `killed`, and a lane its journal
+  closes with `failed`, looked exactly like a lane that returned. The run's word now
+  decides. The agent's journal line comes first (`result` means completed, `failed` means
+  failed), and otherwise the ended run's manifest status applies verbatim. Such a lane
+  reads `killed` or `failed`, carries no `completed_utc` or `duration`, and names why in
+  JSON `settled_by`. The text row carries the same words in brackets, as `status` words a
+  settled lane. A lane that returned before its run was killed still reads `completed`. On
+  the live root 224 of 10,992 lanes move. 120 move to `failed` by their journal line, and
+  101 to `killed` and 3 to `failed` by their run's manifest (claim SUB-034).
+- `files` joined an unexpanded shell variable onto the cwd. A script writing
   `$FIX/.claude/.../$parent.jsonl` from an unquoted heredoc was reported as `cwd-joined`
   with the path `<cwd>/$FIX/.claude/.../$parent.jsonl`, a file that never existed. An
   operand still carrying `$` or a backtick is now `unresolved` and kept verbatim, whatever
-  its shape; over one root 98 rows move (35 `cd-tracked`, 63 `cwd-joined`) and no other row
-  changes class. A `~` operand stays `unresolved`, since the recording shell's HOME is not
-  in the transcript (claim BASH-023).
-- **A fallback-served turn's `served_by` reached no scan.** Every `fallback` block on disk
-  is the sole block of its record (48 of 48 on one root), so the record had no text and a
-  scan emitted nothing for it: `show --line` rendered `served_by`, while `search` over the
-  12 sessions that carry a refusal returned 0 hits with it. The record now emits one
-  `agent.message.plain` unit on a scan as under an address, its body the marker's own
-  words (`served by <to.model>, fell back from <from.model>`), so `-t agent.message.plain`,
-  a model id or `fell back` reach it; the same query now returns 46 hits, one per distinct
-  record. A record that fell back and spoke keeps the marker on its text unit and emits no
-  second one. `search --help` says so (claim CLS-060).
-- **A loop tick fired by the scheduler lost its instant and its edge.** A fired prompt whose
-  armed text opens with a loop marker takes the wakeup or tick leaf, and those read
-  `scheduled_at: null` with only a `parent` edge, although a `scheduled_task_fire` record is
-  their parent exactly as it is a plain fired prompt's (3 such prompts on one root). The
+  its shape. Over one root 98 rows move (35 `cd-tracked`, 63 `cwd-joined`), and no other
+  row changes class. A `~` operand stays `unresolved`, since the recording shell's HOME is
+  not in the transcript (claim BASH-023).
+- A fallback-served turn's `served_by` reached no scan. Every `fallback` block on disk is
+  the sole block of its record (48 of 48 on one root), so the record had no text and a scan
+  emitted nothing for it. `show --line` rendered `served_by`, while `search` over the 12
+  sessions that carry a refusal returned 0 hits with it. The record now emits one
+  `agent.message.plain` unit on a scan, as under an address, with the marker's own words
+  as its body (`served by <to.model>, fell back from <from.model>`). `-t
+  agent.message.plain`, a model id or `fell back` now reach it, and the same query returns
+  46 hits, one per distinct record. A record that fell back and spoke keeps the marker on
+  its text unit and emits no second one. `search --help` says so (claim CLS-060).
+- A loop tick fired by the scheduler lost its instant and its edge. A fired prompt whose
+  armed text opens with a loop marker takes the wakeup or tick leaf. Those leaves read
+  `scheduled_at: null` with only a `parent` edge, although a `scheduled_task_fire` record
+  is their parent exactly as it is a plain fired prompt's (3 such prompts on one root). The
   instant and the `fires` edge are now read off the parent link for every leaf a fired
-  prompt can carry (fire, wakeup, tick), the fire index is built whenever a selection
-  reaches one of those leaves, and the label zone prints `[scheduled fire <when>]` on them;
-  a tick with no fire record above it carries neither, and so does any OTHER record whose
-  parent is a fire record - Claude Code parents each append to the running tail, so a
-  background agent's `<task-notification>` arriving next is one, and it did not fire
-  (claim CLS-032).
-- **The `history-suppression` head printed a raw UTC instant.** `csift search ''
+  prompt can carry, which are fire, wakeup and tick. The fire index is built whenever a
+  selection reaches one of those leaves, and the label zone prints `[scheduled fire
+  <when>]` on them. A tick with no fire record above it carries neither. Neither does any
+  other record whose parent is a fire record. Claude Code parents each append to the
+  running tail, so a background agent's `<task-notification>` arriving next is such a
+  record, and it did not fire (claim CLS-032).
+- The `history-suppression` head printed a raw UTC instant. `csift search ''
   <session> -t harness.bookkeeping.suppression` showed `ts=2026-09-03T00:23:01.606Z`, the
-  last text instant in the bookkeeping family not in csift's local form. A head value that
-  is an RFC 3339 instant now renders as the local text every other text instant takes
-  (`ts=2026-09-03 10:23:01.606 AEST(UTC+10)` in that zone); the UTC string stays matchable
-  in the unit's verbatim JSON body. `cost-state`'s `startTime` is an epoch-millisecond
-  number, not an instant string, and prints as written (claim QT-049).
-- **`files --help` named row keys the rows do not carry.** Its `op` list stopped at
-  `notebook_edit` although the timeline reports `external_write` (49 rows on one root), the
-  timeline schema left out `line` and `detail`, the `--by file` schema called the group key
-  `file` where the row carries `path`, and the dir and summary views were said to group
-  "under a `dir`/`bucket` key" where those are the row KINDS and the group sits in `path`.
-  The page now lists what the rows carry, and a test holds each view's row keys to its
-  schema entry.
-- **The root `--help` page said every command emits one envelope and three commands
-  write.** `deliver` prints a hook-output object or nothing and `wait` one bare
-  `{kind:"wait"}` object, and `recover --out`, `recover --files-from ... --out-dir`,
+  last text instant in the bookkeeping family that was not in csift's local form. A head
+  value that is an RFC 3339 instant now renders as the local text every other text instant
+  takes, `ts=2026-09-03 10:23:01.606 AEST(UTC+10)` in that zone. The UTC string stays
+  matchable in the unit's verbatim JSON body. `cost-state`'s `startTime` is an
+  epoch-millisecond number and no instant string, and it prints as written (claim
+  QT-049).
+- `files --help` named row keys the rows do not carry. Its `op` list stopped at
+  `notebook_edit`, although the timeline reports `external_write` (49 rows on one root).
+  The timeline schema left out `line` and `detail`. The `--by file` schema called the
+  group key `file` where the row carries `path`. The dir and summary views were said to
+  group "under a `dir`/`bucket` key", where those are the row kinds and the group sits in
+  `path`. The page now lists what the rows carry, and a test holds each view's row keys to
+  its schema entry.
+- The root `--help` page said every command emits one envelope and three commands write.
+  `deliver` prints a hook-output object or nothing, and `wait` prints one bare
+  `{kind:"wait"}` object. `recover --out`, `recover --files-from ... --out-dir`,
   `verbatim --out` and `image --out` write wherever the user points them. The page now
-  names the two envelope exceptions and lists each user-named output with what it writes
-  and whether it replaces an existing file; a test derives the output flags from the clap
+  names the two envelope exceptions and lists each user-named output, with what it writes
+  and whether it replaces an existing file. A test derives the output flags from the clap
   tree and requires the page to name each.
-- **`search --help` described a scan wider than the one it runs, and named the wrong gate
-  on three leaves.** "With no `-t`, every label is searched" skipped the gated leaves (the
-  whole `harness.bookkeeping` category, the gated attachment, system and turn leaves); the
-  page now says a flagless scan reaches the leaves the tree tags `[scan]` or
-  `[scan/needle]` and that a gated leaf needs `-t` (or `--attachments`). The tree tagged
-  `harness.hook.context` `[-t]` while `--attachments` admits it, and the csift-channel
-  delivery `[scan]` beside a sentence calling it a needle leaf. The `-t` flag named three
-  of the 28 leaves a bare face skips and gave `system`/`local_command` as its delivery
-  example, whose leaf the model receives anyway; it now names all 28 by group and uses a
-  rendered `hook_success`. The EXPOSED KEYS section said five keys render a tag (six do)
-  and never named `stop_reason` / `stop_details`; the attachment section kept a sentence
-  saying the mid-turn steer reads `[payload]`; and `harness.context.skill` is now described
-  as any injected skill body, not only a subagent's preloaded one. Tests derive every
-  leaf's gate word from the candidate gate's own leaf sets, every skipped leaf from the
-  visibility table and every key from the keys family's projector.
-- **`msg --help` called a csift-channel delivery the one attachment payload a default
-  scan parses.** Three attachment leaves are reached by a flagless scan: the channel
-  delivery, the person's mid-turn steer and the model's structured answer. The page now
-  says so, and says that `msg` reads the delivery off the envelope header at the start of
-  a hook-context attachment rather than running a search.
-- **`whoami --help` said a built-in subagent's environment holds its own id, and that
-  whoami takes `@trap:<marker>` or `@main` only.** Its long description contradicted its
-  own after-help: current Claude Code hands every lane the top-level session's id, the
-  subagent's own being withheld. And a lane id (`@<agent-id>`) and a teammate's routing
-  form (`@<Name>@<Team>`) both resolve as the self target, printing that lane's sections.
-  The page now states the one reading and names all four forms and the refused session
-  uuid; a test holds both.
-- **`verbatim --help` said csift's own walk stops at a compaction cut, and named the
-  exchange header `s·t<n>`.** The survival walk crosses up to `--cross-compactions`
-  boundaries (default 3) through each boundary's `logicalParentUuid`, and only budget 0
-  stops where Claude Code's loader does; the turns it reaches read `live`, and file order
+- `search --help` described a scan wider than the one it runs, and it named the wrong
+  gate on three leaves. "With no `-t`, every label is searched" skipped the gated leaves,
+  which are the whole `harness.bookkeeping` category and the gated attachment, system and
+  turn leaves. The page now says a flagless scan reaches the leaves the tree tags `[scan]`
+  or `[scan/needle]`, and that a gated leaf needs `-t` (or `--attachments`). The tree
+  tagged `harness.hook.context` as `[-t]`, while `--attachments` admits it. It tagged the
+  csift-channel delivery `[scan]` beside a sentence calling it a needle leaf. The `-t` flag
+  named three of the 28 leaves a bare face skips. It gave `system`/`local_command` as its
+  delivery example, a leaf the model receives anyway. It now names all 28 by group and
+  uses a rendered `hook_success`. The EXPOSED KEYS section said five keys render a tag,
+  where six do, and it never named `stop_reason` / `stop_details`. The attachment section
+  kept a sentence saying the mid-turn steer reads `[payload]`. `harness.context.skill` is
+  now described as any injected skill body, beyond a subagent's preloaded one. Tests derive
+  every leaf's gate word from the candidate gate's own leaf sets, every skipped leaf from
+  the visibility table and every key from the keys family's projector.
+- `msg --help` called a csift-channel delivery the one attachment payload a default scan
+  parses. A flagless scan reaches three attachment leaves, the channel delivery, the
+  person's mid-turn steer and the model's structured answer. The page now says so. It also
+  says that `msg` reads the delivery off the envelope header at the start of a
+  hook-context attachment and runs no search.
+- `whoami --help` said a built-in subagent's environment holds its own id, and that
+  whoami takes `@trap:<marker>` or `@main` only. Its long description contradicted its own
+  after-help. Current Claude Code hands every lane the top-level session's id and
+  withholds the subagent's own. A lane id (`@<agent-id>`) and a teammate's routing form
+  (`@<Name>@<Team>`) both resolve as the self target and print that lane's sections. The
+  page now states the one reading and names all four forms and the refused session uuid. A
+  test holds both.
+- `verbatim --help` said csift's own walk stops at a compaction cut, and it named the
+  exchange header `s·t<n>`. The survival walk crosses up to `--cross-compactions`
+  boundaries (default 3) through each boundary's `logicalParentUuid`. Only budget 0 stops
+  where Claude Code's loader does. The turns the walk reaches read `live`, and file order
   still replays the ones above the floor as `pre-cut`. The header token `search` prints is
   `<tok>·t<N>`. A test reads the default off the flag's own constant.
-- **`agents --help` put the notification pulses under `search -t user` and read a run's
-  status off the journal.** A `<task-notification>` pulse is `harness.notification.<kind>`,
-  never `user`, and its kind set includes `workflow`, the one token the page says the two
-  axes share. A RUN row's `status` is the run manifest's own field
-  (`<session>/workflows/<run>.json`, written once the run ends); the journal carries no
-  run status. The page now says both, and lists `failed` beside `completed` and `killed`.
-- **`plan --help` said `--reverse` matches `plan_mode` attachments only, and two messages
-  said a plan is bound only by entering Plan Mode.** The reverse lookup resolves each
-  transcript's binding by the same two laws as the forward direction, so a session bound
-  by its first slug alone (a forked or background session) is found too, with
+- `agents --help` put the notification pulses under `search -t user` and read a run's
+  status off the journal. A `<task-notification>` pulse is `harness.notification.<kind>`
+  and never `user`. Its kind set includes `workflow`, the one token the page says the two
+  axes share. A run row's `status` is the run manifest's own field
+  (`<session>/workflows/<run>.json`, written once the run ends), and the journal carries
+  no run status. The page now says both and lists `failed` beside `completed` and
+  `killed`.
+- `plan --help` said `--reverse` matches `plan_mode` attachments only, and two messages
+  said a plan is bound only by entering Plan Mode. The reverse lookup resolves each
+  transcript's binding by the same two laws as the forward direction. A session bound by
+  its first slug alone, such as a forked or background session, is found too, with
   `binding_source: "slug-only"`. The flag's help now names both laws, and the
   `recover --file @plan` refusal and the `plan` no-binding note name both as absent.
-- **`verbatim`'s markers never agreed with a count of one.** A turn with one tool call
-  printed `[1 tool calls]` and a cut removing one line printed `1 lines elided`, while the
-  fold placeholder already wrote `1 agent message`. The kept-turn marker, the elision
-  marker and the placeholder's character count now take the placeholder's rule, each
-  noun agreeing with its own count (`[1 tool call]`, `[+1 char, 1 line elided]`); the
-  cost model reads the same line the renderer prints. Three lines of the golden baseline
-  moved: two `[1 tool calls]` markers and the header's chars-used total, which counts
-  them.
-- **`verbatim --help` said Claude Code's hook-context cap counts Unicode scalars.** It
-  counts UTF-16 code units: the same number for BMP text, CJK included, but an emoji or a
-  CJK ext-B character is one scalar and two code units, so a `--window` sized at the cap
-  can cross it. The `--slice` and `--window` help now name the two units apart and ask for
-  more headroom on a document carrying astral characters.
-- **A duplicate note said "under 1 project directories".** Two copies of one agent id in
-  two sessions of one project read `at 2 paths under 1 project directories`; the count now
+- `verbatim`'s markers never agreed with a count of one. A turn with one tool call printed
+  `[1 tool calls]`, and a cut removing one line printed `1 lines elided`, while the fold
+  placeholder already wrote `1 agent message`. The kept-turn marker, the elision marker
+  and the placeholder's character count now follow the placeholder's rule, each noun
+  agreeing with its own count (`[1 tool call]`, `[+1 char, 1 line elided]`). The cost model
+  reads the same line the renderer prints. Three lines of the golden baseline moved, two
+  `[1 tool calls]` markers and the header's chars-used total, which counts them.
+- `verbatim --help` said Claude Code's hook-context cap counts Unicode scalars. It counts
+  UTF-16 code units. That is the same number for BMP text, CJK included. An emoji or a CJK
+  ext-B character is one scalar and two code units, so a `--window` sized at the cap can
+  cross it. The `--slice` and `--window` help now name the two units apart and ask for more
+  headroom on a document carrying astral characters.
+- A duplicate note said "under 1 project directories". Two copies of one agent id in two
+  sessions of one project read `at 2 paths under 1 project directories`. The count now
   takes its noun in the singular at one, like every other count the disclosure prints.
-- **`plan` bound every subagent to its session's plan file.** With no `plan_mode`
-  attachment the first slug binds, and a subagent's records carry the session's slug, so
-  every subagent transcript resolved to the session's `<slug>.md`: one session with 1,401
+- `plan` bound every subagent to its session's plan file. With no `plan_mode` attachment
+  the first slug binds, and a subagent's records carry the session's slug. Every subagent
+  transcript therefore resolved to the session's `<slug>.md`. One session with 1,401
   subagents printed 1,402 bindings of that one file, and `plan --reverse` on it listed all
-  of them. Claude Code names a subagent's plan `<slug>-agent-<agent id>.md`, the lane's id
-  verbatim (a teammate's name included), and the slug law now names that file for a
-  subagent transcript; `binding_source` stays `slug-only`. The reverse lookup of the
-  session's plan now finds the session alone, and each of the two subagent plan files on
-  disk whose transcript survives now resolves to that subagent.
-- **A channel message of emoji or rare CJK could arrive as a file pointer.** The chunker
-  kept each chunk within 9,200 characters, while the harness spills an `additionalContext`
-  over 10,000 UTF-16 code units to disk and shows the model a pointer and a preview without
-  the envelope header. An emoji or a CJK extension-B ideograph is one character and two
-  units, so a body of 6,000 emoji rendered one chunk of 12,486 units. The budget is now
-  counted in code units and every cut falls between whole characters: that body renders
-  two parts of 9,199 and 3,335 units, and `send` counts the parts the same way. Bodies of
-  ASCII and BMP text chunk exactly as before.
-- **A zero-match search called `harness.hook.context` reachable only by `-t`.** Its
-  inventory row still carried the selector-only gate from before `--attachments` covered
-  it, so the note listing the leaves a run never scanned named it even on an
-  `--attachments` run that had parsed its line, and a run that named the leaf printed no
-  note although the 23 other selector-only leaves went unscanned. The row now carries the
-  attachment gate the scan applies: the note lists 23 leaves, never the hook context, and
-  `-t harness.hook.context` alone prints it with `gated_leaves_unreached: true`. The
-  SPEC inventory table's row reads `-t or --attachments`.
-- **An excerpt clipped by one character said `… (+1 chars)`.** The explicit elision
-  marker every excerpt ends with - `search`'s head and match-centered forms, `list`'s
-  previews, `show --turn`, `agents --returned-message`, the bookkeeping heads - now names
-  one character in the singular, `… (+1 char)`, through the same count-and-noun rule the
-  `verbatim` markers take. Both marker builders go through one function, so the forms
-  cannot drift apart again.
-- **A zero-match search without `--attachments` said nothing about the attachment lines it
-  skipped.** A flagless scan reads an attachment line only through the three default
-  needles, so a pattern whose only match sits in, say, a hook's injected context returned
-  0 with no word on stderr about those lines. The zero-match note now also names the
-  attachment leaves the scan did not read, and that `--attachments` or a `-t` naming the
-  leaf reaches them, whenever neither was given; the JSON summary carries the list as
+  of them. Claude Code names a subagent's plan `<slug>-agent-<agent id>.md`, with the
+  lane's id verbatim (a teammate's name included). The slug law now names that file for a
+  subagent transcript, and `binding_source` stays `slug-only`. The reverse lookup of the
+  session's plan now finds the session alone. Each of the two subagent plan files on disk
+  whose transcript survives now resolves to that subagent.
+- A channel message of emoji or rare CJK could arrive as a file pointer. The chunker kept
+  each chunk within 9,200 characters. The harness spills an `additionalContext` over 10,000
+  UTF-16 code units to disk and shows the model a pointer and a preview without the
+  envelope header. An emoji or a CJK extension-B ideograph is one character and two units,
+  so a body of 6,000 emoji rendered one chunk of 12,486 units. The budget is now counted in
+  code units, and every cut falls between whole characters. That body renders two parts of
+  9,199 and 3,335 units, and `send` counts the parts the same way. Bodies of ASCII and BMP
+  text chunk exactly as before.
+- A zero-match search called `harness.hook.context` reachable only by `-t`. Its inventory
+  row still carried the selector-only gate from before `--attachments` covered it. The note
+  listing the leaves a run never scanned named it even on an `--attachments` run that had
+  parsed its line. A run that named the leaf printed no note, although the 23 other
+  selector-only leaves went unscanned. The row now carries the attachment gate the scan
+  applies. The note lists 23 leaves and never the hook context, and
+  `-t harness.hook.context` alone prints it with `gated_leaves_unreached: true`. The SPEC
+  inventory table's row reads `-t or --attachments`.
+- An excerpt clipped by one character said `… (+1 chars)`. The explicit elision marker
+  that ends every excerpt now names one character in the singular, `… (+1 char)`. That
+  covers `search`'s head and match-centered forms, `list`'s previews, `show --turn`,
+  `agents --returned-message` and the bookkeeping heads. It uses the same count-and-noun
+  rule the `verbatim` markers take. Both marker builders go through one function, so the
+  forms cannot drift apart again.
+- A zero-match search without `--attachments` said nothing about the attachment lines it
+  skipped. A flagless scan reads an attachment line only through the three default
+  needles. A pattern whose only match sits in, say, a hook's injected context returned 0
+  with no word on stderr about those lines. The zero-match note now also names the
+  attachment leaves the scan did not read, and says that `--attachments` or a `-t` naming
+  the leaf reaches them, whenever neither was given. The JSON summary carries the list as
   `attachment_leaves_unread`. The list is the shape inventory's attachment axis, derived
-  rather than typed.
-- **An empty `--from` read as a sender nobody named.** `send <lane> <text> --from ""`
-  queued a message from an `external unknown` sender, where an empty lane target is
-  refused. `--from` takes `@<lane>` inside Claude Code or a non-empty free label outside
-  it, so `send` now refuses the empty token at parse time (exit 2) naming that grammar.
-- **`show --line -1..-3` answered differently in the two fetch modes.** A from-end range
-  whose ends reverse on the file (the last line, then the third from the end) names no
-  line; the rendered fetch refused it with the unparseable-line explanation, while `--raw`
-  printed nothing and exited 0. Both modes now resolve every `--line` range the same way
-  and refuse an empty one before either reads a line, with one message naming the range as
-  written and the file's length: `no such record(s): L-1..-3 (file has 3 lines)`.
-- **A draft one character from its resend said `differs ... in 1 chars`.** The
-  draft-distance line on a `user.unsent` unit (`search` and `show`) formatted its count
-  with a fixed plural, outside the rule the excerpt marker takes; it now goes through that
-  rule and reads `differs from the sent message in 1 char`. JSON `diff_chars` stays a
-  number.
-- **`verbatim --help` listed a key the rows do not carry.** The JSON schema named
-  `line_no` in the per-unit block while every unit row carries `line`, the jsonl-line key
-  every command's rows use. The same blocks left out keys the rows do carry: a unit's
-  `source` (`elicitation-sidecar` on a merged pending unit, whose `line` is null), the four
-  keys an inbound peer-message unit adds, the id trio, `turn_index` and
+  and never typed.
+- An empty `--from` read as a sender nobody named. `send <lane> <text> --from ""` queued a
+  message from an `external unknown` sender, while an empty lane target is refused.
+  `--from` takes `@<lane>` inside Claude Code or a non-empty free label outside it.
+  `send` now refuses the empty token at parse time (exit 2) and names that grammar.
+- `show --line -1..-3` answered differently in the two fetch modes. A from-end range whose
+  ends reverse on the file (the last line, then the third from the end) names no line. The
+  rendered fetch refused it with the unparseable-line explanation, while `--raw` printed
+  nothing and exited 0. Both modes now resolve every `--line` range the same way and refuse
+  an empty one before either reads a line. One message names the range as written and the
+  file's length, `no such record(s): L-1..-3 (file has 3 lines)`.
+- A draft one character from its resend said `differs ... in 1 chars`. The draft-distance
+  line on a `user.unsent` unit (`search` and `show`) formatted its count with a fixed
+  plural, outside the rule the excerpt marker takes. It now goes through that rule and
+  reads `differs from the sent message in 1 char`. JSON `diff_chars` stays a number.
+- `verbatim --help` listed a key the rows do not carry. The JSON schema named `line_no`
+  in the per-unit block, while every unit row carries `line`, the jsonl-line key every
+  command's rows use. The same blocks left out keys the rows do carry. They missed a
+  unit's `source` (`elicitation-sidecar` on a merged pending unit, whose `line` is null),
+  the four keys an inbound peer-message unit adds, the id trio, `turn_index` and
   `compactions_before` on a `collapsed_agents` row, and `command` plus the four
   duplicate-copy keys on the header. The blocks now list what the rows carry, and
   `recover --help` names `line` as the key `--at @line:<N>` reads. A test holds every key
   each verbatim row kind emits to the page, and every entry of the per-unit block to the
   rows.
-- **`image --format json`'s header left out the scope counts.** Every other spanning command's
-  header carries `sessions_in_scope`, `top_level_sessions` and `subagent_sessions`, built by
-  one function, and `image` built its header with the scope-less form in both the listing
-  and the `--out` extract stream. Both now go through the span builder, counting the resolved
-  transcript set before any filter narrows the images, so an image header reads the same
-  three numbers `list` gives the same scope.
-- **The teammate hint told a reader SendMessage takes the routing id.** Its third line said
-  the official SendMessage needs `Name@Team`, and the JSON `control_hint` said SendMessage
-  takes `routing_id`, while SendMessage's input validation refuses any `to` carrying `@`
-  (`to must be a bare teammate name`). The hint now says what each tool takes: SendMessage
-  the bare name, or the `a<Name>-<hex>` transcript id, which also resumes a teammate that is
-  not running; TaskStop the name or `Name@Team`. `agents --help`, the root help's
-  `@<Name>@<Team>` sentence and the no-match error of that target said the same wrong
-  thing and now say the same true one (claim SUB-035).
-- **`send` printed a SendMessage call that SendMessage refuses.** For a teammate receiver the
-  delegated call read `SendMessage(to: "Name@Team", ...)`, the routing form, and SendMessage's
-  input validation refuses any `to` carrying `@`. `send` and `whoami --to` now print the
-  receiver's transcript id, `SendMessage(to: "a<Name>-<hex>", ...)`, the form they already
-  printed for every other agent lane: SendMessage's agent-id arm delivers it to the running
-  teammate whose resumable id it is, or resumes that teammate, which is what the resume row
-  delegates. The receiver line still names the routing form beside the lane, and the
-  outbox's `official.to_form` records the id the call was printed with (claims SUB-035,
-  MSG-037).
-- **`recover --file <basename>` stitched several files into one.** The basename-suffix
-  fallback matched every record path the argument ended, so a basename three files share
-  replayed all three files' writes and edits into one buffer - on a fixture of three
-  `lib.rs` files, the default restore printed one of them and called it complete, and
-  `--coverage` counted all six events. A target that matches more than one distinct file
-  in scope is now refused before anything is replayed, in every mode, naming each
-  candidate and the count - a relative record path counts, as the file its record's shell
-  cwd resolves it to (a tool result's `filePath` through the cwd of the call it answers), so
-  `other/lib.rs` beside `/p/m/lib.rs` is refused too. A file-history
-  snapshot key is relative and its line carries no cwd, so it resolves against the
-  transcript's first cwd, the directory it is relative to, and names the same file as the
-  absolute Write/Edit path it is the tail of rather than a second one; that join is the
-  candidate a refusal prints for it, which in a session that changed directory before its
-  first write can be a path no record wrote (`recover --help` says so). A candidate, or a
-  longer suffix that names exactly one file, works as before, and an absolute target now
-  also finds a relative record path that resolves to it. Every candidate the refusal prints
-  replays when passed back: one the other candidates end with (a relative path from a
-  transcript with no cwd) replays that file alone, with a note. A `--files-from` line takes
-  the same rule: its report row reads `ambiguous`, nothing is written for it, and the
-  summary line counts it.
-- **`verbatim`'s compaction banner said the turns below it predate the summary.** The
-  banner sits where the walk, going down the file, passes from turns that end before the
-  summary's line to turns that end after it, so the turns below mostly FOLLOW the summary:
-  on a fixture whose summary is L5, the banner sat between L2 and L3 and every line below it
-  but the L3 opener came after L5. It now reads `══ compaction boundary · summary at L5 ·
-  (turns above end before it, turns below end after it) ══`. A turn below can still open
-  before the summary when the compaction lands mid-turn, so the banner names where turns
-  end and makes no claim about when they began. The golden reconstruction moves on its
-  three banners and the header's `chars used`, which counts them.
-- **`verbatim --budget 1` said `budget 1 chars`.** The scope line printed `budget 1 chars is
-  PER session → up to 1 chars total` and the per-session header `budget N chars` with a
-  fixed plural; both budget figures, and the header's reserved worst case, now go through
-  the count-and-noun rule every other csift count takes: `budget 1 char is PER session →
-  up to 1 char total`, and `budget 2 chars` as before.
-- **A shell result quoting the AskUserQuestion answer text no longer opens a turn.** The
-  answer's marker fallback, for a carrier with no `toolUseResult`, read the text alone, so
-  a `tool_result` whose content opened with `Your questions have been answered:` - a
-  `strings` run over the harness binary prints exactly that - labelled `user.answer` and
-  opened a turn. The fallback now answers only when that result's `tool_use_id` names an
-  AskUserQuestion call of the same transcript; such a shell result keeps
+- `image --format json`'s header left out the scope counts. Every other spanning command's
+  header carries `sessions_in_scope`, `top_level_sessions` and `subagent_sessions`, built
+  by one function. `image` built its header with the scope-less form in both the listing
+  and the `--out` extract stream. Both now go through the span builder and count the
+  resolved transcript set before any filter narrows the images, so an image header reads
+  the same three numbers `list` gives the same scope.
+- The teammate hint told a reader that SendMessage takes the routing id. Its third line
+  said the official SendMessage needs `Name@Team`, and the JSON `control_hint` said
+  SendMessage takes `routing_id`. SendMessage's input validation refuses any `to` carrying
+  `@` (`to must be a bare teammate name`). The hint now says what each tool takes.
+  SendMessage takes the bare name, or the `a<Name>-<hex>` transcript id, which also resumes
+  a teammate that is not running. TaskStop takes the name or `Name@Team`. `agents --help`,
+  the root help's `@<Name>@<Team>` sentence and the no-match error of that target said the
+  same wrong thing, and they now say the same true one (claim SUB-035).
+- `send` printed a SendMessage call that SendMessage refuses. For a teammate receiver the
+  delegated call read `SendMessage(to: "Name@Team", ...)`, the routing form, and
+  SendMessage's input validation refuses any `to` carrying `@`. `send` and `whoami --to`
+  now print the receiver's transcript id, `SendMessage(to: "a<Name>-<hex>", ...)`, the
+  form they already printed for every other agent lane. SendMessage's agent-id arm
+  delivers it to the running teammate whose resumable id it is, or resumes that teammate,
+  which is what the resume row delegates. The receiver line still names the routing form
+  beside the lane. The outbox's `official.to_form` records the id the call was printed with
+  (claims SUB-035, MSG-037).
+- `recover --file <basename>` stitched several files into one. The basename-suffix
+  fallback matched every record path the argument ended. A basename that three files share
+  therefore replayed all three files' writes and edits into one buffer. On a fixture of
+  three `lib.rs` files, the default restore printed one of them and called it complete,
+  and `--coverage` counted all six events. A target that matches more than one distinct
+  file in scope is now refused before anything is replayed, in every mode. The refusal
+  names each candidate and the count. A relative record path counts as the file its
+  record's shell cwd resolves it to, and a tool result's `filePath` resolves through the
+  cwd of the call it answers. `other/lib.rs` beside `/p/m/lib.rs` is therefore refused too.
+  A file-history snapshot key is relative and its line carries no cwd. It resolves against
+  the transcript's first cwd, the directory it is relative to, and so names the same file
+  as the absolute Write/Edit path it is the tail of, never a second one. That join is the
+  candidate a refusal prints for it. In a session that changed directory before its first
+  write, that candidate can be a path no record wrote, and `recover --help` says so. A
+  candidate, or a longer suffix that names exactly one file, works as before. An absolute
+  target now also finds a relative record path that resolves to it. Every candidate the
+  refusal prints replays when passed back. One that the other candidates end with (a
+  relative path from a transcript with no cwd) replays that file alone, with a note. A
+  `--files-from` line takes the same rule. Its report row reads `ambiguous`, nothing is
+  written for it, and the summary line counts it.
+- `verbatim`'s compaction banner said the turns below it predate the summary. The banner
+  sits where the walk, going down the file, passes from turns that end before the
+  summary's line to turns that end after it. The turns below it therefore mostly follow
+  the summary. On a fixture whose summary is L5, the banner sat between L2 and L3, and
+  every line below it except the L3 opener came after L5. It now reads `══ compaction
+  boundary · summary at L5 · (turns above end before it, turns below end after it) ══`. A
+  turn below can still open before the summary when the compaction lands mid-turn. The
+  banner names where turns end and makes no claim about when they began. The golden
+  reconstruction moves on its three banners and on the header's `chars used`, which counts
+  them.
+- `verbatim --budget 1` said `budget 1 chars`. The scope line printed `budget 1 chars is
+  PER session → up to 1 chars total`, and the per-session header printed `budget N chars`
+  with a fixed plural. Both budget figures, and the header's reserved worst case, now go
+  through the count-and-noun rule every other csift count takes. The line reads `budget 1
+  char is PER session → up to 1 char total`, and `budget 2 chars` stays as before.
+- A shell result quoting the AskUserQuestion answer text no longer opens a turn. The
+  answer's marker fallback, for a carrier with no `toolUseResult`, read the text alone. A
+  `tool_result` whose content opened with `Your questions have been answered:` was
+  labelled `user.answer` and opened a turn, and a `strings` run over the harness binary
+  prints exactly that. The fallback now answers only when that result's `tool_use_id` names
+  an AskUserQuestion call of the same transcript. Such a shell result keeps
   `agent.tool.result`, and every surface that numbers turns (`search`, `show`, `stats`,
   `verbatim`, `files`, `recover`, `image`) counts one turn fewer on its transcript.
-  `files` and `recover`, whose prefilters keep file traffic, also parse the line carrying
-  the AskUserQuestion call, so a genuine marker-only answer opens its turn there as it does
-  on every other surface. A surface that reads no whole transcript (the `list` preview,
-  the live tail) renders an answer from its structured fields only.
-- **`verbatim --format json` names itself in its header.** The header line read
+  `files` and `recover`, whose prefilters keep file traffic, now also parse the line
+  carrying the AskUserQuestion call. A genuine marker-only answer therefore opens its turn
+  there as it does on every other surface. A surface that reads no whole transcript (the
+  `list` preview, the live tail) renders an answer from its structured fields only.
+- `verbatim --format json` names itself in its header. The header line read
   `"command":"turns"`, the command's name before its rename, while every other command's
-  header names that command; it reads `"command":"verbatim"`.
-- **`[not delivered]` prints wherever the JSON `delivered` reads false.** The text tag
-  followed only the per-record delivery override, so a leaf the model never receives by
-  its leaf - the turn closers, a compaction boundary, a scheduler event, a kill, a queued
-  or recalled message - read `delivered: false` in JSON and carried no tag on `search`
-  or `show`; the bookkeeping family printed its own copy to cover its leaves. One verdict
-  now drives both: every undelivered unit is tagged once, and a bookkeeping line's label
-  is unchanged. `search --help` states the rule.
-- **`search -c`, `-l` and `--count-by` name a skipped malformed line.** A torn line was
+  header names that command. It reads `"command":"verbatim"` now.
+- `[not delivered]` prints wherever the JSON `delivered` reads false. The text tag followed
+  only the per-record delivery override. A record the model never receives by its leaf
+  read `delivered: false` in JSON and carried no tag on `search` or `show`. That covers the
+  turn closers, a compaction boundary, a scheduler event, a kill, and a queued or recalled
+  message. The bookkeeping family printed its own copy of the tag to cover its leaves. One
+  verdict now drives both surfaces. Every undelivered unit is tagged once, and a
+  bookkeeping line's label is unchanged. `search --help` states the rule.
+- `search -c`, `-l` and `--count-by` now name a skipped malformed line. A torn line was
   never matched, so a count, an id list or a census over a scope holding one covers the
-  parseable lines only - and those three modes said nothing about it. Each now prints
-  `csift: note: N malformed line(s) skipped` on stderr, as `--raw` does, and
-  `-c --format json`'s summary carries `skipped_lines`. On a zero match the note stands
-  down in every terminal mode, because the zero-match caveat already names the line and
-  what it means for the absence: one mention, never two.
-- **`deliver --recipe` says where its block goes.** The block's top level is
+  parseable lines only, and those three modes said nothing about it. Each now prints
+  `csift: note: N malformed line(s) skipped` on stderr, as `--raw` does, and the
+  `-c --format json` summary carries `skipped_lines`. On a zero match the note stands down
+  in every terminal mode. The zero-match caveat already names the line and what it means
+  for the absence, and one mention is enough.
+- `deliver --recipe` says where its block goes. The block's top level is
   `{"hooks": {...}}`, and the note said to paste it into the `hooks` object of a
-  settings.json, which nests `hooks.hooks`. The note now says to merge it at the file's
-  top level - the block's `hooks` key with the file's own, each event's array appended to,
-  never replacing, the one already there - and `deliver --help` names the fragment the
-  same way.
-- **The documents say which `show --raw` forms disclose a compaction crossing.** SPEC and
+  settings.json, which nests `hooks.hooks`. The note now says to merge it at the file's top
+  level. The block's `hooks` key merges with the file's own, and each event's array is
+  appended to the one already there, never replacing it. `deliver --help` names the
+  fragment the same way.
+- The documents now say which `show --raw` forms disclose a compaction crossing. SPEC and
   the maintenance manual listed `show --raw` among the modes that print the crossing report
-  on stderr; only a `--turn` window does, as `show --help` already said. A `--line` or
-  `--uuid` raw fetch builds no chain - its bytes are the same under every budget - and
-  prints nothing about crossing on either stream; no output moved.
-- **`verbatim`'s skip note names the budget that renders.** A skipped session's `needs ≥ N
-  chars` added the header rendered at the budget the run was given, and the header prints
-  that budget, so N moved with its digits and its plural - on one fixture `--budget 1` said
-  392 and `--budget 100` said 399, the budget that renders. N is now the least budget that
-  fits the header rendered at N itself, the same at every skipped budget.
-- **`recover`'s several-files refusal says where it came from and what it prevents.** A
-  `--files-from` line's note named it `--file`; the batch summary counted an unreplayed
-  ambiguous line among the recovered files; the refusal named only the stitching outcome,
+  on stderr. Only a `--turn` window does, as `show --help` already said. A `--line` or
+  `--uuid` raw fetch builds no chain, since its bytes are the same under every budget. It
+  prints nothing about crossing on either stream. No output moved.
+- `verbatim`'s skip note names the budget that renders. A skipped session's `needs ≥ N
+  chars` added the header rendered at the budget the run was given. That header prints the
+  budget, so N moved with the budget's digits and its plural. On one fixture `--budget 1`
+  said 392 and `--budget 100` said 399, the budget that renders. N is now the least budget
+  that fits the header rendered at N itself, the same at every skipped budget.
+- `recover`'s several-files refusal now says where it came from and what it prevents. A
+  `--files-from` line's note named it `--file`. The batch summary counted an unreplayed
+  ambiguous line among the recovered files. The refusal named only the stitching outcome,
   though candidates in different transcripts would replay one file's history and drop the
-  others'; and it listed every candidate, one line each however many there were. The note now
-  names the manifest line, the summary counts it beside the recovered files, the refusal
-  names both outcomes and lists the first ten candidates with a count of the rest.
-- **`recover --file` in one spelling of a file read only that spelling's events.** A
-  relative record path joined to its cwd was normalised and every other spelling compared
-  as a string, so after a write to `./a/lib.rs` and an edit through `a/lib.rs`,
-  `--file ./a/lib.rs` printed the first write's content and called it complete, and
-  `/p//q/lib.rs` beside `/p/q/lib.rs` was refused as two files. Paths now compare
-  lexically, the target and every record path alike: `.` segments are dropped and a run of
-  `/` collapses to one (a leading `//` stays), so any spelling replays the file's whole
-  history. A `..` segment and a symlink's other spelling are not resolved: those stay two
-  files, and `recover --help` says what each spelling then replays.
-- **The `agents` teammate hint no longer offers SendMessage's refusal as the reason TaskStop
-  takes the routing id.** Its third line now states the two tools' facts apart: the routing id
-  `Name@Team` is a form TaskStop takes, and SendMessage, which refuses any `to` carrying `@`,
-  takes the bare name or the transcript id. `agents --help`'s paragraph on a teammate's two ids
-  says the same: a form TaskStop takes, beside the bare name.
-- **`whoami`'s environment form no longer says a lane has no parent.** With no target the
-  lane comes from `$CLAUDE_CODE_SESSION_ID`, which names the top-level session in every lane,
-  and the `parent` line read `none (a top-level session has no lane above it)` while the
-  JSON parent was null and the depth line said unknown; read from a subagent the line was
+  others'. It also listed every candidate, one line each, however many there were. The
+  note now names the manifest line, and the summary counts it beside the recovered files.
+  The refusal names both outcomes and lists the first ten candidates with a count of the
+  rest.
+- `recover --file` with one spelling of a file read only that spelling's events. A
+  relative record path joined to its cwd was normalised, and every other spelling was
+  compared as a string. After a write to `./a/lib.rs` and an edit through `a/lib.rs`,
+  `--file ./a/lib.rs` printed the first write's content and called it complete. `/p//q/lib.rs`
+  beside `/p/q/lib.rs` was refused as two files. Paths now compare lexically, the target
+  and every record path alike. `.` segments are dropped, and a run of `/` collapses to one
+  (a leading `//` stays). Any spelling therefore replays the file's whole history. A `..`
+  segment and a symlink's other spelling are not resolved. Those stay two files, and
+  `recover --help` says what each spelling then replays.
+- The `agents` teammate hint no longer offers SendMessage's refusal as the reason TaskStop
+  takes the routing id. Its third line now states the two tools' facts separately. The
+  routing id `Name@Team` is a form TaskStop takes. SendMessage refuses any `to` carrying
+  `@` and takes the bare name or the transcript id. `agents --help`'s paragraph on a
+  teammate's two ids says the same, a form TaskStop takes, beside the bare name.
+- `whoami`'s environment form no longer says a lane has no parent. With no target the lane
+  comes from `$CLAUDE_CODE_SESSION_ID`, which names the top-level session in every lane.
+  The `parent` line read `none (a top-level session has no lane above it)`, while the JSON
+  parent was null and the depth line said unknown. Read from a subagent, the line was
   false. It now reads `unknown from the environment alone (a top-level session has none; a
-  subagent's parent is this session)`; a target that resolves the lane keeps its parent.
-- **A zero match under `--turn` blamed the label filter for what the window left out.** An
-  abandoned record - a recalled draft, a rewound turn, a record on an abandoned branch -
-  belongs to no numbered turn, so a `--turn` window leaves it out, and the diagnosis probed
-  only `-t`: `-t user.unsent --turn ..` over a session with one draft said the pattern
-  occurs under other labels and the label filter excluded them. The diagnosis now also
-  counts the records the pattern and label filter match outside turn numbering and, when
-  there are any, says so on a line printed first, naming both ways back (drop `--turn`, or
-  window by time); the JSON summary carries the count as `outside_turn_numbering`. `search
-  --help` says so.
-- **`show`'s cap continuation dropped the records after an abandoned one, and fetched
-  records nobody addressed.** The rendered fetch kept its first `cap` units in render order,
-  which puts an abandoned unit after every live one, and read the continuation off that
-  order, so a window with an abandoned record printed a continuation that stopped at it or
-  ran backwards: on one transcript `--line 1..400` continued with `--line 201..393` and lost
-  L394-L400. The cap now keeps the records on the lowest lines, whole records, and the
-  continuation names the units it dropped by their lines, with touching ranges merged
-  (`--line 1..4,9..14` cut at L3 continues `--line 3..4,9..14`, where one range from L3
-  also fetched L5-L8). A dropped record merged from the elicitation sidecar has no line
-  and is named by `--uuid`. Every address form continues this way, `--turn` included, so
-  a turn wider than the cap pages forward and the footer always says which records the
-  page left out. A wide window pays for that in length: `--turn ..` on a 397 MiB
-  transcript continues with 17,534 line pieces. Following the continuations at one cap
-  until none is printed yields every unit of the uncapped fetch exactly once, and the
-  footer now says `--max-count 0` returns the whole fetch. `show --raw`'s stderr
-  continuation follows the same rule. `show --help` says so under `--max-count`.
-- **`show --raw` by uuid fetches the records the rendered fetch does.** A uuid a replay
-  copy shares with the line that survives it fetched both rendered and only the copy raw;
-  it now prints both lines, lowest first. The uuid of a record merged from the elicitation
-  sidecar exited 1 with `no such record(s)` under `--raw` while the rendered fetch showed
-  it; it now prints nothing for that record and a stderr note saying it has no transcript
-  line, exit 0, as `search --raw` does. A uuid that names no record stays a miss.
-  `show --help` says so under RAW MODE.
-- **A quoted relay framing no longer emits an inbox unit.** An assistant text opening with
-  `Another Claude session sent a message:` and a quoted `<agent-message>`, and a compaction
-  summary carrying a peer section, each emitted an `agent.communication.inbox` unit whose
-  `label` was not among the record's own `labels`. The per-section units now come only from
-  the records the classification reads sections on: a user record that is neither an
-  elicitation marker nor a compaction summary.
-- **A refusal typed over several lines prints its hit on one line.** The `[feedback: ...]`
-  tag kept the newlines inside the first 60 characters of the typed text, so the rest of
-  the hit continued on new lines. The tag now flattens the text before it cuts it, and JSON
-  `user_feedback` still carries the words whole.
-- **A resumed workflow run's live lanes no longer read as killed.** A run resumed under its
-  own id keeps running under the manifest its killed predecessor wrote until it ends, and
-  that manifest settled every lane with no closing journal line: `agents` read them
-  `killed`, `status` counted none live. A manifest now settles a lane only when the lane's
-  newest record is no more than a minute newer than the manifest's own end instant (the
-  kill's own writes land within 66 ms of it; a resumed run's, hours later); a newer lane is
-  read from its tail and its row names the stale manifest, saying the lane wrote after its
-  run's end and naming a resume as the likely cause.
-- **`show --help` said a compaction boundary fetched without its summary reports no mode.**
+  subagent's parent is this session)`. A target that resolves the lane keeps its parent.
+- A zero match under `--turn` blamed the label filter for what the window left out. An
+  abandoned record, such as a recalled draft, a rewound turn or a record on an abandoned
+  branch, belongs to no numbered turn, so a `--turn` window leaves it out. The diagnosis
+  probed only `-t`. `-t user.unsent --turn ..` over a session with one draft said the
+  pattern occurs under other labels and the label filter excluded them. The diagnosis now
+  also counts the records the pattern and label filter match outside turn numbering. When
+  there are any, it says so on a line printed first and names both ways back (drop
+  `--turn`, or window by time). The JSON summary carries the count as
+  `outside_turn_numbering`. `search --help` says so.
+- `show`'s cap continuation dropped the records after an abandoned one, and it fetched
+  records nobody addressed. The rendered fetch kept its first `cap` units in render order,
+  which puts an abandoned unit after every live one, and it read the continuation off that
+  order. A window with an abandoned record printed a continuation that stopped at that
+  record or ran backwards. On one transcript `--line 1..400` continued with
+  `--line 201..393` and lost L394-L400. The cap now keeps the records on the lowest lines,
+  whole records. The continuation names the units it dropped by their lines, with touching
+  ranges merged. `--line 1..4,9..14` cut at L3 continues as `--line 3..4,9..14`, where one
+  range from L3 would also have fetched L5-L8. A dropped record merged from the
+  elicitation sidecar has no line and is named by `--uuid`. Every address form continues
+  this way, `--turn` included, so a turn wider than the cap pages forward and the footer
+  always says which records the page left out. A wide window pays for that in length.
+  `--turn ..` on a 397 MiB transcript continues with 17,534 line pieces. Following the
+  continuations at one cap until none is printed yields every unit of the uncapped fetch
+  exactly once. The footer now says `--max-count 0` returns the whole fetch. `show --raw`'s
+  stderr continuation follows the same rule, and `show --help` says so under
+  `--max-count`.
+- `show --raw` by uuid fetches the records the rendered fetch does. A uuid that a replay
+  copy shares with the line that survives it fetched both lines rendered and only the copy
+  raw. It now prints both lines, lowest first. The uuid of a record merged from the
+  elicitation sidecar exited 1 with `no such record(s)` under `--raw`, while the rendered
+  fetch showed it. It now prints nothing for that record plus a stderr note saying the
+  record has no transcript line, and exits 0, as `search --raw` does. A uuid that names no
+  record stays a miss. `show --help` says so under RAW MODE.
+- A quoted relay framing no longer emits an inbox unit. Two records each emitted an
+  `agent.communication.inbox` unit whose `label` was not among the record's own `labels`.
+  One was an assistant text opening with `Another Claude session sent a message:` and a
+  quoted `<agent-message>`. The other was a compaction summary carrying a peer section.
+  The per-section units now come only from the records the classification reads sections
+  on, a user record that is neither an elicitation marker nor a compaction summary.
+- A refusal typed over several lines now prints its hit on one line. The
+  `[feedback: ...]` tag kept the newlines inside the first 60 characters of the typed
+  text, so the rest of the hit continued on new lines. The tag now flattens the text before
+  it cuts it, and JSON `user_feedback` still carries the words whole.
+- A resumed workflow run's live lanes no longer read as killed. A run resumed under its
+  own id keeps running under the manifest its killed predecessor wrote, until it ends.
+  That manifest settled every lane with no closing journal line, so `agents` read those
+  lanes `killed` and `status` counted none live. A manifest now settles a lane only when
+  the lane's newest record is no more than a minute newer than the manifest's own end
+  instant. The kill's own writes land within 66 ms of it, and a resumed run's land hours
+  later. A newer lane is read from its tail, and its row names the stale manifest. The row
+  says the lane wrote after its run's end and names a resume as the likely cause.
+- `show --help` said a compaction boundary fetched without its summary reports no mode.
   The pairing is read off the whole file before any address narrows the output, so a
-  boundary fetched alone reports its mode; the help now says so, and that a boundary reads
-  null only when the file itself leaves it unpaired.
-- **`status` printed no `last ◂` when the newest prompt was a slash command with arguments.**
+  boundary fetched alone reports its mode. The help now says so, and says that a boundary
+  reads null only when the file itself leaves it unpaired.
+- `status` printed no `last ◂` when the newest prompt was a slash command with arguments.
   The row took the newest turn-opening record, and a slash command typed with arguments is
   the person's words without opening a turn. It now takes the newest record labelled
   `user.message`, `user.answer` or `user.rejection`, turn-opening or not, in the text
-  `search` renders (`/name args` for the slash command, a relayed or queued message's own
-  body); a `<task-notification>` pulse is not the person's words and no longer takes it.
-- **A fork child's first carrier emitted an inbox unit that named no call.** A subagent
-  return carrier holding text beside its result emits two `agent.communication.inbox` units,
-  and the text one read `pairing` null, no tool name and no `result_of` edge while the
-  result one read the call. The text unit now carries the carrier's call, so both report
-  one pairing, one tool name and one edge (`orphan` and `not in this file` when the call is
-  on no line of the file).
-- **A spawn prompt that names a fork record is still the lane's seed.** `search` took a
-  lane for a `/fork` clone when the literal `fork-context-ref` occurred anywhere in the first
-  4096 bytes of its line 1, and a subagent's line 1 is its spawn prompt, so a prompt about
-  forks read as a clone: its seed classified `user.message` instead of
-  `agent.communication.inbox`, lost its `parent ⇨ self` direction and joined every spanning
-  count of the person's words. Line 1's type decides now, read as the quoted value
-  `"fork-context-ref"` the candidate gate already uses, which a quote-escaping JSON string
-  cannot carry.
-- **A closed pipe shared by stdout and stderr no longer aborts a reporting surface.** Under
-  `csift ... 2>&1 | head -c 1` the failed stdout write reached the error arm, whose
-  `eprintln!` failed on the same pipe and panicked: every surface that reports a closed
+  `search` renders. That is `/name args` for the slash command, and a relayed or queued
+  message's own body. A `<task-notification>` pulse is not the person's words and no longer
+  takes the row.
+- A fork child's first carrier emitted an inbox unit that named no call. A subagent return
+  carrier holding text beside its result emits two `agent.communication.inbox` units. The
+  text one read `pairing` null, with no tool name and no `result_of` edge, while the result
+  one read the call. The text unit now carries the carrier's call, so both report one
+  pairing, one tool name and one edge. They read `orphan` and `not in this file` when the
+  call is on no line of the file.
+- A spawn prompt that names a fork record is still the lane's seed. `search` took a lane
+  for a `/fork` clone when the literal `fork-context-ref` occurred anywhere in the first
+  4096 bytes of its line 1. A subagent's line 1 is its spawn prompt, so a prompt about
+  forks read as a clone. Its seed classified as `user.message` and not as
+  `agent.communication.inbox`, lost its `parent ⇨ self` direction, and joined every
+  spanning count of the person's words. Line 1's type decides now. It is read as the quoted
+  value `"fork-context-ref"` that the candidate gate already uses, which a quote-escaping
+  JSON string cannot carry.
+- A closed pipe shared by stdout and stderr no longer aborts a reporting surface. Under
+  `csift ... 2>&1 | head -c 1`, the failed stdout write reached the error arm, whose
+  `eprintln!` failed on the same pipe and panicked. Every surface that reports a closed
   stdout exited 1 with stderr open and 101 under `2>&1`. The error arm and every stderr
-  line those surfaces print go through one helper that drops a write it cannot make, so
-  they exit 1 either way; a `println!` surface still exits 101 on its own stdout. The
-  same helper keeps a note that cannot land after a stream that did - a `--raw` cap drop,
-  a zero-match diagnosis, `verbatim`'s no-compaction note - from turning the run into an
-  abort: it exits 0 with its whole stream. The root `--help`'s exit-code paragraph says so.
-- **`search --raw` says what the survival walk crossed.** A raw scan builds the chain - the
-  walk decides which records are hits - so what it prints moves with `--cross-compactions`,
-  yet it was the one scan mode that said nothing about the crossing on either stream. It
-  now prints the same one or two `(compaction crossing ...)` lines on stderr after its
-  stream, beside its sidecar, cap and malformed notes, the stream `--count-by` already uses;
-  stdout stays the matched lines alone, and at budget 0 nothing is printed. A raw stream has
-  no envelope, so no JSON key is added. `search --help` says so under `--raw`.
-- **An env note names the variable that answered.** With `CLAUDE_CODE_SESSION_ID` unset and
+  line those surfaces print now go through one helper that drops a write it cannot make,
+  so they exit 1 either way. A `println!` surface still exits 101 on its own stdout. The
+  same helper keeps a note that cannot land, after a stream that did, from turning the run
+  into an abort. Such a note is a `--raw` cap drop, a zero-match diagnosis or `verbatim`'s
+  no-compaction note, and the run exits 0 with its whole stream. The root `--help`'s
+  exit-code paragraph says so.
+- `search --raw` says what the survival walk crossed. A raw scan builds the chain, because
+  the walk decides which records are hits, so what it prints moves with
+  `--cross-compactions`. It was still the one scan mode that said nothing about the
+  crossing on either stream. It now prints the same one or two `(compaction crossing ...)`
+  lines on stderr after its stream, beside its sidecar, cap and malformed notes, the
+  stream `--count-by` already uses. Stdout stays the matched lines alone, and at budget 0
+  nothing is printed. A raw stream has no envelope, so no JSON key is added.
+  `search --help` says so under `--raw`.
+- An env note names the variable that answered. With `CLAUDE_CODE_SESSION_ID` unset and
   the Codex companion's `CODEX_COMPANION_SESSION_ID` set, `whoami`, `@main` and the `msg` /
-  `ack` lane resolve from the alias as documented, but their stderr notes said the id came
-  from `$CLAUDE_CODE_SESSION_ID`, a variable that was empty. Each note now names the one
-  that carried the id, and `@main`'s note names a variable at all. `whoami --help` says so.
-- **`verbatim` renders a pending sidecar question as the assistant's.** A pending
+  `ack` lane resolve from the alias as documented. Their stderr notes still said the id
+  came from `$CLAUDE_CODE_SESSION_ID`, a variable that was empty. Each note now names the
+  one that carried the id, and `@main`'s note now names a variable at all. `whoami --help`
+  says so.
+- `verbatim` renders a pending sidecar question as the assistant's. A pending
   AskUserQuestion or ExitPlanMode merged from the elicitation sidecar was emitted as
-  `▽ (elicitation sidecar)  USER` with JSON `role: "user"`, so the assistant's question read
-  as words the person said - and a hook that re-injects `verbatim`'s reconstruction after a
-  compaction carried that into the model's context. The pending line stands for the
-  assistant record Claude Code writes once the question resolves, so the unit now sits on
-  the turn's assistant side: `△ (elicitation sidecar)  ASSISTANT`, `role: "assistant"`,
-  the body still naming the tool and the question. The header's user/assistant unit split
-  counts it as an assistant unit. `verbatim --help` says so.
+  `▽ (elicitation sidecar)  USER` with JSON `role: "user"`. The assistant's question read
+  as words the person said. A hook that re-injects `verbatim`'s reconstruction after a
+  compaction carried that mistake into the model's context. The pending line stands for
+  the assistant record Claude Code writes once the question resolves, so the unit now sits
+  on the turn's assistant side, as `△ (elicitation sidecar)  ASSISTANT` with
+  `role: "assistant"`. The body still names the tool and the question. The header's
+  user/assistant unit split counts it as an assistant unit. `verbatim --help` says so.
 
 ### Performance
 
-- **The render was the other serial half of a search.** Everything the scan does in parallel
-  was spent before the first output byte: on a 1.18 GB session (the top-level transcript
-  plus every `*.jsonl` under its subagent tree except `journal.jsonl`, which is what csift
-  parses) a whole-scope `--format json` dump cost 1.94 s of CPU on ONE thread while nine
-  rayon workers waited, and a wide-match text search (`search 'the'`) paid 0.45 s of that
-  phase's 0.59 s inside `println!`, which is one `write(2)` and one backward newline scan
-  per row - 297,976 of them. Two changes. Every row-dumping surface (`search` text, JSON and
-  `--raw`, both of `show`'s, `files`, `agents`, `image`, and both of `verbatim`'s - its
-  documented `--subagents` span is 125,269 text rows on that session) now writes through one
-  buffered stdout, one syscall per megabyte. And `search` renders its per-exchange rows in
-  bounded parallel chunks, writing the chunk buffers in index order, so the byte stream is
-  the one a serial loop produced. Medians of 7 interleaved reps on that session, at a host
-  load of 7 to 27 that the wall numbers carry and the CPU numbers do not: the JSON dump
-  2.958 s -> 1.532 s, `search 'x'` 1.247 -> 1.040, `search 'the'` 1.140 -> 0.931 (at its own
-  `-c` floor now), a `--for` closure 1.080 -> 0.901, `show --branch-points` 0.397 -> 0.355,
-  the `agents` tree 0.664 -> 0.619, `files --by timeline` 0.890 -> 0.858. CPU for the two
-  wide text rows falls about 10% (their sys halves 1.10 -> 0.70 and 1.07 -> 0.68); the JSON
-  dump's rises 3.9%, which is what the fan-out costs to spread over ten cores. What the
-  look-ahead costs in memory is UP TO TWICE 128 RENDERED ROWS - 128 rows are rendered before
-  any is written, and each chunk buffer grows by doubling, so it can sit at twice the bytes
-  it holds. On that session, rows averaging 78 KB, that is 10 to 20 MB against a peak of
-  about 1,570 MiB and it does not clear the noise: medians of 13 interleaved reps differ by
-  0.1 MiB, against per-arm spreads of 12 and 17 MiB. On a synthetic transcript whose
-  rendered rows are 4,195,818 B, three runs of five interleaved pairs read medians of 715.8,
-  844.2 and 723.7 MiB, the widest single observation 929.3 and the narrowest 522.3, against
-  a one-copy figure of 512.2 MiB - so the peak is not a floor on the bound, one run is not a
-  property of the pipeline, and a reader sizing a run works from twice 128 rows. The
-  smallest inputs stay inside the same-binary control band, at a median ratio of 1.009
-  against the control's 0.9997. Output bytes do not move: of the acid set's 169 (row, size
-  class) pairs over three size classes, 165 are compared on all four streams - stdout,
-  stderr, the exit code, and an interleaved `2>&1` capture, which is the only one that can
-  see the ORDER between the first two - and 163 are byte-identical on every one of them,
-  with stderr and the exit code identical on all 165. The two that are not are one binding
-  in its two size classes, `csift --help`, whose page grew by the 512 bytes of the clause
-  the exit law gained this release - a documented surface change, and the only stdout
-  difference anywhere in the set. FOUR MORE are excluded because they print LIVE state, and
-  both bindings are named: the `whoami --format json` rows, whose lane instants move when
-  the session they name gains a record, and the `status` rows, whose fourth stdout line
-  carries an elapsed-seconds field that advances by the gap between the two captures, so a
-  repeat of the SAME binary differs from itself by exactly however long it waited. All four
-  are run anyway, under the condition that makes their comparison mean anything: the two
-  arms of a pair land inside one second. Whether a given pair then matches is a property of
-  when it ran, which is exactly why it is not counted among the 165. What a render change
-  can never reach is stated rather than claimed away: a heavy regex row is 1.189 s against a
-  1.140 s floor with the render removed entirely, because its output is 2.5 MB and its clock
-  is the regex over that 1.18 GB.
-- **A record's width is a number now, and it is written down.** The amendment gave `Record`
-  a second conversion key and a memo holding both parsed conversions, and the memo held its
-  payload INLINE - 56 bytes on a field almost no record carries, paid by every parsed line
-  of every scan. It is behind a pointer now (16 bytes whatever the pair grows to, and no
-  allocation at all for a record carrying neither key), so `size_of::<Record>()` reads 1,368
-  where the inline form measured 1,408 and the pre-amendment record measured 1,336: the
+- The render was the other serial half of a search. Everything the scan does in parallel
+  was spent before the first output byte. The test session was 1.18 GB, counting the
+  top-level transcript plus every `*.jsonl` under its subagent tree except
+  `journal.jsonl`, which is what csift parses. On it a whole-scope `--format json` dump
+  cost 1.94 s of CPU on one thread while nine rayon workers waited. A wide-match text
+  search (`search 'the'`) paid 0.45 s of that phase's 0.59 s inside `println!`, which makes
+  one `write(2)` and one backward newline scan per row, 297,976 of them. Two changes
+  address it. Every row-dumping surface now writes through one buffered stdout, one
+  syscall per megabyte. Those surfaces are `search` text, JSON and `--raw`, both of
+  `show`'s, `files`, `agents`, `image`, and both of `verbatim`'s, whose documented
+  `--subagents` span is 125,269 text rows on that session. `search` also renders its
+  per-exchange rows in bounded parallel chunks and writes the chunk buffers in index order,
+  so the byte stream is the one a serial loop produced. The medians below are of 7
+  interleaved reps on that session, at a host load of 7 to 27 that the wall numbers carry
+  and the CPU numbers do not.
+
+  | query | before (s) | after (s) |
+  |---|---|---|
+  | whole-scope JSON dump | 2.958 | 1.532 |
+  | `search 'x'` | 1.247 | 1.040 |
+  | `search 'the'` (now at its own `-c` floor) | 1.140 | 0.931 |
+  | a `--for` closure | 1.080 | 0.901 |
+  | `show --branch-points` | 0.397 | 0.355 |
+  | the `agents` tree | 0.664 | 0.619 |
+  | `files --by timeline` | 0.890 | 0.858 |
+
+  CPU for the two wide text rows falls about 10%, with their sys time halving from 1.10 to
+  0.70 and from 1.07 to 0.68. The JSON dump's CPU rises 3.9%, which is what the fan-out
+  costs to spread over ten cores. The look-ahead can hold up to twice 128 rendered rows in
+  memory. 128 rows are rendered before any is written, and each chunk buffer grows by
+  doubling, so it can sit at twice the bytes it holds. On that session, with rows averaging
+  78 KB, that is 10 to 20 MB against a peak of about 1,570 MiB, and it does not clear the
+  noise. Medians of 13 interleaved reps differ by 0.1 MiB, against per-arm spreads of 12
+  and 17 MiB. On a synthetic transcript whose rendered rows are 4,195,818 B, three runs of
+  five interleaved pairs read medians of 715.8, 844.2 and 723.7 MiB. The widest single
+  observation was 929.3 and the narrowest 522.3, against a one-copy figure of 512.2 MiB.
+  The peak is not a floor on the bound, and one run is not a property of the pipeline. A
+  reader sizing a run should work from twice 128 rows. The smallest inputs stay inside the
+  same-binary control band, at a median ratio of 1.009 against the control's 0.9997.
+
+  Output bytes do not move. The acid set has 169 (row, size class) pairs over three size
+  classes. 165 of them are compared on all four streams, which are stdout, stderr, the exit
+  code, and an interleaved `2>&1` capture, the only one that can see the order between the
+  first two. 163 are byte-identical on every stream, and stderr and the exit code are
+  identical on all 165. The two that differ are one binding in its two size classes,
+  `csift --help`. Its page grew by the 512 bytes of the clause the exit law gained this
+  release, a documented surface change and the only stdout difference anywhere in the set.
+  Four more pairs are excluded because they print live state, and both bindings are named.
+  The `whoami --format json` rows carry lane instants that move when the session they name
+  gains a record. The `status` rows carry an elapsed-seconds field on their fourth stdout
+  line that advances by the gap between the two captures, so a repeat of the same binary
+  differs from itself by exactly however long it waited. All four are run anyway, under the
+  condition that makes their comparison mean anything, with the two arms of a pair landing
+  inside one second. Whether a given pair then matches depends on when it ran, which is
+  exactly why it is not counted among the 165. One limit is stated plainly. A render change
+  can never reach a heavy regex row, which reads 1.189 s against a 1.140 s floor with the
+  render removed entirely. Its output is 2.5 MB, and its clock is the regex over that
+  1.18 GB.
+- A record's width is now a number, and it is written down. The amendment gave `Record` a
+  second conversion key and a memo holding both parsed conversions. The memo held its
+  payload inline, 56 bytes on a field almost no record carries, paid by every parsed line of
+  every scan. It now sits behind a pointer, 16 bytes whatever the pair grows to and no
+  allocation at all for a record carrying neither key. `size_of::<Record>()` reads 1,368,
+  where the inline form measured 1,408 and the pre-amendment record measured 1,336. The
   amendment costs 32 bytes instead of 72. A unit test pins that exact number beside the
-  spine row's 72, because widening the record is worth doing deliberately and nothing else
+  spine row's 72, because widening the record is worth doing deliberately, and nothing else
   in the crate notices when it happens.
-- **An attachment payload is parsed once per record.** Four layers ask one attachment
-  record about its payload, and each ask re-parsed bytes that can hold a whole file
+- An attachment payload is parsed once per record. Four layers ask one attachment record
+  about its payload, and each ask used to re-parse bytes that can hold a whole file
   snapshot.
-- **The nine provenance relations cost nothing a same-binary band can see.** Measured on an
-  idle host, the tip that carries them against the tip they were built from, over 31 queries
-  in three transcript sizes at 21 repetitions per cell: 90 of 93 rows sit inside the control
-  band, the three outside are slower by 0.4, 27 and 51 milliseconds, the whole-scope JSON
-  dump of the 397 MiB transcript reads 1.0009, and the `for-kind` census reads 1.0034 while
-  printing 85 percent more. SPEC section 7i carries the rows.
-- **`whoami` reads its own session's lanes once.** The topology section read the calling
-  session's child lanes for its own line, and the count of other live lanes then read every
-  one of them again for the same session. The census now takes the rows already read for
-  the registry row whose transcript is that file. On a session holding 1,401 subagent
-  transcripts, `whoami` went from 1.339 s to 1.069 s (hyperfine, 5 runs after a warm-up),
-  and its text and JSON are byte-identical to before, on a two-session fixture and on the
-  live root.
+- The nine provenance relations cost nothing a same-binary band can see. The measurement
+  ran on an idle host, the tip that carries them against the tip they were built from, over
+  31 queries in three transcript sizes at 21 repetitions per cell. 90 of 93 rows sit inside
+  the control band. The three outside are slower by 0.4, 27 and 51 milliseconds. The
+  whole-scope JSON dump of the 397 MiB transcript reads 1.0009, and the `for-kind` census
+  reads 1.0034 while printing 85 percent more. SPEC section 7i carries the rows.
+- `whoami` reads its own session's lanes once. The topology section read the calling
+  session's child lanes for its own line. The count of other live lanes then read every one
+  of them again for the same session. The census now takes the rows already read for the
+  registry row whose transcript is that file. On a session holding 1,401 subagent
+  transcripts, `whoami` went from 1.339 s to 1.069 s (hyperfine, 5 runs after a warm-up).
+  Its text and JSON are byte-identical to before, on a two-session fixture and on the live
+  root.
 
 ### Removed
 
-- **`harness.meta` and every `harness.meta.*` selector.** They are hard errors naming their
-  successors, one error per retired spelling, and there is no alias, no forwarding arm and no
-  twin in `labels[]`. The same goes for `harness.schedule.continuation`, whose producer is the
-  resume loader (`harness.resume.prompt`), and for the 0.6-era flat `thinking`, `tool` and
-  `tool-response`, which were already errors and now point at the same three successors.
-- **`--additional-context`.** The flag gated one leaf and that leaf now has a name:
+- `harness.meta` and every `harness.meta.*` selector are removed. They are hard errors
+  naming their successors, one error per retired spelling, and there is no alias, no
+  forwarding arm and no twin in `labels[]`. The same goes for
+  `harness.schedule.continuation`, whose producer is the resume loader
+  (`harness.resume.prompt`). The 0.6-era flat `thinking`, `tool` and `tool-response` were
+  already errors and now point at the same three successors.
+- `--additional-context` is removed. The flag gated one leaf, and that leaf now has a name,
   `-t harness.hook.context`. Naming any attachment-carried leaf is a gate of its own, so the
-  narrow ask needs no flag; `--attachments` keeps its wide meaning. The flag is a hidden
-  tombstone that bails with the successor, deliberately rather than becoming a quiet no-op: a
-  run that silently scanned fewer lines than the caller asked for would read as the definitive
-  absence an empty result promises.
+  narrow ask needs no flag, and `--attachments` keeps its wide meaning. The flag is a hidden
+  tombstone that bails with the successor. It deliberately does not become a quiet no-op. A
+  run that silently scanned fewer lines than the caller asked for would read as the
+  definitive absence an empty result promises.
 
-- **The introspection ledger moves to schema 2: version-ranged states, one receipt each,
-  and the prose law as a gate.** `INTROSPECTION.json` had grown a `checks[]` history - one
-  appended record per release audit - and the history became the file: 1,856 checks behind
-  739 claims, 1,117 of them superseded by a later check on the same claim, every one
-  carrying the calendar dates, csift versions and audit-process words the ledger's own prose
+- The introspection ledger moves to schema 2, with version-ranged states, one receipt each,
+  and the prose law as a gate. `INTROSPECTION.json` had grown a `checks[]` history, one
+  appended record per release audit, and the history became the file. It held 1,856 checks
+  behind 739 claims, 1,117 of them superseded by a later check on the same claim. Every one
+  carried the calendar dates, csift versions and audit-process words the ledger's own prose
   law bars. A fact record does not need its own minutes. A claim now carries its `code[]`
-  sites at claim level, because csift's tree is one tree at any time and where a fact is
-  relied on is never a property of a Claude Code version range, plus one or two `states[]`
-  with exactly one of them open. A state is a version range (`from`, and `to` = null while
-  it is open) holding the claim text for that range, the two attribution legs, the
-  provenance and ONE `verified` receipt; `located` and `first_seen_claude_code` retire into
-  the first state's `from`, and the per-check dates and csift versions retire outright. Each
-  state also gains a `from_basis` - one word saying whether its floor was measured,
-  bounded or defaulted - and a `probe`, the machine-readable twin of `instrument` naming
-  the half a stranger re-runs first as one of bytes, corpus, csift, live or repo. A
-  RECEIPT is the last check at the badge's build whose instrument names an artefact
-  OUTSIDE csift's own tree: a build, a byte offset in one, a corpus, a registry directory,
-  a live trial. The artefact is the test and never the command, so `grep` over `src` is the
-  same text pass as reading the file while `grep -ab` over a shipped build is a
-  measurement, and a text pass can never back the badge. The gate is rewritten to read all
-  of it and grows from twelve rules to twenty-two, each failing by name on a hand-built
-  specimen: rule 13 is the state shape, including that the open state is LAST; rule 14 is
-  the prose law over every field a pass wrote, now word-bounded, first-person-aware and
-  with the backtick exemption bounded; rule 10 reaches `residue` and a receipt's `note`,
-  which is where every unconsumed text instruction was hiding; rules 15 to 20 are the
-  state's own text and probe, a closed state's receipt, a retired selector handed to csift
-  as an argument - the bare `tool` among them, with the valid `--count-by tool` census axis
-  spared by position rather than by word - the file's own shape, every heredoc handed back
-  to its own language to parse, and the receipt's artefact itself; rule 21 is the `bytes`
-  probe's own literal, read in the builds its state names and in a CLOSED state's too
-  wherever this host holds them, because four of them counted zero in every one and a
-  probe that counts nothing cannot be run. Rule 22 holds a probe's KIND and its SCOPE to the
-  same artefact: the kind follows what the command reads and the scope is derived from the
-  instrument, and nothing compared the two, so thirty-eight states shipped claiming `corpus`
-  beside a scope naming the shipped binary and one claimed `bytes` beside a scope naming a
-  projects root. Only the two kinds whose artefact is fixed are tested, since `csift`, `live`
-  and `repo` name a run, a gesture and this tree and any of the three may mention either noun
-  without contradiction; its corpus word list learns the harness session REGISTRY under its
-  English names, a row set on disk having been reachable only as a path before. It stops at the
-  scope and never reads the command, a scope being a noun phrase a word list decides while a
-  program classified by the words in it has the same false-negative shape the pair had. Rule 12
-  learns that a hop can name the BUILD it was read in - and that a build nobody holds is not a
-  pass, so such a hop is named rather than counted wherever the verified build itself is here -
-  refuses a run of four or more dots the way it refuses an empty excerpt, holds an ELIDED
-  excerpt to the run before its first ellipsis at its own offset - that bucket used to be
-  compared against nothing, so replacing an already-elided excerpt with fabricated text moved no
-  figure - refuses an excerpt that reads as prose whether or not the hop wears a MARK, since
-  English occurs in no build and satisfies `absent` by construction, decides a marked hop by its
-  mark BEFORE the eliding so it lands in one of the five counts and never in two, and compares
-  bytes rather than a UTF-8 round trip. How many `...`-bearing excerpts are byte-exact anyway is
-  derived by the walk and carried on the README rather than typed anywhere. Rule 8 stops
-  matching rows with a regex and REGENERATES the README block, comparing it byte for byte. A
-  folded check is not simply dropped: every fact token with no survivor in the state is carried
-  into `residue`, and each carried entry names what superseded it. A carried entry the SOURCE
-  had already cut short is repaired where the same state spells the whole word, trimmed back to
-  the last complete item where it does not, and completed from the claim's own schema-1 text
-  where that text says what came next; a cut landing on a word BOUNDARY, where every token is
-  spelled correctly and the sentence stops anyway, is found by its LENGTH - the four truncation
-  constants the source itself writes at. The prose rewrite masks every quoted run, literal,
-  offset, version and whitespace run before it fires and restores each byte for byte, so it can
-  neither cut a comma out of a jq argument list, nor normalise the double space out of an
-  asctime literal, nor flatten the indent a python heredoc's block structure lives in; and a
-  date that is the object of an epoch stays.
+  sites at claim level, because csift's tree is one tree at any time, and where a fact is
+  relied on is never a property of a Claude Code version range. It also carries one or two
+  `states[]`, exactly one of them open. A state is a version range (`from`, and `to` = null
+  while it is open). It holds the claim text for that range, the two attribution legs, the
+  provenance and one `verified` receipt. `located` and `first_seen_claude_code` retire into
+  the first state's `from`, and the per-check dates and csift versions retire outright.
+  Each state also gains a `from_basis`, one word saying whether its floor was measured,
+  bounded or defaulted. It gains a `probe` too, the machine-readable twin of `instrument`,
+  which names the half a stranger re-runs first as one of bytes, corpus, csift, live or
+  repo.
+
+  A receipt is the last check at the badge's build whose instrument names an artefact
+  outside csift's own tree. That artefact can be a build, a byte offset in one, a corpus, a
+  registry directory or a live trial. The artefact is the test and never the command.
+  `grep` over `src` is the same text pass as reading the file, while `grep -ab` over a
+  shipped build is a measurement, and a text pass can never back the badge.
+
+  The gate is rewritten to read all of it and grows from twelve rules to twenty-two, each
+  failing by name on a hand-built specimen. Rule 13 is the state shape, including that the
+  open state comes last. Rule 14 is the prose law over every field a pass wrote. It is now
+  word-bounded and first-person-aware, and its backtick exemption is bounded. Rule 10
+  reaches `residue` and a receipt's `note`, which is where every unconsumed text
+  instruction was hiding. Rules 15 to 20 cover the state's own text and probe, a closed
+  state's receipt, and a retired selector handed to csift as an argument. The bare `tool`
+  is among those selectors, and the valid `--count-by tool` census axis is spared by
+  position and not by word. The same rules cover the file's own shape, every heredoc handed
+  back to its own language to parse, and the receipt's artefact itself. Rule 21 checks the
+  `bytes` probe's own literal. It reads the literal in the builds its state names, and in a
+  closed state's builds too wherever this host holds them, because four of those literals
+  counted zero in every build and a probe that counts nothing cannot be run.
+
+  Rule 22 holds a probe's kind and its scope to the same artefact. The kind follows what the
+  command reads, and the scope is derived from the instrument, and nothing compared the two.
+  Thirty-eight states shipped claiming `corpus` beside a scope naming the shipped binary,
+  and one claimed `bytes` beside a scope naming a projects root. Only the two kinds whose
+  artefact is fixed are tested. `csift`, `live` and `repo` name a run, a gesture and this
+  tree, and any of the three may mention either noun without contradiction. The rule's
+  corpus word list learns the harness session registry under its English names, since a row
+  set on disk had been reachable only as a path. The rule stops at the scope and never
+  reads the command. A scope is a noun phrase that a word list decides. A program classified
+  by the words in it has the same false-negative shape the pair had.
+
+  Rule 12 learns that a hop can name the build it was read in. A build nobody holds is not a
+  pass, so such a hop is named and not counted wherever the verified build itself is
+  present. The rule refuses a run of four or more dots the way it refuses an empty excerpt.
+  It holds an elided excerpt to the run before its first ellipsis, at its own offset. That
+  bucket used to be compared against nothing, so replacing an already-elided excerpt with
+  fabricated text moved no figure. It refuses an excerpt that reads as prose whether or not
+  the hop wears a mark, since English occurs in no build and satisfies `absent` by
+  construction. It decides a marked hop by its mark before the eliding, so the hop lands in
+  one of the five counts and never in two. It compares bytes and no longer a UTF-8 round
+  trip. How many `...`-bearing excerpts are byte-exact anyway is derived by the walk and
+  carried on the README, and typed nowhere. Rule 8 no longer matches rows with a regex. It
+  regenerates the README block and compares it byte for byte.
+
+  A folded check is not simply dropped. Every fact token with no survivor in the state is
+  carried into `residue`, and each carried entry names what superseded it. Some carried
+  entries had already been cut short in the source. Such an entry is repaired where the same
+  state spells the whole word, and trimmed back to the last complete item where it does not.
+  It is completed from the claim's own schema-1 text where that text says what came next. A
+  cut landing on a word boundary, where every token is spelled correctly and the sentence
+  stops anyway, is found by its length, using the four truncation constants the source
+  itself writes at. The prose rewrite masks every quoted run, literal, offset, version and
+  whitespace run before it fires and restores each byte for byte. It therefore cannot cut a
+  comma out of a jq argument list, normalise the double space out of an asctime literal, or
+  flatten the indent a python heredoc's block structure lives in. A date that is the object
+  of an epoch stays.
 
 ## [0.12.3] - 2026-09-13
 
