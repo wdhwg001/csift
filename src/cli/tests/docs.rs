@@ -205,7 +205,9 @@ fn the_subcommands_block_matches_the_command_enum() {
     );
 }
 
-use crate::cli::show_keys::{k, record_row_keys, Family, FAMILY_ORDER, RECORD_KEYS};
+use crate::cli::show_keys::{
+    k, record_row_keys, Family, FAMILY_ORDER, KEY_BLOCK_CONTINUATION, RECORD_KEYS,
+};
 
 // -- The per-family HELP sections --
 
@@ -342,7 +344,9 @@ fn the_show_record_keys_render_from_their_table() {
     // rather than by ordering the table around it; `an_object_valued_key_parses_last`
     // below is the pin.
     let unwrap_list = |s: &str| -> String { s[1..s.len() - 1].to_string() };
-    let body = unwrap_list(&rendered);
+    // The block breaks into lines at a key boundary, so a line break is one more spelling
+    // of the `, ` between two keys.
+    let body = unwrap_list(&rendered).replace(KEY_BLOCK_CONTINUATION, ", ");
     // EVERY row exactly once: the family blocks partition the table, so the rendered
     // list is as long as the table and no name is repeated. A grouping that put a row in
     // more than one block, or dropped a block, changes this count and nothing else.

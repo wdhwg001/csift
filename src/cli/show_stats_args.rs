@@ -1,122 +1,169 @@
 //! ShowArgs + StatsArgs.
+//!
+//! The after-help bodies are written at column 0 inside multi-line literals, with every
+//! line break typed out: clap renders help text without wrapping it, so the page keeps the
+//! line lengths written here. The flag docs carry `verbatim_doc_comment` for the same
+//! reason, and clap indents each of their lines under the flag.
 
 use super::*;
 
 /// `csift show`: fetch specific record(s) of ONE transcript, rendered full (or raw).
 /// The `show --help` after-help body up to the record-row KEY LIST, which
 /// [`show_keys::record_row_keys`] renders from the table rather than from a sentence.
-const SHOW_AFTER_HELP_HEAD: &str = "EXAMPLES\n  \
-          csift show @<uuid> --line 46550                # the record at line 46550, full\n  \
-          csift show @<uuid> --line 87,495..500,992      # several lines + ranges\n  \
-          csift show @<agent-id> --line 88               # a SUBAGENT transcript (id from `csift agents`)\n  \
-          csift show @<uuid> --uuid <record-uuid>        # by record uuid\n  \
-          csift show @<uuid> --line 46550 --raw          # the verbatim raw jsonl line\n  \
-          csift show @<uuid> --branch-points             # where did this conversation fork (rewind / retry / parallel)?\n\n\
-        TARGET, exactly ONE transcript\n  \
-          `@<uuid>` / `@<uuid-prefix>` → that top-level transcript (never spans subagents); \
-        `@<agent-id>` (from `csift agents`) → that subagent transcript; a `*.jsonl` path → \
-        that file. A target resolving to more or fewer than one transcript is a hard error; \
-        line numbers address one file. That includes the COPIES case: when one session id \
-        sits under two project directories the spanning commands merge them, but `show` \
-        counts the UNMERGED set and refuses, naming every copy's path - no `@<uuid>` \
-        and no `@<agent-id>` separates them (a copied project directory carries the \
-        whole sidecar, so a subagent has two copies too), so name the `*.jsonl` you mean.\n\n\
-        ADDRESSING + EXIT\n  \
-          `--line` / `--turn` tokens take the shared range grammar: `N` · `A..B` · `N..` (to \
-        the end) · `..N` · `-k` from the end (`--line -20..` = the last 20 lines, `--turn -3..` = \
-        the last 3 turns); 1-based for lines, 0-based for turns, inclusive, repeatable / \
-        comma-joined. An explicitly named line/uuid that resolves to no record is a HARD \
-        ERROR (exit non-zero) that names the file's line count when the address lies past its \
-        end; a range CLAMPS to the file, erroring if it yields nothing, and counts the lines it \
-        named past the end apart from the non-record lines it covered (`lines_past_end`, and a \
-        footer line - a `--raw` stderr note - naming the file's last line). \
-        A pending-elicitation record merged from the sidecar has no physical line; address \
-        it by `--uuid` (it renders `(elicitation sidecar)` in place of `Lnnnn`).\n\n\
-        RECORDS OUTSIDE THE SURVIVING CONVERSATION\n  \
-          `--turn` speaks the SAME numbering `search` prints, and that numbering follows \
-        Claude Code's own conversation chain: a record the chain no longer reaches - a \
-        recalled draft, a turn the operator REWOUND past, anything under one - belongs to \
-        no numbered turn. An ADDRESS still renders it (the refetch law), as its own \
-        annotated unit headed `draft (superseded …)` or `rewound turn …` instead of a \
-        fabricated t<N>, and it states its distance from the message that replaced it: \
-        `differs from the sent message in N chars (P% of the final)` - insertions plus \
-        deletions of a shortest CHARACTER edit script, never a length difference, so P can \
-        exceed 100 when the draft was the longer text; a rewound turn leads with `rewound: \
-        the conversation continued from L<n> instead`. JSON record rows add \
-        `superseding_line`, `superseding_uuid`, `diff_chars`, `diff_pct` and `diff_exact` \
-        (false when a bound stopped the walk, in which case both numbers read \"more \
-        than\") - all five null on any other row - plus `survival` (live | pre-cut | \
-        abandoned), `abandoned_root_line` and `replay_copy_of` on every row.\n\n\
-        A SHAPE CSIFT MODELS NO LEAF FOR\n  \
-          An address never hard-misses a PARSEABLE line. A record whose shape carries no leaf \
-        - an isMeta pseudo-turn matching no template, a text-less block record (a NON-isMeta \
-        image-only user record reads `? unmodeled: user/image`; the isMeta one is \
-        `harness.context.image`), an attachment payload type or a system subtype no table names \
-        - comes back as ONE unit reading `? unmodeled: <type[/subtype|/attachment.type]>` with \
-        a key=value excerpt of the line's own top-level keys as its body (JSON `label`:null, \
-        `labels`:[], `unmodeled`). A line that is not a JSON object at all is still a hard miss \
-        pointing at `--raw`.\n  \
-          That excerpt is the one rendered path that walks a line's values without knowing what \
-        they are, so a `headers` member is ELIDED at EVERY depth, by exact name, and prints as \
-        `<elided>`: a `type:\"system\"` `api_error` line carries the failed request's whole HTTP \
-        response header set inside its `error` object, and `--raw` is the one path that prints \
-        it.\n\n\
-        RAW MODE\n  \
-          `--raw` prints the exact bytes of each addressed jsonl line (even a malformed / \
-        torn line: that is the point). It is mutually exclusive with `--format json` (raw \
-        IS the file's own JSON) and reads the transcript file only (no sidecar merge). A \
-        `--uuid` names the records it names rendered: both lines a replay copy shares with \
-        its survivor, lowest first; a record merged from the elicitation sidecar has no line, \
-        so it prints nothing and a stderr note says so (exit 0).\n\n\
-        JSON SCHEMA (per --format json)\n  \
-          Envelope: {kind:\"header\", command:\"show\", session_id, is_subagent, \
-        parent_session_id, path} → one {kind:\"record\", …} row per fetched record → \
-        {kind:\"summary\", …}. Record rows carry ";
+/// It ends with the two-space indent plus `Record rows carry ` that
+/// [`show_keys::KEY_BLOCK_FIRST_COLUMN`] counts.
+const SHOW_AFTER_HELP_HEAD: &str = "\
+EXAMPLES
+  csift show @<uuid> --line 46550             # the record at line 46550, in full
+  csift show @<uuid> --line 87,495..500,992   # several lines and ranges
+  csift show @<agent-id> --line 88            # a SUBAGENT transcript (id from `csift agents`)
+  csift show @<uuid> --uuid <record-uuid>     # one record, by its uuid
+  csift show @<uuid> --line 46550 --raw       # the verbatim jsonl line
+  csift show @<uuid> --branch-points          # where it forked (rewind / retry / parallel)
+
+TARGET (exactly ONE transcript)
+  `@<uuid>` or `@<uuid-prefix>` names a top-level transcript, and `show` never adds that
+  session's subagents to it. `@<agent-id>` (an id `csift agents` prints) names one subagent
+  transcript. A `*.jsonl` path names that file. A target that resolves to more or fewer than
+  one transcript is a hard error, because a line number addresses one file.
+
+  One session id can sit under two project directories. The spanning commands merge such
+  copies. `show` counts the unmerged set instead and refuses, naming every copy's path. No
+  `@<uuid>` and no `@<agent-id>` separates the copies, because a copied project directory
+  carries the whole sidecar and a subagent then has two copies too. The way to one copy is
+  its `*.jsonl` path.
+
+ADDRESSING AND EXIT
+  `--line` and `--turn` take one shared range grammar. Lines count from 1 and turns from 0,
+  and every range is inclusive.
+
+    N      one line or turn
+    A..B   from A through B
+    N..    from N to the end
+    ..N    from the start through N
+    -k     counted from the end (`--line -20..` is the last 20 lines, `--turn -3..` the
+           last 3 turns)
+
+  `--line` repeats and takes a comma-joined list. `--turn` takes one spec per run.
+
+  A line or uuid named outright that resolves to no record is a HARD ERROR (exit non-zero).
+  When the address lies past the file's end, the error names the file's line count. A range
+  CLAMPS to the file and errors only when it yields nothing. It reports the lines it named
+  past the end apart from the non-record lines it covered, in JSON `lines_past_end` and in a
+  footer line naming the file's last line (a stderr note under `--raw`).
+
+  A pending-elicitation record merged from the sidecar has no physical line. A `--uuid`
+  reaches it, and it renders `(elicitation sidecar)` in place of `Lnnnn`.
+
+RECORDS OUTSIDE THE SURVIVING CONVERSATION
+  `--turn` uses the numbering `search` prints, and that numbering follows Claude Code's own
+  conversation chain. A record the chain no longer reaches belongs to no numbered turn. Such
+  records are a recalled draft, a turn the operator REWOUND past, and anything under one.
+
+  An ADDRESS always fetches what it names, so it still renders such a record. The record
+  comes back as its own annotated unit, headed `draft (superseded …)` or `rewound turn …` in
+  place of a fabricated t<N>. The unit states its distance from the message that replaced
+  it, in this line:
+
+    differs from the sent message in N chars (P% of the final)
+
+  N sums insertions and deletions in a shortest CHARACTER edit script, never a length difference.
+  P can therefore exceed 100 when the draft was the longer text. A rewound turn leads the
+  line with `rewound: the conversation continued from L<n> instead`.
+
+  JSON record rows add `superseding_line`, `superseding_uuid` and the three numbers
+  `diff_chars`, `diff_pct` and `diff_exact`. All five are null on any other row.
+  `diff_exact` reads false when a bound stopped the walk, and both numbers then mean \"more
+  than\". Every row also carries `survival` (live | pre-cut | abandoned),
+  `abandoned_root_line` and `replay_copy_of`.
+
+A SHAPE CSIFT MODELS NO LEAF FOR
+  csift labels each record with leaves of its role.category.leaf taxonomy, the paths
+  `search -t` selects. An address never hard-misses a PARSEABLE line, even when the line's
+  shape carries no leaf. Those shapes are an isMeta pseudo-turn matching no template, a
+  text-less block record, and an attachment payload type or system subtype no table names.
+  A NON-isMeta image-only user record is one of them and reads `? unmodeled: user/image`.
+  The isMeta one has a leaf, `harness.context.image`.
+
+  Such a record comes back as ONE unit reading `? unmodeled: <type[/subtype|/attachment.type]>`.
+  Its body is a key=value excerpt of the line's own top-level keys, and its JSON row carries
+  `label`:null, `labels`:[] and `unmodeled`. A line that is no JSON object at all is still a
+  hard miss, and the error points at `--raw`.
+
+  That excerpt is the one rendered path that walks a line's values without knowing what they
+  are. So a `headers` member is ELIDED at every depth, by exact name, and prints as
+  `<elided>`. A `type:\"system\"` `api_error` line carries the failed request's whole HTTP
+  response header set inside its `error` object, and `--raw` is the one path that prints it.
+
+RAW MODE
+  `--raw` prints the exact bytes of each addressed jsonl line, a malformed or torn line
+  included. It cannot be combined with `--format json`, since raw output IS the file's own
+  JSON. It reads the transcript file only, with no sidecar merge.
+
+  A `--uuid` under `--raw` names the same records the rendered fetch shows. A replay copy and
+  its survivor share one uuid, so both lines print, lowest first. A record merged from the
+  elicitation sidecar has no line, so it prints nothing and a stderr note says so (exit 0).
+
+JSON SCHEMA (--format json)
+  The envelope is {kind:\"header\", command:\"show\", session_id, is_subagent,
+  parent_session_id, path}, then one {kind:\"record\", …} row per fetched record, then
+  {kind:\"summary\", …}.
+
+  Record rows carry ";
 
 /// The `show --help` after-help body after the record-row key list.
-const SHOW_AFTER_HELP_TAIL: &str = ". `text` is one line: whitespace runs are \
-        collapsed to single spaces, and it is FULL under a `--line`/`--uuid` address (which \
-        lifts the excerpt cap) but CLIPPED to ~400 chars with the explicit `… (+N chars)` \
-        marker under `--turn`, which is a window rather than an address. `body` carries the \
-        same rendered text with its NEWLINES intact - so a markdown table or a paragraph \
-        break survives - and is non-null under exactly the addresses that lift the cap \
-        (`--line` / `--uuid`), null under `--turn`. It is the RENDERED form, so a record \
-        whose text the opener renderer already flattened (a user message) carries no \
-        newline there either; `--raw` stays the path to the bytes. `mode` and `compact_metadata` are \
-        the compaction pair's own fields and null on every other record: `mode` is \
-        `compact` | `summarize-from-here` | `summarize-up-to-here` (a `/rewind` summarize \
-        IS a compaction; the boundary learns its mode from the summary that follows it in the \
-        FILE - the pairing is read before any address narrows the output, so a boundary \
-        fetched alone reports its mode - and it stays null only where the file leaves the \
-        boundary unpaired: no summary after it, or a second boundary first), and \
-        `compact_metadata` is the \
-        boundary's own object verbatim, including the `preservedMessages` uuid lists the \
-        one-line excerpt only counts. The summary is {records, dropped_by_cap, \
-        refetch_remainder (the ready-to-run continuation command when the cap dropped units, \
-        else null; it names the dropped units by line, or by uuid for a unit with no line, so \
-        it never repeats a unit already shown), non_record_lines (lines that exist and render no \
-        record), lines_past_end (lines a range named past the file's last line), \
-        skipped_lines, with_elicitation_sidecar}, plus \
-        the crossing set \
-        {crossing_budget, boundaries_crossed, budget_exhausted, boundaries_above_floor, \
-        floor_line, floor_cause} whenever `--cross-compactions` is non-zero. An ADDRESS \
-        moves with that budget - the record it names can read `live` under one and \
-        `pre-cut` under another - so the keys say which reading you are holding; under \
-        `--cross-compactions 0` they are absent. `--raw` prints the same disclosure on \
-        stderr, and only for a `--turn` window (a `--line`/`--uuid` address crosses nothing \
-        to find its lines).\n\n  \
-          Under `--branch-points` the rows are {kind:\"branch-point\", uuid, line, \
-        parent_line, parent_type, live_child_line, children:[…], widest_gap_seconds} and \
-        the summary is {branch_points, conversation_records, skipped_lines} plus the same \
-        crossing set, on the same terms. `line` and \
-        `parent_line` are the SAME value - on this row the record IS the fork parent - and \
-        both are null when the parent uuid names no line in the file. `live_child_line` is \
-        the line of the child on the chain, and it is null unless EXACTLY one child is \
-        live: null with zero live children means the whole fork sits off the surviving \
-        conversation, and null with two (the chain's membership rules keep \
-        same-message.id assistant siblings) means the text named both. Each child is \
-        {line, uuid, record_type, survival (live | pre-cut | abandoned), verdict (live | \
-        rewound | draft | abandoned | pre-cut), ts_utc, ts_local}.";
+const SHOW_AFTER_HELP_TAIL: &str = ".
+
+  `text` is one line, with every whitespace run collapsed to a single space. A `--line` or
+  `--uuid` address lifts the excerpt cap, so `text` is FULL there. `--turn` is a window, and
+  under it `text` is CLIPPED to ~400 chars with the explicit `… (+N chars)` marker.
+
+  `body` carries the same rendered text with its NEWLINES intact, so a markdown table or a
+  paragraph break survives. It is non-null under exactly the addresses that lift the cap
+  (`--line` / `--uuid`) and null under `--turn`. It is the RENDERED form, so a record whose
+  text the opener renderer already flattened (a user message) carries no newline there
+  either. `--raw` stays the path to the bytes.
+
+  `mode` and `compact_metadata` belong to the compaction pair and are null on every other
+  record. `mode` is `compact` | `summarize-from-here` | `summarize-up-to-here`, because a
+  `/rewind` summarize IS a compaction. A boundary learns its mode from the summary that
+  follows it in the FILE. That pairing is read before any address narrows the output, so a
+  boundary fetched alone still reports its mode. It stays null only where the file leaves
+  the boundary unpaired, with no summary after it or a second boundary first.
+  `compact_metadata` is the boundary's own object verbatim, including the
+  `preservedMessages` uuid lists that the one-line excerpt only counts.
+
+  The summary is {records, dropped_by_cap, refetch_remainder, non_record_lines,
+  lines_past_end, skipped_lines, with_elicitation_sidecar}.
+
+    refetch_remainder   the ready-to-run continuation command when the cap dropped units,
+                        else null. It names the dropped units by line, or by uuid for a
+                        unit with no line, so it never repeats a unit already shown.
+    non_record_lines    lines that exist and render no record
+    lines_past_end      lines a range named past the file's last line
+
+  Whenever `--cross-compactions` is non-zero, the summary also carries the crossing set
+  {crossing_budget, boundaries_crossed, budget_exhausted, boundaries_above_floor,
+  floor_line, floor_cause}. An ADDRESS moves with that budget. The record it names can read
+  `live` under one budget and `pre-cut` under another, so the keys say which reading you
+  hold. Under `--cross-compactions 0` they are absent. `--raw` prints the same disclosure on
+  stderr, and only for a `--turn` window, because a `--line`/`--uuid` address crosses
+  nothing to find its lines.
+
+  Under `--branch-points` the rows are {kind:\"branch-point\", uuid, line, parent_line,
+  parent_type, live_child_line, children:[…], widest_gap_seconds}, and the summary is
+  {branch_points, conversation_records, skipped_lines} plus the same crossing set, on the
+  same terms.
+
+  On a branch-point row `line` and `parent_line` are the SAME value, because the record IS
+  the fork parent. Both are null when the parent uuid names no line in the file.
+  `live_child_line` is the line of the child on the chain, and it is null unless EXACTLY one
+  child is live. Null with zero live children means the whole fork sits off the surviving
+  conversation. Null with two means the text named both. Two children can both be live
+  because the chain's membership rules keep same-message.id assistant siblings.
+
+  Each child is {line, uuid, record_type, survival (live | pre-cut | abandoned),
+  verdict (live | rewound | draft | abandoned | pre-cut), ts_utc, ts_local}.";
 
 /// The assembled `show --help` body. A `LazyLock<String>` because the key list is
 /// BUILT from [`show_keys::RECORD_KEYS`]: a family that adds a key to a record row adds
@@ -133,23 +180,26 @@ pub(crate) static SHOW_AFTER_HELP: std::sync::LazyLock<String> = std::sync::Lazy
     about = "Fetch specific record(s) of ONE transcript by line / turn index / record uuid \
             , rendered full, or verbatim raw jsonl with `--raw`; `--branch-points` reports \
             where the conversation forked",
-    long_about = "Fetch the record(s) at specific 1-based jsonl line number(s) (the `Lnnnn` \
-        every csift surface prints) and/or record uuid(s), from exactly ONE transcript. \
-        Default output renders each record FULL (label + timestamp + complete text: the \
-        permission-friendly alternative to `Read`-ing the raw jsonl). `--raw` emits the \
-        VERBATIM raw jsonl line(s) instead: the escape hatch for inspecting fields csift \
-        does not render (usage tokens, stop_reason, model, …). `--branch-points` instead \
-        reports the transcript's conversation FORK facts: every record with more than one \
-        conversation child (a later parentUuid re-attach: a rewind, a retry, or a \
-        parallel lane), ranked by the widest inter-child time gap (a rewind usually shows \
-        a wide gap, a parallel lane near zero). Each fork names the LIVE child and gives \
-        every other child the conversation chain's verdict; beyond what that chain \
-        resolves csift does not guess.",
+    long_about = "\
+Fetch the record(s) at specific 1-based jsonl line numbers or record uuids, from exactly ONE
+transcript. The line numbers are the `Lnnnn` every csift surface prints.
+
+By default each record renders FULL, with its label, its timestamp and its complete text.
+That makes `show` the permission-friendly alternative to `Read`-ing the raw jsonl. `--raw`
+emits the VERBATIM jsonl lines instead, which is the way to the fields csift does not render
+(usage tokens, stop_reason, model, …).
+
+`--branch-points` reports the transcript's conversation FORK facts in place of records. A
+fork is a record with more than one conversation child. A rewind, a retry and a parallel
+lane each make one, by a later parentUuid re-attach. Forks rank by the widest time gap
+between their children. A rewind usually shows a wide gap, and a parallel lane a gap near
+zero. Each fork names the LIVE child and gives every other child the conversation chain's
+verdict. Beyond what that chain resolves, csift does not guess.",
     after_help = SHOW_AFTER_HELP.as_str()
 
 )]
 pub struct ShowArgs {
-    /// ONE transcript: `@<uuid>` | `@<uuid-prefix>` | `@<agent-id>` | a `*.jsonl` path.
+    /// ONE transcript: `@<uuid>`, `@<uuid-prefix>`, `@<agent-id>` or a `*.jsonl` path.
     // Declared as a Vec DELIBERATELY (the run handler enforces exactly-one): a single
     // non-Vec positional with `allow_hyphen_values` makes clap consume a mistyped
     // long flag AS the target and report the user's VALID target as the surplus
@@ -159,73 +209,92 @@ pub struct ShowArgs {
     #[arg(value_name = "TARGET", value_parser = parse_project_target, allow_hyphen_values = true, required = true, num_args = 1..)]
     pub target: Vec<std::path::PathBuf>,
 
-    /// 1-based jsonl line(s) in the shared range grammar: `N` · `A..B` · `N..` · `..N` · `-k` from the end (`-20..` = last 20), repeatable / comma-joined
-    /// (`--line 87,495..500,992`).
+    /// 1-based jsonl line(s) in the shared range grammar (`N`, `A..B`, `N..`, `..N`, or `-k`
+    /// counted from the end, so `-20..` is the last 20 lines). Repeatable or comma-joined,
+    /// as in `--line 87,495..500,992`.
     #[arg(
         long,
         value_name = "SPEC",
         value_delimiter = ',',
-        allow_hyphen_values = true
+        allow_hyphen_values = true,
+        verbatim_doc_comment
     )]
     pub line: Vec<String>,
 
-    /// Record uuid(s), repeatable / comma-joined.
+    /// Record uuid(s), repeatable or comma-joined.
     #[arg(long, value_name = "UUID", value_delimiter = ',')]
     pub uuid: Vec<String>,
 
-    /// 0-based TURN index/range: the `tN` `search` prints, in the SAME grammar as `--line`
-    /// (`N` · `A..B` · `N..` · `..N` · `-k` from the end, so `-3..` = the last 3 turns,
-    /// `42..` = turn 42 → the end). Fetches every user and assistant record of the named
-    /// turns (reads a turn's whole back-and-forth); the gated non-record lines a turn
-    /// carries (turn-duration, stop-hooks, away-summary, queue, snapshot, system) belong
-    /// to no turn fetch: address them by `--line`/`--uuid`, or name their leaf -
+    /// 0-based TURN index or range, the `tN` that `search` prints, in the grammar `--line`
+    /// takes (`N`, `A..B`, `N..`, `..N`, `-k` from the end). `-3..` is the last 3 turns,
+    /// and `42..` runs from turn 42 to the end. The numbering matches the `·t<N>` in
+    /// `search`'s exchange headers exactly.
+    ///
+    /// The fetch returns every user and assistant record of the named turns, so it reads a
+    /// turn's whole back-and-forth. The gated non-record lines a turn carries
+    /// (turn-duration, stop-hooks, away-summary, queue, snapshot, system) belong to no turn
+    /// fetch. An address by `--line` or `--uuid` reaches them, and so does naming their leaf:
     /// `search -t 'harness.bookkeeping.*' -t 'harness.turn.*' -t 'harness.system.*'`.
-    /// The turn numbering matches the `·t<N>` in `search`'s exchange headers exactly.
-    /// Mutually exclusive with `--line`/`--uuid` (pick ONE addressing mode).
+    ///
+    /// Mutually exclusive with `--line` and `--uuid`, so a run picks ONE addressing mode.
     #[arg(
         long,
         value_name = "N|A..B|N..|-k",
         allow_hyphen_values = true,
-        conflicts_with_all = ["line", "uuid"]
+        conflicts_with_all = ["line", "uuid"],
+        verbatim_doc_comment
     )]
     pub turn: Option<String>,
 
-    /// Cap the emitted record units: the CONTEXT-FLOOD guard for open ranges (`--line ..`
-    /// / `--turn ..` address a whole transcript). Defaults to 200. The cap keeps the records
-    /// on the LOWEST lines (a `--turn` window: its earliest turns, by line within a turn),
-    /// whole records (at least one), whatever order they render in. The drop is ALWAYS
-    /// reported with a continuation command that names the dropped units by their lines,
-    /// sorted, with ranges that overlap or touch merged (`--line 3..4,9..14`). A dropped
-    /// record merged from the elicitation sidecar has no line and is named by `--uuid`. Every
-    /// address form continues this way, `--turn` included, so the footer always says which
-    /// records this page left out, and following the continuations at one cap returns every
-    /// unit of the uncapped fetch exactly once. `0` = uncapped (the crate-wide
-    /// `--max-count 0` convention).
-    #[arg(long, value_name = "N")]
+    /// Cap the emitted record units (default 200). The cap guards a reader's context
+    /// against an open range, since `--line ..` or `--turn ..` addresses a whole transcript.
+    /// `0` means uncapped, as on every csift command that takes `--max-count`.
+    ///
+    /// The cap keeps whole records (at least one) on the LOWEST lines, whatever order they
+    /// render in. A `--turn` window keeps its earliest turns, and the lowest lines within a
+    /// turn.
+    ///
+    /// The drop is ALWAYS reported, with a continuation command that names the dropped
+    /// units by their lines. The lines are sorted, and ranges that overlap or touch are
+    /// merged (`--line 3..4,9..14`). A dropped record merged from the elicitation sidecar has no
+    /// line and is named by `--uuid`. Every address form continues this way, `--turn`
+    /// included, so the footer always says which records this page left out. Following the
+    /// continuations at one cap returns every unit of the uncapped fetch exactly once.
+    #[arg(long, value_name = "N", verbatim_doc_comment)]
     pub max_count: Option<usize>,
 
-    /// Emit the VERBATIM raw jsonl line(s) instead of the rendered record view
-    /// (mutually exclusive with `--format json`).
-    #[arg(long)]
+    /// Emit the VERBATIM raw jsonl line(s) instead of the rendered record view.
+    /// Mutually exclusive with `--format json`.
+    #[arg(long, verbatim_doc_comment)]
     pub raw: bool,
 
-    /// Report the transcript's conversation FORK facts instead of fetching records:
-    /// every record with MORE THAN ONE conversation child (a later parentUuid
-    /// re-attach: a rewind, a retry, or a parallel lane), each child with its line,
-    /// timestamp and verdict, ranked by the WIDEST inter-child time gap (a rewind
-    /// usually shows hours, a parallel lane near zero). Tool-result carriers, isMeta
-    /// records, and compaction summaries never count as children (a parallel tool
-    /// fan-out is not a fork); the PARENT can be any record the loader admits, so a
-    /// fork parented to a hook's attachment line prints that line and its type, and
-    /// `parent uuid not in this file` is reserved for a uuid no line here carries.
-    /// Each fork names its LIVE child from Claude Code's own conversation chain and
-    /// gives every child one of five verdicts: `live` (on the chain), `rewound`
-    /// (an opener that was answered, then rewound past), `draft` (an opener nothing
-    /// ever answered), `abandoned` (off the chain but not an opener - a retried
-    /// assistant record, say) or `pre-cut` (above a compaction boundary, where the
-    /// chain stops and csift keeps reading). Beyond what the chain resolves, csift
-    /// reports and ranks, never guesses.
-    #[arg(long = "branch-points", conflicts_with_all = ["line", "uuid", "turn", "raw"])]
+    /// Report the transcript's conversation FORK facts in place of records. A fork is a
+    /// record with MORE THAN ONE conversation child. A rewind, a retry and a parallel lane
+    /// each make one, by a later parentUuid re-attach. Each child is listed with its line,
+    /// timestamp and verdict, and forks rank by the WIDEST time gap between children (a
+    /// rewind usually shows hours, a parallel lane near zero).
+    ///
+    /// Tool-result carriers, isMeta records and compaction summaries never count as
+    /// children, so a parallel tool fan-out is no fork. The PARENT can be any record the
+    /// loader admits. A fork parented to a hook's attachment line prints that line and its
+    /// type, and `parent uuid not in this file` is kept for a uuid no line here carries.
+    ///
+    /// Each fork names its LIVE child from Claude Code's own conversation chain, and every
+    /// child gets one of five verdicts:
+    ///
+    ///   live        on the chain
+    ///   rewound     an opener that was answered, then rewound past
+    ///   draft       an opener nothing ever answered
+    ///   abandoned   off the chain without being an opener (a retried assistant record)
+    ///   pre-cut     above a compaction boundary, where the chain stops and csift keeps
+    ///               reading
+    ///
+    /// Beyond what the chain resolves, csift reports and ranks and never guesses.
+    #[arg(
+        long = "branch-points",
+        conflicts_with_all = ["line", "uuid", "turn", "raw"],
+        verbatim_doc_comment
+    )]
     pub branch_points: bool,
 
     /// Emit JSON instead of the rendered text format.
@@ -270,119 +339,162 @@ impl ShowArgs {
 #[command(
     about = "One-scan aggregates per session: records, turns, tool calls by name, tokens \
              by model, time span, compactions",
-    long_about = "One scan, one fixed rich shape: the aggregation questions that \
-        otherwise force hand-rolled jsonl parsing: token burn per model \
-        (message.usage, counted ONCE per API message: Claude Code repeats the identical \
-        usage object on every per-block record of one message, so sums dedupe by \
-        message.id per transcript - a per-record sum over-reads 2-3.5x), narration-block \
-        counts per model (agent.thinking.narration: API-issued summaries; the token \
-        split is not derivable, so only blocks are counted), tool-call counts by name (per CALL: one per invocation; \
-        `search --count-by tool` counts RECORDS, use + result carrier, so it reads ≈2× \
-        these tallies: a unit difference, not a discrepancy), turn count, first/last \
-        timestamps + duration, compaction count, malformed-line count, and a whole-file \
-        LINE-TYPE census (every physical line counted by its top-level `type`: `user`, \
-        `assistant`, `attachment`, `file-history-snapshot`, `system`, …) - the answer to \
-        \"what else is in this jsonl besides the conversation\", since non-record lines \
-        are the majority of many transcripts' bytes and no other surface parses them. \
-        Spans subagents \
-        by default (each transcript is its own row; the scope TOTAL block sums them). \
-        `--since`/`--until` bound the counted records by timestamp. `turns` counts the \
-        LIVE turns - the numbering that follows Claude Code's own conversation chain, the \
-        same one `search` prints as `tN` and `show --turn` addresses - so a `stats` turn \
-        count equals the row count of `search --count-by turn` over the same scope, and a \
-        `--turn` window resolves against that numbering. What LEFT the numbering is \
-        disclosed beside it, on one line printed only when there is something to say: \
-        `chain  abandoned turns N (M rewound) - replay copy lines K`. An ABANDONED turn is \
-        an opener the chain no longer reaches (a recalled draft, or a turn the operator \
-        rewound past); the REWOUND ones are the subset that drew a reply before the \
-        rewind; a REPLAY COPY is a line whose uuid a later line also carries, which a \
-        compaction re-anchor appends. Under `--turn`/time windowing every figure windows \
-        EXCEPT `lines`, the `types` census and those three chain totals, which stay file \
-        facts (physical line count / per-type line counts / whole-chain counts - an \
-        abandoned opener carries no turn index to window on), not window facts.",
-    after_help = "EXAMPLES\n  \
-          csift stats @<uuid>                    # one session + its subagents\n  \
-          csift stats @<uuid> --no-subagents     # just the top-level thread\n  \
-          csift stats . --since 1d               # this project, last 24h\n  \
-          csift stats @<uuid> --format json | tail -1 | jq .tokens   # scope token totals\n\n\
-        JSON SCHEMA (per --format json)\n  \
-          Envelope: header → one {kind:\"session\", …} row per session → summary. Session \
-        rows carry {session_id, is_subagent, parent_session_id, lines, line_types:{<type>:count}, \
-        user_records, \
-        assistant_records, turns, abandoned_turns, rewound_turns, replay_copies, \
-        compactions, first_utc, first_local, last_utc, last_local, \
-        tokens:{<model>:{input, output, cache_read, cache_creation}}, \
-        narration_blocks:{<model>:count}, unknown_thinking_tags, tools:{<name>:count}, \
-        skipped_lines}. The summary adds the scope totals ({sessions, line_types, tokens, \
-        narration_blocks, unknown_thinking_tags, tools, turns, abandoned_turns, \
-        rewound_turns, replay_copies, \
-        dropped_by_cap, skipped_lines}). Both rows ALSO carry the crossing set \
-        {crossing_budget, boundaries_crossed, budget_exhausted, boundaries_above_floor, \
-        floor_line, floor_cause} whenever `--cross-compactions` is non-zero - how many \
-        compaction boundaries the survival walk stepped over, how many it did not, and \
-        where the chain floor sits; under `--cross-compactions 0` csift crossed nothing \
-        and the keys are absent. `tail -1 | jq .tokens` is the one-liner for total \
-        burn. `skipped_lines` here is a FULL-SCAN census (stats parses every line): the \
-        corruption-census authority for \"does this transcript carry a torn/corrupt line \
-        anywhere\"; `list`'s same-named field covers only the head/tail lines list reads."
+    long_about = "\
+One scan of each transcript answers the aggregation questions that otherwise need
+hand-rolled jsonl parsing. Every session row has the same fixed shape:
+
+  tokens        token burn per model, from message.usage
+  narration     narration-block counts per model (agent.thinking.narration)
+  tools         tool-call counts by name
+  turns         the turn count
+  span          the first and last timestamps, and the duration between them
+  compactions   the compaction count
+  malformed     the malformed-line count
+  types         a whole-file LINE-TYPE census
+
+Tokens are counted ONCE per API message. Claude Code repeats the identical usage object on
+every per-block record of one message, so sums dedupe by message.id per transcript. A
+per-record sum over-reads 2-3.5x.
+
+Narration blocks are summaries the API issues. Their token split is not derivable, so only
+blocks are counted.
+
+A tool call counts once per CALL, one per invocation. `search --count-by tool` counts
+RECORDS, the use plus its result carrier, so it reads ≈2× these tallies. The two figures
+differ in unit and do not contradict each other.
+
+The line-type census counts every physical line by its top-level `type` (`user`,
+`assistant`, `attachment`, `file-history-snapshot`, `system`, …). It answers \"what else is
+in this jsonl besides the conversation\". Non-record lines are the majority of many
+transcripts' bytes, and no other surface parses them.
+
+Subagents are spanned by default. Each transcript is its own row, and the scope TOTAL block
+sums them. `--since`/`--until` bound the counted records by timestamp.
+
+`turns` counts the LIVE turns. That is the numbering that follows Claude Code's own
+conversation chain, the one `search` prints as `tN` and `show --turn` addresses. A `stats`
+turn count therefore equals the number of numbered rows (`t0` .. `tN`) that
+`search --count-by turn` prints over the same scope, and a `--turn` window resolves against
+that numbering. When the transcript carries records off the chain, the census prints one
+row more, `t? (abandoned)`, which counts those records and is no turn.
+
+What LEFT the numbering is disclosed beside it, on a line printed only when there is
+something to say:
+
+  chain  abandoned turns N (M rewound) · replay copy lines K
+
+An ABANDONED turn is an opener the chain no longer reaches, such as a recalled draft or a
+turn the operator rewound past. The REWOUND ones are the subset that drew a reply before
+the rewind. A REPLAY COPY is a line whose uuid a later line also carries, which a compaction
+re-anchor appends.
+
+Under a `--turn` or time window every figure windows EXCEPT `lines`, the `types` census and
+the three chain totals. They stay file facts (the physical line count, the per-type line
+counts and the whole-chain counts). The chain totals cannot window, because an abandoned
+opener carries no turn index to window on.",
+    after_help = "\
+EXAMPLES
+  csift stats @<uuid>                                        # one session + its subagents
+  csift stats @<uuid> --no-subagents                         # just the top-level thread
+  csift stats . --since 1d                                   # this project, last 24h
+  csift stats @<uuid> --format json | tail -1 | jq .tokens   # scope token totals
+
+JSON SCHEMA (--format json)
+  The envelope is a header, then one {kind:\"session\", …} row per session, then the
+  summary.
+
+  Session rows carry {session_id, is_subagent, parent_session_id, lines,
+  line_types:{<type>:count}, user_records, assistant_records, turns, abandoned_turns,
+  rewound_turns, replay_copies, compactions, first_utc, first_local, last_utc, last_local,
+  tokens:{<model>:{input, output, cache_read, cache_creation}},
+  narration_blocks:{<model>:count}, unknown_thinking_tags, tools:{<name>:count},
+  skipped_lines}.
+
+  The summary adds the scope totals {sessions, line_types, tokens, narration_blocks,
+  unknown_thinking_tags, tools, turns, abandoned_turns, rewound_turns, replay_copies,
+  dropped_by_cap, skipped_lines}. `tail -1 | jq .tokens` is the one-liner for total burn.
+
+  Both rows ALSO carry the crossing set {crossing_budget, boundaries_crossed,
+  budget_exhausted, boundaries_above_floor, floor_line, floor_cause} whenever
+  `--cross-compactions` is non-zero. The set says how many compaction boundaries the
+  survival walk stepped over, how many it did not, and where the chain floor sits. Under
+  `--cross-compactions 0` csift crossed nothing, and the keys are absent.
+
+  `skipped_lines` here is a FULL-SCAN census, because `stats` parses every line. It is the
+  corruption-census authority for \"does this transcript carry a torn or corrupt line
+  anywhere\". The field of the same name on `list` covers only the head and tail lines
+  `list` reads."
 )]
 pub struct StatsArgs {
-    /// Project path(s) / `@<uuid>` / `@<agent-id>` / `*.jsonl`; same targeting grammar as
-    /// every subcommand. Empty ⇒ every project.
+    /// Project path(s), `@<uuid>`, `@<agent-id>` or `*.jsonl`, in the targeting grammar every
+    /// subcommand shares. With no PATH, every project.
     #[arg(
         value_name = "PATH",
         value_parser = parse_project_target,
-        allow_hyphen_values = true
+        allow_hyphen_values = true,
+        verbatim_doc_comment
     )]
     pub paths: Vec<std::path::PathBuf>,
 
-    /// Scope ALSO to the session ids in FILE (`-` = stdin): whitespace/newline-separated
-    /// uuid / uuid-prefix / agent-id tokens, bare or `@`-prefixed, exactly the ids csift
-    /// emits (`search -l`, JSON `transcript_ids` / `parent_session_id`). UNION with positional
-    /// targets; each id resolves fail-loud like an `@` positional. An EMPTY list (an upstream
-    /// stage that found nothing) scopes to NOTHING: honest empty, exit 0, never a silent
-    /// widening to every project. The resolved ids then follow this command's normal
-    /// span rules, exactly as if they were `@` positionals: on the span-by-default
-    /// commands each session EXPANDS to its subagent transcripts (add `--no-subagents`
-    /// to pin to exactly the listed ids).
-    #[arg(long = "sessions-from", value_name = "FILE|-")]
+    /// Scope ALSO to the session ids in FILE (`-` reads stdin). The ids are uuid,
+    /// uuid-prefix or agent-id tokens, bare or `@`-prefixed and separated by whitespace or
+    /// newlines. They are exactly the ids csift emits (`search -l`, JSON `transcript_ids` /
+    /// `parent_session_id`).
+    ///
+    /// The list is a UNION with the positional targets, and each id resolves fail-loud like
+    /// an `@` positional. An EMPTY list (an upstream stage that found nothing) scopes to
+    /// NOTHING. That is an honest empty result with exit 0, never a silent widening to every
+    /// project.
+    ///
+    /// The resolved ids then follow this command's span rules exactly as `@` positionals
+    /// do. On the span-by-default commands each session EXPANDS to its subagent
+    /// transcripts, and `--no-subagents` pins the scope to exactly the listed ids.
+    #[arg(long = "sessions-from", value_name = "FILE|-", verbatim_doc_comment)]
     pub sessions_from: Option<std::path::PathBuf>,
 
-    /// Lower time bound (ISO8601 / relative `2h`/`3d`/…): records outside are not counted.
-    #[arg(long, value_name = "WHEN")]
+    /// Lower time bound (ISO8601, or relative `2h`/`3d`/…). Records outside it are not
+    /// counted.
+    #[arg(long, value_name = "WHEN", verbatim_doc_comment)]
     pub since: Option<String>,
 
-    /// Upper time bound (same WHEN grammar as --since).
+    /// Upper time bound (the same WHEN grammar as --since).
     #[arg(long, value_name = "WHEN")]
     pub until: Option<String>,
 
-    /// Count ONLY records in this inclusive turn-index window: the shared range grammar
-    /// (`N` · `A..B` · `N..` · `..N` · `-k` from the end), 0-based on the transcript's turn
-    /// order, turn 0 holding the first opener's turn (the same axis `search`/`files` use; discover
-    /// indices from their output). Intersects
-    /// (AND) with `--since`/`--until`, e.g. token burn of the last N turns is simply
-    /// `csift stats @main --turn -N..` (no need to look up the current turn index).
+    /// Count ONLY records in this inclusive turn-index window, in the shared range grammar
+    /// (`N`, `A..B`, `N..`, `..N`, `-k` from the end). Turns are 0-based in the
+    /// transcript's turn order, and turn 0 holds the first opener's turn. It is the axis
+    /// `search` and `files` use, and their output shows the indices.
+    ///
+    /// The window intersects (AND) with `--since`/`--until`. The token burn of the last N
+    /// turns is `csift stats @main --turn -N..`, with no need to look up the current turn
+    /// index.
     #[arg(
         long = "turn",
         value_name = "N|A..B|N..|-k",
-        allow_hyphen_values = true
+        allow_hyphen_values = true,
+        verbatim_doc_comment
     )]
     pub turn_range: Option<String>,
 
-    /// Cap the emitted per-session rows (default: unlimited); bound an unscoped run's output.
-    /// The kept rows are the most recently active; the drop is reported, never silent (the
-    /// scope TOTAL block then covers the shown subset). Pass a target / `--since` to choose
-    /// WHICH sessions instead.
-    #[arg(long, value_name = "N")]
+    /// Cap the emitted per-session rows (default: unlimited) to bound an unscoped run's
+    /// output. The kept rows are the most recently active. The drop is reported, never
+    /// silent, and the scope TOTAL block then covers the shown subset. A target or
+    /// `--since` chooses WHICH sessions instead.
+    #[arg(long, value_name = "N", verbatim_doc_comment)]
     pub max_count: Option<usize>,
 
-    /// Exclude subagent transcripts: count only the top-level session(s).
+    /// Exclude subagent transcripts and count only the top-level session(s).
     #[arg(long = "no-subagents")]
     pub no_subagents: bool,
 
-    /// Span subagent transcripts: the DEFAULT here; the explicit flag exists so every
-    /// span command answers the same two switches (`--subagents` / `--no-subagents`).
-    #[arg(long = "subagents", conflicts_with = "no_subagents")]
+    /// Span subagent transcripts, the DEFAULT here. The explicit flag exists so every span
+    /// command answers the same two switches (`--subagents` / `--no-subagents`).
+    #[arg(
+        long = "subagents",
+        conflicts_with = "no_subagents",
+        verbatim_doc_comment
+    )]
     pub subagents: bool,
 
     /// Emit JSON instead of the text blocks.

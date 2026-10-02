@@ -106,7 +106,7 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
     k(Family::Bookkeeping, "checkpoint_join"),
     k(
         Family::Thinking,
-        "signature_len (thinking blocks; null when the block carries no signature field)",
+        "signature_len (on thinking blocks and null when the block carries no signature field)",
     ),
     k(Family::Thinking, "thinking_text_absent"),
     k(
@@ -147,7 +147,7 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
     k(Family::System, "retry_in_ms"),
     k(
         Family::System,
-        "error (type and message only; never headers)",
+        "error (its type and message and never its headers)",
     ),
     k(Family::System, "task_id"),
     k(Family::System, "cron"),
@@ -166,7 +166,7 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
     k(Family::Keys, "user_feedback"),
     k(
         Family::Keys,
-        "api_failure:{error status quota{limit_type resets_at_utc resets_at_local} \
+        "api_failure:{error status quota{limit_type resets_at_utc resets_at_local}\n      \
          truncated_after_output aborted_mid_stream}",
     ),
     // The two OBJECT-VALUED keys of this family sit together, ahead of the scalar joins,
@@ -204,10 +204,24 @@ pub(crate) const FAMILY_ORDER: [Family; 7] = [
     Family::Keys,
 ];
 
-/// The keys as `show --help` prints them: `{a, b, c}`, block by block.
+/// Where the key block starts on its first line: `show --help` writes it after the
+/// two-space indent and `Record rows carry `, which is 20 columns.
+pub(crate) const KEY_BLOCK_FIRST_COLUMN: usize = 20;
+
+/// The separator between two keys where the block breaks a line: the comma, then a
+/// four-space continuation indent.
+pub(crate) const KEY_BLOCK_CONTINUATION: &str = ",\n    ";
+
+/// The widest a rendered line of the block may run.
+const KEY_BLOCK_WIDTH: usize = 96;
+
+/// The keys as `show --help` prints them: `{a, b, c}`, block by block, broken into lines
+/// no wider than [`KEY_BLOCK_WIDTH`]. clap prints help text without wrapping it, so the
+/// line breaks are made here.
 ///
 /// Built rather than typed, so a family that appends a row changes the help by changing
-/// the table - which is the whole point of the table.
+/// the table - which is the whole point of the table. A row whose rendered form carries
+/// its own line break (`api_failure`) is measured from that break on.
 pub(crate) fn record_row_keys() -> String {
     let names: Vec<&str> = FAMILY_ORDER
         .iter()
@@ -218,5 +232,26 @@ pub(crate) fn record_row_keys() -> String {
                 .map(|r| r.rendered)
         })
         .collect();
-    format!("{{{}}}", names.join(", "))
+    let mut out = String::from("{");
+    let mut column = KEY_BLOCK_FIRST_COLUMN + 1;
+    for (i, name) in names.iter().enumerate() {
+        let head = name.split('\n').next().unwrap_or_default().chars().count();
+        if i > 0 {
+            // The `+ 1` keeps room for the comma or the closing brace after the name.
+            if column + 2 + head + 1 > KEY_BLOCK_WIDTH {
+                out.push_str(KEY_BLOCK_CONTINUATION);
+                column = KEY_BLOCK_CONTINUATION.len() - 2;
+            } else {
+                out.push_str(", ");
+                column += 2;
+            }
+        }
+        out.push_str(name);
+        column = match name.rsplit_once('\n') {
+            Some((_, tail)) => tail.chars().count(),
+            None => column + head,
+        };
+    }
+    out.push('}');
+    out
 }

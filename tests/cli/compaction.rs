@@ -239,7 +239,7 @@ fn show_help_says_a_boundary_fetched_alone_reports_its_mode() {
     let help = h.run(&["show", "--help"]);
     let flat = help.stdout.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
-        flat.contains("so a boundary fetched alone reports its mode - and it stays null only where the file leaves the boundary unpaired"),
+        flat.contains("so a boundary fetched alone still reports its mode. It stays null only where the file leaves the boundary unpaired"),
         "{}",
         help.stdout
     );
