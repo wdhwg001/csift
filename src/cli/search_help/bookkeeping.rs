@@ -53,5 +53,6 @@ pub(crate) const SECTION: &str = "\n\nBOOKKEEPING LEAVES (harness.bookkeeping)\n
      `[for: <kind> unknown (<reason>)]` rather than dropping the edge. ONE relation \
      is not an edge, because its target is an INSTANT rather than a record or a file: \
      `cost-state` renders `[checkpoint closes <instant>]` (JSON \
-     `checkpoint_closes_at` plus `checkpoint_join`) - startTime plus totalDuration, \
+     `checkpoint_closes_at_utc` and `checkpoint_closes_at_local`, the timestamp pair, plus \
+     `checkpoint_join`) - startTime plus totalDuration, \
      the instant `list` joins a cleared session on as `cleared_from`.";

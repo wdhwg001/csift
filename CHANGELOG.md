@@ -154,8 +154,8 @@ surface change bumps the PATCH.
   `[for: continued_in @<session>]`, an `@` target you can feed straight back to csift. The
   fifth names an INSTANT, which no target shape can carry without putting a timestamp in a
   field documented as the target record's uuid, so `cost-state` stays the family's own
-  fact: `[checkpoint closes <instant>]` with JSON `checkpoint_closes_at` and
-  `checkpoint_join`, the `startTime + totalDuration` sum `list` joins a cleared session on
+  fact: `[checkpoint closes <instant>]` with JSON `checkpoint_closes_at_utc`,
+  `checkpoint_closes_at_local` and `checkpoint_join`, the `startTime + totalDuration` sum `list` joins a cleared session on
   as `cleared_from`. Each renders its honest empty when the key it reads is absent, rather
   than dropping the field. A `fork-context-ref` naming a parent session but no cut record
   renders that session for the same reason.
@@ -163,8 +163,8 @@ surface change bumps the PATCH.
   for all thirteen leaves while the text surface said nothing, because the engine prints
   that marker only for a record carrying a per-record delivery override and a bookkeeping
   line's invisibility comes from its leaf. It is the engine's own marker, so both surfaces
-  spell it one way. `show --format json` gains three record-row keys with it: `for`,
-  `checkpoint_closes_at` and `checkpoint_join`. The handover relation is not a fourth key:
+  spell it one way. `show --format json` gains four record-row keys with it: `for`,
+  `checkpoint_closes_at_utc`, `checkpoint_closes_at_local` and `checkpoint_join`. The handover relation is not a fourth key:
   it rides the shared `for` array as the edge `continued_in`, whose target names the child
   SESSION and no record in it, so a `continued-in` line's row carries that edge and no
   `continued_in` key of its own.
@@ -1054,12 +1054,12 @@ surface change bumps the PATCH.
   the harness writes it as a number: the session start in epoch milliseconds, which its
   own schema for the line declares `number().nonnegative().finite()`. So every
   `cost-state` unit rendered `[checkpoint closes unknown (needs startTime and
-  totalDuration)]` with JSON `checkpoint_closes_at: null`, 96 of 96 lines on one projects
+  totalDuration)]` with a null JSON instant, 96 of 96 lines on one projects
   root, while `--raw` showed both keys on every one. The fact now reads the pair through
   the same function `list`'s `/clear` join uses, so the instant a unit shows is the one
   the join compares. The label prints it as local text,
-  `[checkpoint closes 2026-08-31 18:58:32.913 AEST(UTC+10)]`, and `checkpoint_closes_at`
-  carries the UTC instant. A value that is not a non-negative number reads as absent, the
+  `[checkpoint closes 2026-08-31 18:58:32.913 AEST(UTC+10)]`, and JSON carries the
+  instant as the pair `checkpoint_closes_at_utc` and `checkpoint_closes_at_local`. A value that is not a non-negative number reads as absent, the
   line the harness's own readers refuse, and the empty label now says so: `(needs
   startTime and totalDuration as numbers)`. The `search --help` sample head showed
   `startTime` as an ISO string and shows epoch milliseconds now (claims QT-042, QT-043).

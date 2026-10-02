@@ -32205,7 +32205,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "419-424",
+          "lines": "420-425",
           "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The leaf it gated has a name: select it with\n    /// `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -49339,7 +49339,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "419-424",
+          "lines": "420-425",
           "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The leaf it gated has a name: select it with\n    /// `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -83293,7 +83293,7 @@
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "380",
+          "lines": "386",
           "snippet": "fn checkpoint_join(obj: &serde_json::Map<String, serde_json::Value>) -> Option<String> {"
         },
         {
@@ -87160,7 +87160,7 @@
       "code": [
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "350-356",
+          "lines": "356-362",
           "snippet": "        \"fork-context-ref\" => super::for_edge(\n            EdgeKind::ForkedFrom,\n            Basis::Key,\n            at(\"parentLastUuid\"),\n            at(\"parentSessionId\"),\n            ctx,\n        ),"
         }
       ],
@@ -87353,7 +87353,7 @@
         },
         {
           "path": "src/commands/search/record_text/bookkeeping.rs",
-          "lines": "358-364",
+          "lines": "364-370",
           "snippet": "        \"continued-in\" => super::for_edge(\n            EdgeKind::ContinuedIn,\n            Basis::Key,\n            None,\n            at(\"continuedInSessionId\"),\n            ctx,\n        ),"
         }
       ],

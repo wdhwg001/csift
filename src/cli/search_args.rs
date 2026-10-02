@@ -300,8 +300,9 @@ pub struct SearchArgs {
     /// `minted_elsewhere` on `list`, `spawn_tool_use_id` / `parent_agent_id` on `agents`,
     /// the verdict on `msg` - because an edge's target names a session without carrying the
     /// re-feedable id trio beside it; and a relation whose target is not a RECORD at all is
-    /// a per-hit FACT with its own key - `produced_by` (a command), `checkpoint_closes_at`
-    /// (an instant), `peer_sender_task_id` (a lane), `image_ids` (an image handle),
+    /// a per-hit FACT with its own key - `produced_by` (a command),
+    /// `checkpoint_closes_at_utc` / `_local` (an instant), `peer_sender_task_id` (a lane),
+    /// `image_ids` (an image handle),
     /// `--resolve-persisted` (an external file). Some relations csift can NAME and nothing
     /// on disk states: `summarizes` has no key for the region a compaction summary replaced
     /// (the boundary names what it KEPT, `preserves`, and `csift verbatim` reconstructs the

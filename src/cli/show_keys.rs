@@ -101,7 +101,8 @@ pub(crate) const RECORD_KEYS: &[RecordKey] = &[
     ),
     // The family's own one, on the line whose relation names an INSTANT rather than a
     // record or a file - the one relation no `for` target can express.
-    k(Family::Bookkeeping, "checkpoint_closes_at"),
+    k(Family::Bookkeeping, "checkpoint_closes_at_utc"),
+    k(Family::Bookkeeping, "checkpoint_closes_at_local"),
     k(Family::Bookkeeping, "checkpoint_join"),
     k(
         Family::Thinking,

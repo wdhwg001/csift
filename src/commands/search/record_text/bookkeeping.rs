@@ -267,8 +267,14 @@ impl Fact {
         match self {
             #[cfg(test)]
             Fact::Probe(head) => vec![("bookkeeping_probe", serde_json::json!(head))],
+            // A machine instant rides as the `_utc` / `_local` pair; the label zone above
+            // prints the local form alone.
             Fact::Checkpoint(at) => vec![
-                ("checkpoint_closes_at", serde_json::json!(at)),
+                ("checkpoint_closes_at_utc", serde_json::json!(at)),
+                (
+                    "checkpoint_closes_at_local",
+                    serde_json::json!(at.as_deref().and_then(crate::timez::local_iso)),
+                ),
                 (
                     "checkpoint_join",
                     serde_json::json!("startTime+totalDuration; list joins it as cleared_from"),

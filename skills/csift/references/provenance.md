@@ -79,7 +79,7 @@ Relations that are real and are not `for` edges, and where each answer lives. A 
 | a channel message, the record it landed in | `csift msg` (references/channel.md) |
 | a peer relay, the lane that sent it | `peer_sender_task_id` |
 | a hook attachment, the command that produced it | `produced_by` |
-| a cost checkpoint, the instant it closes | `checkpoint_closes_at` |
+| a cost checkpoint, the instant it closes | `checkpoint_closes_at_utc`, `checkpoint_closes_at_local` |
 | an image block, its record and position | `image_ids` and `csift image` handles |
 | a `<persisted-output>` pointer, the file holding the output | `search --resolve-persisted` |
 | an external write, the calls around it | `recover` boundaries (references/disk.md) |

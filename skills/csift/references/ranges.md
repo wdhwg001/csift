@@ -38,7 +38,7 @@ Read line and turn numbers from output, never compute one from the other, and ne
 
 ## Instants
 
-Text output prints an instant in local time with its zone and offset (`2026-03-14 09:26:53 AEDT(UTC+11)`; the turn and record headers of `search` and `show` add milliseconds), except what a record states in its own words: a schedule's `[scheduled fire Jun 5 6:40am]` keeps the harness's text and a cost line's `startTime=` epoch milliseconds (measured: each command's text output on one session, `csift search '' -t harness.schedule.fire`, `-t harness.bookkeeping.cost`). JSON pairs `*_utc` with `*_local`, except `checkpoint_closes_at` (UTC alone) and `scheduled_at` (the harness's text); the `--until is before --since` error prints UTC. Do not convert text times by hand; instead read them as printed, and use the JSON pair for arithmetic.
+Text output prints an instant in local time with its zone and offset (`2026-03-14 09:26:53 AEDT(UTC+11)`; the turn and record headers of `search` and `show` add milliseconds), except what a record states in its own words: a schedule's `[scheduled fire Jun 5 6:40am]` keeps the harness's text and a cost line's `startTime=` epoch milliseconds (measured: each command's text output on one session, `csift search '' -t harness.schedule.fire`, `-t harness.bookkeeping.cost`). JSON pairs `*_utc` with `*_local`, except `scheduled_at` (the harness's text); the `--until is before --since` error prints UTC. Do not convert text times by hand; instead read them as printed, and use the JSON pair for arithmetic.
 
 ## Time windows
 

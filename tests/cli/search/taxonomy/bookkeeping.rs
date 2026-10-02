@@ -304,7 +304,17 @@ fn the_provenance_relations_ride_the_json_row() {
     assert_eq!(edge["reason"], serde_json::Value::Null);
     // The family's own one.
     let cost = row("16");
-    assert_eq!(cost["checkpoint_closes_at"], "2026-01-01T01:00:00Z");
+    // The instant rides as the timestamp pair, and no bare key beside it; the offset is
+    // whatever this host's zone is.
+    assert_eq!(cost["checkpoint_closes_at_utc"], "2026-01-01T01:00:00Z");
+    let local = cost["checkpoint_closes_at_local"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(
+        local.len() == "2026-01-01T01:00:00+00:00".len() && local.starts_with("2026-01-01T"),
+        "{cost}"
+    );
+    assert!(cost.get("checkpoint_closes_at").is_none(), "{cost}");
     assert_eq!(
         cost["checkpoint_join"],
         "startTime+totalDuration; list joins it as cleared_from"

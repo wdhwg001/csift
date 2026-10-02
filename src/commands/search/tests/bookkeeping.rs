@@ -215,8 +215,15 @@ fn the_checkpoint_json_carries_the_utc_instant() {
     assert_eq!(
         json[0],
         (
-            "checkpoint_closes_at",
+            "checkpoint_closes_at_utc",
             serde_json::json!("2026-01-01T01:00:00Z")
+        )
+    );
+    assert_eq!(
+        json[1],
+        (
+            "checkpoint_closes_at_local",
+            serde_json::json!(crate::timez::local_iso("2026-01-01T01:00:00Z"))
         )
     );
 }
