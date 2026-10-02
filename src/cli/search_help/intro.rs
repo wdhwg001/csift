@@ -257,11 +257,14 @@ pub(crate) const INTRO: &str = "EXAMPLES\n  \
           THE 1:1 LAW. `csift show --line N` never hard-misses a PARSEABLE line. A shape csift\n  \
         models no leaf for renders `? unmodeled: <type[/subtype|/attachment.type]>` with the\n  \
         line\'s own top-level keys (JSON `label`:null, `labels`:[], `unmodeled`), so an unknown\n  \
-        line is visibly unknown and never absent. In that excerpt a `headers` member is ELIDED\n  \
-        at every depth and prints as `<elided>`, and `--raw` is the one path that prints an\n  \
-        HTTP response header set. A SCAN never emits an unmodeled unit, so no census, count or\n  \
-        -t result moves. A line that is not a JSON object at all is still a hard miss pointing\n  \
-        at `--raw`.\n\n  \
+        line is visibly unknown and never absent. In that excerpt two members are ELIDED at\n  \
+        every depth and print as `<elided>`. A `headers` member holds an HTTP response header\n  \
+        set, and `--raw` is the one path that prints one. A `data` member holds a base64 image\n  \
+        or document source, or a redacted thinking block's ciphertext. Its head identifies\n  \
+        nothing, and at the 80-character cut it would crowd out the sibling keys that do say\n  \
+        what the shape is. A SCAN never emits an unmodeled unit, so no census, count or -t\n  \
+        result moves. A line that is not a JSON object at all is still a hard miss pointing at\n  \
+        `--raw`.\n\n  \
           A record carrying several labels prints ONCE, under its richest view (an AUQ answer is\n  \
         `user.answer`, not `agent.tool.result`). `labels` is ordered richest-first, and the\n  \
         rendered view is the first entry your -t/-T leaves alive.\n\n  \
