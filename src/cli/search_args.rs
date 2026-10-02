@@ -38,10 +38,9 @@ pub struct SearchArgs {
     ///   @main, @trap:<marker>     the calling session
     ///   *.jsonl                   one transcript file
     ///
-    /// Every encoded dir starts with `-`, so `allow_hyphen_values` is REQUIRED on this
-    /// argument. The `normalize_argv` pre-pass routes declared flags (LONG ones and the
-    /// short `-t`/`-i`) away from the positional, so a trailing flag
-    /// (`… <path> --format json` or `… <path> -t user`) is never swallowed.
+    /// An encoded dir token starts with `-` and is still read as a target. A declared flag
+    /// after a target (any long flag, or the short `-t`/`-i`) is still read as a flag, so
+    /// `… <path> --format json` and `… <path> -t user` both work.
     #[arg(
         value_name = "PATH",
         allow_hyphen_values = true,
@@ -90,8 +89,8 @@ pub struct SearchArgs {
     ///   an intermediate prefix or exact leaf   its full set
     ///   (`-t agent.tool`, `-t user.unsent`)
     ///
-    /// A bare role or category is narrowed on THREE axes. AXIS 1 is a per-LEAF default.
-    /// A bare face reaches every leaf except these model-invisible ones.
+    /// A bare role or category shows only what the model received. Per LEAF, it leaves out
+    /// these leaves, which the model never receives.
     ///
     ///   `user.unsent`, `user.rewound`     scan-layer leaves the surviving conversation
     ///                                     does not reach
@@ -105,25 +104,29 @@ pub struct SearchArgs {
     ///   `harness.system.{refusal,api-error,notice,kill}`
     ///   `harness.hook.outcome`
     ///
-    /// The other two axes decide per RECORD.
+    /// Per RECORD, delivery and survival decide further.
     ///
-    /// DELIVERY. Claude Code's converter turns a `hook_success` attachment that carries a
-    /// top-level `rendered` into text the model receives. `-t harness` therefore shows
-    /// such a record although `harness.hook.outcome` is invisible. Claude Code's request
-    /// assembler drops an `isVirtual` record and the `<synthetic>` API-error placeholder,
-    /// and its converter drops a never-converted attachment payload. A bare face hides
-    /// those records although their leaves are visible. `agent.message.structured` alone
-    /// keeps its face, because the model wrote it.
+    /// DELIVERY. Claude Code turns a `hook_success` attachment that carries a top-level
+    /// `rendered` into text the model receives. `-t harness` therefore shows such a record
+    /// although `harness.hook.outcome` is one of the leaves listed above. Claude Code also
+    /// leaves some records out of the request it sends the model. Among them are a record
+    /// flagged `isVirtual`, which only the person's screen shows, the stand-in assistant
+    /// record with the model name `<synthetic>` that it writes when an API call fails, and
+    /// an attachment whose payload type it never turns into text. A bare role or category
+    /// hides those records although their leaves are not in the list above.
+    /// `agent.message.structured` is the one exception and stays in `-t agent`, because
+    /// the model wrote it.
     ///
-    /// SURVIVAL. A record Claude Code's own conversation chain does not reach is not in
-    /// the conversation either. That covers a recalled draft, a turn the operator rewound
-    /// past, and anything under one. A bare role skips such a record. A glob or an exact
-    /// leaf reaches it, marked `[abandoned]` or `[rewound]`.
+    /// SURVIVAL. A bare role or category skips a record Claude Code's conversation chain no
+    /// longer reaches (the global `--cross-compactions` entry says what the chain is). That
+    /// covers a message the person recalled and edited before resending it, a turn the
+    /// person rewound past, and anything under one. A glob or an exact leaf reaches such a
+    /// record, marked `[abandoned]` or `[rewound]`.
     ///
     /// An invalid selector is a HARD error listing the valid set. With no `-t`, every leaf
     /// a default scan reaches is eligible, and a gated leaf still needs its own `-t` (the
-    /// leaf tree's GATE words). There is no back-compat. The retired flat
-    /// `thinking`/`tool`/`tool-response` spellings hard-error and name their successors.
+    /// leaf tree's GATE words). The retired flat `thinking`/`tool`/`tool-response`
+    /// spellings hard-error and name their successors.
     #[arg(
         short = 't',
         long = "label",
@@ -134,10 +137,11 @@ pub struct SearchArgs {
     pub labels: Vec<String>,
 
     /// EXCLUDE labels matching this selector (repeatable). It takes the same grammar and
-    /// validation as `-t`, the rg `-t`/`-T` duality, and the same record-level rule for a
-    /// bare role. `-T harness` excludes a delivered `local_command` record and keeps an
-    /// undelivered one. The effective set is the `-t` selectors (or ALL, with none) MINUS
-    /// the `-T` selectors.
+    /// validation as `-t`, the rg `-t`/`-T` duality. A bare role or category in `-T`
+    /// removes only the records the same selector in `-t` would show. `-T harness`
+    /// therefore excludes a delivered `local_command` record and keeps an undelivered one,
+    /// which `-t harness` would not show either. The effective set is the `-t` selectors
+    /// (or ALL, with none) MINUS the `-T` selectors.
     ///
     ///   -T agent.thinking           everything except thinking
     ///   -t agent -T agent.tool      the agent role minus its tool traffic
@@ -270,17 +274,17 @@ pub struct SearchArgs {
 
     /// Print ONLY a census of the matched records along ONE fixed axis, one `<count> <key>`
     /// line per key. Every axis counts RECORDS, so a record whose several sections match
-    /// still counts once. The axes are a CLOSED set, not a query language.
+    /// still counts once. The axes are a fixed set of ten.
     ///
     ///   label       per `role.category.leaf` leaf. A record counts under EVERY leaf it
     ///               carries, so a leaf's number is exactly how many records `-t <leaf>`
-    ///               would surface. This is the exploration on-ramp. Run
-    ///               `csift search "" <target> --count-by label` BEFORE you guess a `-t`.
-    ///   tool        per tool name. These are RECORDS too, and a completed call is a
-    ///               tool_use record PLUS a tool_result carrier record, so expect ≈2× the
-    ///               per-CALL tallies `stats` prints. An answered AskUserQuestion re-homes
-    ///               its carrier to user.answer, so AUQ stays ≈1×. The 2× gap is a unit
-    ///               difference and no discrepancy.
+    ///               would surface. `csift search "" <target> --count-by label` shows
+    ///               which leaves a scope holds before any `-t` is chosen.
+    ///   tool        per tool name, over tool_use and tool_result records. A completed
+    ///               call is a tool_use record PLUS a tool_result carrier record, so the
+    ///               counts run at ≈2× the per-CALL tallies `stats` prints. An answered
+    ///               AskUserQuestion (AUQ) re-homes its carrier to user.answer, so AUQ
+    ///               stays ≈1×.
     ///   turn        per turn, in ASCENDING turn order (a histogram)
     ///   session     per transcript
     ///   pairing     paired | pending | orphan, joined by tool_use_id. It covers every
@@ -318,16 +322,18 @@ pub struct SearchArgs {
     ///   `parent` `precedes` `preserves` `redoes` `refused` `repairs` `replays`
     ///   `replies_to` `reports` `result_of` `supersedes` `versions` `wraps`
     ///
-    /// Six of them ride JSON alone and never render a label-zone tag, because each
-    /// restates something the unit already shows. `parent` restates the record above and
-    /// `result_of` what the pairing glyph says. The four survival words `supersedes` /
-    /// `continues` / `replays` / `branches` restate the distance line and the
-    /// `[abandoned]` / `[rewound]` / `[replay copy of L<n>]` markers. This census reads
-    /// them anyway.
+    /// Six of them appear in JSON only. They never print as a `for` tag in a hit's label
+    /// zone (the part of its header line that carries the leaf path and its markers),
+    /// because each repeats something the hit already shows. `parent` repeats
+    /// the record above. `result_of` repeats the `▹` mark that joins a tool result to its
+    /// call. The four survival words `supersedes` / `continues` / `replays` / `branches`
+    /// repeat the `differs from the sent message ...` line a recalled draft carries and
+    /// the `[abandoned]` / `[rewound]` / `[replay copy of L<n>]` markers. This census
+    /// counts all six all the same.
     ///
-    /// THE WORDS ARE NOT THE WHOLE MAP. A relation whose target sits in ANOTHER transcript
-    /// is a FIELD on the surface that owns the join, because an edge's target names a
-    /// session without carrying the re-feedable id trio beside it.
+    /// Beyond these keys, a relation whose target sits in ANOTHER transcript is a FIELD on
+    /// the surface that owns the join, because an edge's target names a session without
+    /// carrying the re-feedable id trio beside it.
     ///
     ///   list      `clone_of`, `cleared_from`, `continued_in`, `minted_elsewhere`
     ///   agents    `spawn_tool_use_id`, `parent_agent_id`
@@ -341,12 +347,12 @@ pub struct SearchArgs {
     ///   `image_ids`                                     an image handle
     ///   `--resolve-persisted`                           an external file
     ///
-    /// Some relations csift can NAME that nothing on disk states. `summarizes` has no key
-    /// for the region a compaction summary replaced. The boundary names what it KEPT
-    /// (`preserves`), and `csift verbatim` reconstructs the rest. `steers` has no key at
-    /// all. `closes` resolves one hop through `hook_run` and infers the rest from position.
-    /// `folds` is a csift RENDER decision and no record address. The csift skill's relation
-    /// inventory is the same table, with one row each.
+    /// `summarizes`, `steers`, `closes` and `folds` name relations that nothing on disk
+    /// states, so none of the four is a key of this census. `summarizes` would name the
+    /// region a compaction summary replaced, and no key records it. The boundary names what
+    /// it KEPT (`preserves`), and `csift verbatim` reconstructs the rest. `steers` has no
+    /// key at all. `closes` resolves one hop through `hook_run` and infers the rest from
+    /// position. `folds` is a csift RENDER decision and no record address.
     ///
     /// Records outside an axis's domain (no tool name, no pairing, no model) are excluded,
     /// AND the excluded count is reported, never silently. The census honors `-t`/`-T`, the
@@ -384,7 +390,7 @@ pub struct SearchArgs {
     ///
     /// THREE structural relations admit a row, and no others.
     ///
-    ///   its `parentUuid` names a member     `parent`, and every family word built on the
+    ///   its `parentUuid` names a member     `parent`, and every relation word built on the
     ///                                       parent link (`attached_to`, `blocked`,
     ///                                       `redoes`, `fires`, `wraps`)
     ///   it carries a `tool_result`          `result_of`
@@ -396,28 +402,27 @@ pub struct SearchArgs {
     /// non-structural relation points AT comes back empty. Those relations are `versions`,
     /// `refused`, `interrupted`, `leaf`, `forked_from`, `continued_in`, `replies_to`,
     /// `armed_by`, `banner`, `hook_run`, the four survival words, `precedes` and
-    /// `preserves`. The empty answer is a definitive absence about the three arms. It makes
-    /// no claim that nothing points there.
+    /// `preserves`. The empty answer is a definitive absence about the three relations
+    /// above. It makes no claim that nothing points there.
     ///
     /// TWO relations are in neither list and come back anyway, because the walk follows
     /// the LINKS and not the words. `pairs` on a compaction summary and `repairs` on a
     /// paired resume placeholder both name the record ABOVE, which is their `parentUuid`.
-    /// The parent arm therefore returns them from an address on that record, although
-    /// their hit prints no `parent` edge. It prints none because of the
-    /// ONE-RELATION-ONE-EDGE rule. `parent` stands down whenever ANY OTHER edge on the same
-    /// unit already names that same TARGET. The test is on the target and never on who
-    /// named it, so a family's word and the engine's own both trigger it. No FIELD is
-    /// removed by that. The record keeps the parent it had, `for_root` still names its
-    /// turn, and `--for` still walks it. The forward direction answers those, through the
-    /// `for[]` on the hit or `--count-by for-kind`.
+    /// The `parentUuid` relation therefore returns them from an address on that record,
+    /// although their hit prints no `parent` edge. It prints none because a hit gives one
+    /// target one edge. `parent` is left out whenever ANY OTHER edge on the same hit
+    /// already names that same TARGET, whichever word that edge uses. No FIELD is removed
+    /// by that. The record keeps the parent it had, `for_root` still names its turn, and
+    /// `--for` still walks it. The forward direction answers those, through the `for[]` on
+    /// the hit or `--count-by for-kind`.
     ///
     /// The address may name a GATED line (a hook attachment, a bookkeeping line). The
     /// closure starts there either way, and the addressed record itself is emitted only
-    /// under its own gate. `--for L12` gives you what L12 drew, and
-    /// `--for L12 --attachments` gives you L12 as well. `--for` composes with `-t`/`-T`,
-    /// the time bounds and the scope. The PATTERN still applies, so use an empty pattern
-    /// for the whole set. Under JSON the summary gains `for_of` (`address`, `records`,
-    /// `transcripts`).
+    /// under its own gate. For a gated L12, `--for L12` returns the records that are for
+    /// L12 without L12 itself, and `--for L12 --attachments` returns L12 as well. `--for`
+    /// composes with `-t`/`-T`, the time bounds and the scope. The PATTERN still applies,
+    /// so an empty pattern returns the whole set. Under JSON the summary gains `for_of`
+    /// (`address`, `records`, `transcripts`).
     #[arg(long = "for", value_name = "ADDR", verbatim_doc_comment)]
     pub for_addr: Option<String>,
 
@@ -444,12 +449,17 @@ pub struct SearchArgs {
     /// not render (usage, stop_reason, model, any new field), FILTERED by the full search
     /// surface (PATTERN, `-t`/`-T`, time, turn, scope). stdout is a pure jsonl stream to
     /// pipe into `jq`. The scope, drop and malformed notes go to stderr, and so do the
-    /// compaction crossing lines (`--cross-compactions`), because the scan's survival walk
-    /// decides which records are hits. A raw stream has no envelope, so it carries none of
-    /// the crossing JSON keys. The stream holds one line per matched RECORD, and a record
-    /// hit under several labels emits once. A sidecar-merged record has no physical line
-    /// and is omitted with a stderr note. `--resolve-persisted` still affects MATCHING
-    /// only, and the emitted line is always the original.
+    /// compaction crossing lines (`--cross-compactions`), because the conversation chain
+    /// decides which records are hits (the global `--cross-compactions` entry says what the
+    /// chain is). A raw stream has no header or summary line, so it carries none of the
+    /// crossing JSON keys. The stream holds one line per matched RECORD, and a record hit
+    /// under several labels emits once. A session's sidecar directory is the
+    /// `<session-id>/` folder beside its transcript, holding its subagent transcripts,
+    /// `tool-results/` and the elicitation file `elicitations.jsonl`, where csift's hook
+    /// records a question or approval still waiting on the person. A record merged in from
+    /// that file has no physical line and is omitted with a stderr note.
+    /// `--resolve-persisted` still affects MATCHING only, and the emitted line is always
+    /// the original.
     #[arg(
         long,
         conflicts_with_all = ["siblings", "count_only", "sessions_with_matches", "no_truncate"],
@@ -470,7 +480,12 @@ pub struct SearchArgs {
     #[arg(long, verbatim_doc_comment)]
     pub no_truncate: bool,
 
-    /// Resolve `<persisted-output>` pointers to their `tool-results/<id>.txt` file.
+    /// Match a large tool output's full text. Claude Code moves a large tool output out of
+    /// the transcript into `tool-results/<id>.txt` in the session's sidecar directory and
+    /// leaves a `<persisted-output>` pointer in its place, the file's path plus a short
+    /// preview. A pattern then matches only that preview. This flag reads the file and
+    /// matches its whole content in place of the pointer. A file that cannot be read keeps
+    /// the pointer, and the hit says the file could not be read.
     #[arg(long, verbatim_doc_comment)]
     pub resolve_persisted: bool,
 
@@ -482,16 +497,16 @@ pub struct SearchArgs {
     #[arg(long, hide = true)]
     pub additional_context: bool,
 
-    /// Also scan EVERY `type:"attachment"` record. These are the harness sidecar payloads
-    /// (hook context, edited-file snapshots, compact file references, file snapshots, …)
-    /// that a default scan never parses, since they are the bulk of a transcript's bytes
-    /// and echo files wholesale. The flag EQUALS naming every attachment-carried leaf with
-    /// `.*`. The narrow ask needs no flag at all. A hook payload is
-    /// `-t harness.hook.context`, an injected payload is `-t 'harness.context.*'`, and each
-    /// renders its body by the rule ATTACHMENT LEAVES below states, which is also its
-    /// matchable text. `--count-by attachment` implies this gate. An explicit
-    /// `show --line`/`--uuid` address always renders an addressed attachment record, flag
-    /// or not.
+    /// Also scan EVERY `type:"attachment"` record. These carry what the harness attaches
+    /// to a turn (hook context, edited-file snapshots, compact file references, file
+    /// snapshots, …). A default scan never parses them, since they are the bulk of a
+    /// transcript's bytes and echo files wholesale. The flag EQUALS naming every
+    /// attachment-carried leaf with `.*`. The narrow ask needs no flag at all. A hook
+    /// payload is `-t harness.hook.context`, an injected payload is
+    /// `-t 'harness.context.*'`, and each renders its body by the rule ATTACHMENT LEAVES
+    /// below states, which is also its matchable text. `--count-by attachment` implies
+    /// this gate. An explicit `show --line`/`--uuid` address always renders an addressed
+    /// attachment record, flag or not.
     #[arg(long, verbatim_doc_comment)]
     pub attachments: bool,
 

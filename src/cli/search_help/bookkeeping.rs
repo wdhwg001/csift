@@ -29,7 +29,7 @@ pub(crate) const SECTION: &str = "\n\nBOOKKEEPING LEAVES (harness.bookkeeping)\n
      one leaf. They keep the head built from the fields csift models,\n  \
      `[file-history snapshot at <ts>: <path>@vN]`, which names the tracked path where a raw\n  \
      key walk could only print the snapshot object as JSON.\n\n  \
-     Two rules decide a head's values, and there is no third.\n    \
+     A head's values follow two rules.\n    \
      a key naming an ACCOUNT, an   prints its first 8 characters (leafUuid, parentLastUuid,\n    \
      ORGANISATION or a RECORD      accountUuid, ownerAccountUuid, ownerOrganizationUuid,\n                                  \
      vetoedAgainstAccountUuid)\n    \
@@ -39,12 +39,11 @@ pub(crate) const SECTION: &str = "\n\nBOOKKEEPING LEAVES (harness.bookkeeping)\n
      A session-shaped value (bridgeSessionId, parentSessionId) prints whole under the\n  \
      second rule, because it is a join key carried to another file and half a uuid joins\n  \
      nothing.\n\n  \
-     Every unit of the family carries the marker [not delivered]. None of these lines\n  \
+     Every bookkeeping unit carries the marker [not delivered]. None of these lines\n  \
      reaches the model, which is what the JSON `delivered` field says about all thirteen\n  \
      leaves.\n\n  \
-     FIVE line types also name something outside themselves. Three name a RECORD and one\n  \
-     names a FILE, and those four ride the shared provenance edge, `[for: leaf L42]` in the\n  \
-     label zone and a `for` array in JSON.\n    \
+     Four line types name a RECORD or a FILE outside themselves, and they carry the shared\n  \
+     provenance edge, `[for: leaf L42]` in the label zone and a `for` array in JSON.\n    \
      `last-prompt`          -> leaf, its leafUuid\n    \
      a file-history line    -> versions, its messageId\n    \
      `fork-context-ref`     -> forked_from, the record the forked agent's prefix was cut\n                              \
@@ -56,8 +55,9 @@ pub(crate) const SECTION: &str = "\n\nBOOKKEEPING LEAVES (harness.bookkeeping)\n
      resolves to a LINE of this transcript when one carries it. Otherwise the id prints\n  \
      with `(not in this file)`, and a line naming no such key renders\n  \
      `[for: <kind> unknown (<reason>)]` in place of a dropped edge.\n\n  \
-     ONE relation is no edge, because its target is an INSTANT, neither a record nor a\n  \
-     file. `cost-state` renders `[checkpoint closes <instant>]`, the startTime plus\n  \
-     totalDuration, which is the instant `list` joins a cleared session on as\n  \
+     `cost-state` names something outside itself too, an INSTANT, which is neither a\n  \
+     record nor a file and so takes no edge. It renders `[checkpoint closes <instant>]`,\n  \
+     the startTime plus totalDuration, which is the instant `list` joins a cleared session\n  \
+     on as
      `cleared_from`. JSON carries it as the timestamp pair `checkpoint_closes_at_utc` and\n  \
      `checkpoint_closes_at_local`, plus `checkpoint_join`.";

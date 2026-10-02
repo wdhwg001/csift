@@ -32205,7 +32205,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "478-483",
+          "lines": "493-498",
           "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The leaf it gated has a name: select it with\n    /// `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -45603,7 +45603,7 @@
         },
         {
           "path": "src/cli/search_help/intro.rs",
-          "lines": "230-232",
+          "lines": "236-238",
           "snippet": "          AXIS 1, LEAF VISIBILITY. 28 of the 73 leaves are outside a bare role or category. They\\n  \\\n        are the two scan-layer user leaves, `user.queued` and all 13 bookkeeping leaves\\n  \\\n        (non-transcript lines with no message field), the two textless thinking leaves, the\\n  \\"
         }
       ],
@@ -49339,7 +49339,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "478-483",
+          "lines": "493-498",
           "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The leaf it gated has a name: select it with\n    /// `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -49756,7 +49756,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "291-293",
+          "lines": "295-297",
           "snippet": "    ///   model       per assistant model, the raw `message.model` value. Claude Code's own\n    ///               `<synthetic>` placeholder, a stand-in assistant record Claude Code\n    ///               fabricates (an API-error notice, for one), is reported verbatim."
         }
       ],
@@ -80691,7 +80691,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "83-85",
+          "lines": "82-84",
           "snippet": "    /// Filter to records whose label matches a SELECTOR (repeatable). A label is a dotted\n    /// `role.category.leaf` path, and a selector matches it by dot-SEGMENT prefix. A\n    /// selector takes one of three forms."
         }
       ],

@@ -7,7 +7,7 @@
 //! would trail the JSON paragraph on the runs where these notes are the last thing on it.
 
 /// See the module doc.
-pub(crate) const OUTRO: &str = " The footer's `transcript_ids` is the \
+pub(crate) const OUTRO: &str = " The summary's `transcript_ids` is the \
         per-TRANSCRIPT\n  matching-id set, named apart from `-l`'s owning-session ids. \
-        Whole-document\n  `json.load` fails, so parse the stream line by line as JSONL, N \
-        envelopes followed by\n  the footer.";
+        Whole-document\n  `json.load` fails, because the stream is JSONL with one object per \
+        line, the header,\n  N exchange rows, then the summary.";

@@ -15,9 +15,10 @@ pub(crate) const SEARCH_LONG_ABOUT: &str =
         unless it spells an uppercase letter, as a literal or inside a bracket class such as\n\
         `[A-Z]`. An escape like `\\S`, `\\W`, `\\D` or `\\B` is no letter. `-i` forces \
         case-insensitive\nmatching and always wins. `--multiline` lets `.` cross newlines. \
-        An EMPTY pattern is a\npure filter that matches every label-eligible record, so \
-        combine it with `--label`,\n`--since` or `--turn`. A bare empty pattern with no other \
-        filter warns that it will\nemit a lot.\n\n\
+        An EMPTY pattern is a\npure filter that matches every record the label filter admits \
+        (with no `-t`, every leaf\na default scan reaches), so combine it with `--label`, \
+        `--since` or `--turn`. A bare\nempty pattern with no other filter warns that it will \
+        emit a lot.\n\n\
         LABELS (`-t`, repeatable)\n\
         A label is a dotted `role.category.leaf` path, over 3 roles, 17 categories and 73 \
         leaves.\nA SELECTOR matches a record label when it is a dot-SEGMENT prefix of the \
@@ -36,10 +37,10 @@ pub(crate) const SEARCH_LONG_ABOUT: &str =
         needs\nits own `-t` (see the leaf tree's GATE words). `-T`/`--label-not` EXCLUDES \
         with the same\ngrammar, the rg -t/-T duality. The effective set is the -t selectors \
         (or ALL) minus the\n-T selectors, and ONLY a -T that cancels your -t is a hard \
-        error. `harness.bookkeeping`\nis the one category whose whole face is invisible. \
-        Its bare form is accepted, matches\nnothing by the law, and says so with the \
-        remedy. Every retired spelling is a hard error\nnaming its successors. The retired \
-        spellings are `harness.meta` and every `harness.meta.*`\npath, the flat \
+        error. The model receives no\nleaf under `harness.bookkeeping`, so a bare \
+        `-t harness.bookkeeping` matches nothing. csift\naccepts it and says so on stderr \
+        with the remedy. Every retired spelling is a hard error\nnaming its successors. The \
+        retired spellings are `harness.meta` and every `harness.meta.*`\npath, the flat \
         `thinking`/`tool`/`tool-response`, and `harness.schedule.continuation`.\n\n\
         Where some records land:\n\n  \
           the human turn                              `user.message`\n  \
@@ -53,8 +54,10 @@ pub(crate) const SEARCH_LONG_ABOUT: &str =
           `user`\n\n\
         A tool named after harness machinery still classifies by ROLE. A `ScheduleWakeup` \
         CALL\n(arming a timer) is `agent.tool.use` like any other tool. \
-        `harness.schedule.wakeup` is only\nthe FIRED tick, the harness-injected \
-        marker-carrying wakeup prompt. A custom-prompt tick\ncarries no marker at all. It \
+        `harness.schedule.wakeup` is only\nthe FIRED tick, the fixed prompt the harness \
+        injects when the timer fires. That prompt\nopens with one of its own marker lines, \
+        such as `<<autonomous-loop-dynamic>>` or\n`# Autonomous loop check`. A tick armed \
+        with a custom prompt injects that prompt instead\nand carries no marker line. It \
         lands under `harness.schedule.fire`, the prompt a scheduled\ntask fires, which is \
         recognised by its parent link to the scheduler's own fire record and\nnever by its \
         text. A `<task-notification>` pulse OPENS a turn and is labelled by its kind, as\n\
@@ -73,20 +76,22 @@ pub(crate) const SEARCH_LONG_ABOUT: &str =
           2026-06-01T05:00:00       a BARE datetime, that LOCAL wall-clock time\n  \
           2026-06-01T05:00:00Z      an explicit zone (`…+10:00` works too)\n  \
           2h 3d 90m 45s 1w 2mo 1y   relative forms (a leading `-` is tolerated)\n\n\
-        ZERO MATCHES IS A DEFINITIVE ANSWER, NOT A FAILURE\n\
+        ZERO MATCHES\n\
         A no-match search exits 0 and prints a diagnosis on stderr. It reads \"DEFINITIVE\n\
         absence (exit 0), NOT an error\" and lists the active filters. When a `-t`/`-T` \
         filter was\non, an active probe NAMES the label(s) the pattern DOES occur under. \
         For example, the\npattern was excluded by your `-t user.message` but occurs under \
         `agent.tool.use`. Under\n`--turn` the diagnosis also counts the records the pattern \
         and the label filter match\nOUTSIDE turn numbering, which a turn window leaves out. \
-        These are a recalled draft, a\nrewound turn and a record on an abandoned branch. \
-        The count gets a line of its own,\nprinted first when there are any, and it names \
-        the two ways to reach them. One is to\ndrop `--turn`, the other to window by time \
-        with `--since`/`--until`. The terminal modes\n(`-c`, `-l`, `--count-by`) print the \
-        same stderr lines. Read the diagnosis and adjust the\nfilter, because an empty \
-        result is never a syntax error. To SEE a scope's record types\nbefore you filter, \
-        run `--count-by label`, a per-leaf census that covers the whole scope\nwith an \
-        empty pattern.\n\n\
+        Those are the records Claude Code's\nconversation chain no longer reaches (the global \
+        `--cross-compactions` entry says what\nthe chain is). They are a message the person \
+        sent, recalled and edited before resending\nit, a turn the person rewound past, and \
+        any record that hangs under one of those. The\ncount gets a line of its own, \
+        printed first when there are any, and it names the two\nways to reach them. One is \
+        to drop `--turn`, the other to window by time with\n`--since`/`--until`. The \
+        terminal modes (`-c`, `-l`, `--count-by`) print the same stderr\nlines. An empty \
+        result is never a syntax error, and the diagnosis names the filter to\nchange. \
+        `--count-by label` with an empty pattern is a per-leaf census that covers the \
+        whole\nscope, which shows its record types before any filter is chosen.\n\n\
         `--max-count` caps the emitted exchanges and reports how many it dropped. The \
         default is\nunlimited, with no cap. Nothing anywhere is truncated silently.";

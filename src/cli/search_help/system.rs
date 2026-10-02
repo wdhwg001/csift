@@ -51,10 +51,10 @@ pub(crate) const SECTION: &str = "\n\nSYSTEM LEAVES (harness.system, harness.sch
      (type and message only)\n    \
      schedule.event   `task_id`, `cron`, `prompt` (cut at 200 chars)\n    \
      fallback turn    `served_by`, `fell_back_from`\n  \
-     The instant is the engine's `scheduled_at` field on BOTH halves of the pair, and it\n  \
+     The instant rides the JSON `scheduled_at` field on BOTH halves of the pair, and it\n  \
      means one thing on each, which is when the schedule fired. The fired PROMPT reads it\n  \
      off its event sibling, and the EVENT reads its own parenthesised tail. The head\n  \
-     carries it too, because every key this family exposes is also in the rendered text.\n\n  \
+     carries it too, because every key these leaves expose is also in the rendered text.\n\n  \
      PROVENANCE. A leaf that NAMES another record carries a `for` fact.\n    \
      [for: <kind> L<n>]                      this transcript holds the named record\n    \
      [for: <kind> <id> (not in this file)]   it does not. A uuid is cut to its\n                                            \
@@ -66,13 +66,13 @@ pub(crate) const SECTION: &str = "\n\nSYSTEM LEAVES (harness.system, harness.sch
      chains stdout to stdout, so by construction the link names the record above,\n               \
      and that need not be the wrapper.\n    \
      armed_by   a fire record's `taskId`, always unknown. The arming call is joined by\n               \
-     matching that id inside a tool result, which a uuid map cannot do. The id\n               \
-     itself is in the head and in `task_id`.\n    \
+     matching that id inside a tool result, which a lookup by record uuid\n               \
+     cannot do. The id itself is in the head and in `task_id`.\n    \
      banner     the fallback turn, always unknown, because the banner names the turn and\n               \
      not the reverse\n  \
      JSON `for` is an ARRAY, one object per edge, each with `kind`, `basis`, `target`\n  \
      (`line`, `uuid`, `session`, `note`) and `reason`.\n\n  \
-     ONE law is not this family's to relax. An `api_error` line carries the whole HTTP\n  \
-     response header set inside `error.headers`, and NO rendered or JSON path prints any\n  \
-     of it. `--raw` is the documented way to those bytes. The same law is why this family\n  \
-     renders its named fields, where the bookkeeping leaves render the verbatim line.";
+     An `api_error` line carries the whole HTTP response header set inside\n  \
+     `error.headers`, and NO rendered or JSON path prints any of it. `--raw` is the\n  \
+     documented way to those bytes. That is also why these leaves render their named\n  \
+     fields, where the bookkeeping leaves render the verbatim line.";

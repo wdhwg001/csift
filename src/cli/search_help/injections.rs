@@ -26,10 +26,10 @@ pub(crate) const SECTION: &str = "\n\nINJECTION LEAVES (isMeta templates and the
      harness.context, harness.schedule, harness.resume, harness.notification, and the\n  \
      isMeta user.message and agent.communication.inbox.\n\n  \
      The harness writes text into a turn as a user record, shaped exactly like the\n  \
-     operator's own message. Every arm matches at CONTENT START after one left trim, and\n  \
-     every arm needs an AUTHORSHIP STAMP, either `isMeta` or `turnCompanion` on a record the\n  \
-     harness wrote to accompany a turn. A person writes neither, so a person who QUOTES a\n  \
-     template keeps `user.message`.\n    \
+     operator's own message. Each template matches only at CONTENT START, after leading\n  \
+     whitespace is trimmed, and only on a record carrying an AUTHORSHIP STAMP, either\n  \
+     `isMeta` or `turnCompanion` on a record the harness wrote to accompany a turn. A person\n  \
+     writes neither, so a person who QUOTES a template keeps `user.message`.\n    \
      .hook.feedback    answers to all four names one formatter writes (Stop, TeammateIdle,\n                      \
      TaskCreated, TaskCompleted)\n    \
      .enforce.retry    the harness CONTINUING a turn the model did not finish. It matches\n                      \
@@ -49,8 +49,9 @@ pub(crate) const SECTION: &str = "\n\nINJECTION LEAVES (isMeta templates and the
      a hook's\n    \
      .context.skill    answers to TWO heads. `Base directory for this skill:` is what the\n                      \
      registrar prepends, only for a skill that ships FILES.\n                      \
-     `# Workflow authoring reference` is the one bundled body with no\n                      \
-     files whose producer has been read.\n\n  \
+     `# Workflow authoring reference` heads the one bundled skill body\n                      \
+     with no files that the leaf recognises. Other file-less bodies\n                      \
+     share no head and carry no leaf.\n\n  \
      THREE records here are not the harness talking to itself.\n    \
      relayed message     A person's message the harness relayed into a running lane\n                        \
      (`origin.kind` `human`) is `user.message` with the marker\n                        \
@@ -65,7 +66,7 @@ pub(crate) const SECTION: &str = "\n\nINJECTION LEAVES (isMeta templates and the
      `[context image-only: N image block(s), M document block(s)]` (JSON `image_only`),\n  \
      because it has no text of its own to show. The same shape WITHOUT `isMeta` is a\n  \
      person's record and carries no leaf at all.\n\n  \
-     Most units of the family carry one `for` edge (JSON `for`, an array of\n  \
+     Most of these units carry one `for` edge (JSON `for`, an array of\n  \
      `{kind, basis, target:{line,uuid,session,note}, reason}`).\n    \
      redoes        the assistant turn an enforce nudge sends the model back to\n    \
      blocked       the turn a hook's feedback stopped\n    \
@@ -84,6 +85,6 @@ pub(crate) const SECTION: &str = "\n\nINJECTION LEAVES (isMeta templates and the
      `show --line N` renders it as `? unmodeled: user/isMeta` or\n  \
      `? unmodeled: user/turnCompanion`, and a scan never emits it. The AUTHORSHIP names the\n  \
      residue ahead of the content shape, so a companion whose content is a text-block\n  \
-     array is named by its stamp and not by the block. `turnCompanion` is read by\n  \
-     `is_genuine_user` too, so a record carrying it is never the person and never opens a\n  \
-     turn, whatever `isMeta` says.";
+     array is named by its stamp and not by the block. csift's test for the person's own\n  \
+     message reads `turnCompanion` too, so a record carrying it is never the person and\n  \
+     never opens a turn, whatever `isMeta` says.";

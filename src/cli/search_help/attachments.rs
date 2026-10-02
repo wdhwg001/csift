@@ -28,7 +28,10 @@ pub(crate) const SECTION: &str =
      Each unit also names ITSELF.\n    \
      [hook <event> <name>]                     injected context\n    \
      [hook <event> <name> exit <code> <ms>ms]  a hook run\n    \
-     [hook <payload type>]                     the other six outcome types\n    \
+     [hook <payload type>]                     the other six outcome types,\n                                               \
+     hook_blocking_error, hook_non_blocking_error,\n                                               \
+     hook_cancelled, hook_stopped_continuation,\n                                               \
+     hook_system_message, async_hook_response_batch\n    \
      [context <payload type>]                  the context leaves\n    \
      [structured]                              a schema-bound subagent's own answer\n    \
      [mid-turn]                                the person's steer\n  \
@@ -58,9 +61,10 @@ pub(crate) const SECTION: &str =
      converted text, and the payload text it replaced no longer matches. `--raw` does not\n  \
      recover the difference, because the raw backfill runs after the match phase. The way\n  \
      to the bytes is an address, `csift show @<id> --line N --raw`.\n  \
-     The decoded body is searchable by an ordinary pattern. A needle the prefilter can use\n  \
+     The decoded body is searchable by an ordinary pattern. Before it parses a line, csift\n  \
+     checks the raw bytes for a run the pattern requires (its needle), and a needle\n  \
      carries no whitespace, no double quote, no backslash, no control character and no DEL.\n  \
-     Such a run sits verbatim inside the raw line's JSON string, so the line prefilter and\n  \
-     the whole-file gate see what the render does. The backslash is on that list because a\n  \
-     line stores it doubled and a needle splits there. `C:\\Users\\dev` derives `Users`,\n  \
-     which is in the bytes, and the pattern matches.";
+     Such a run sits verbatim inside the raw line's JSON string, so the quick byte check\n  \
+     never skips a line the rendered body would match. The backslash is on that list\n  \
+     because a line stores it doubled, so a needle splits there. `C:\\Users\\dev` derives\n  \
+     `Users`, which is in the bytes, and the pattern matches.";

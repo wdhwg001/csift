@@ -42,27 +42,28 @@ pub(crate) const SECTION: &str =
      truncated after output aborted mid-stream]\n        \
      Each half appears only when the record names it, so a quota naming only its reset\n        \
      instant renders `quota resets <local instant>`. A record naming none of them\n        \
-     carries no object at all, which leaves the tag no floor word. `resets_at_utc` and\n        \
-     `resets_at_local` are the quota's reset instant, which the harness writes as epoch\n        \
-     seconds, as the `_utc` / `_local` pair every other instant carries.\n    \
+     carries no object and prints no tag at all. `resets_at_utc` and `resets_at_local`\n        \
+     are the quota's reset instant, which the harness writes as epoch seconds, as the\n        \
+     `_utc` / `_local` pair every other instant carries.\n    \
      `stop_reason`, `stop_details` {type, category, explanation, fallback_has_prefill_claim}\n        \
      ride a record whose `message.stop_details` names at least one member. They are the\n        \
-     API's own account of why it stopped the response, which reads `refusal` on every\n        \
-     record observed. They render `[api <type>: <category>]`, or `[api <type>]` with no\n        \
-     category. The tag is display-only, because a pattern scan matches a unit's text and\n        \
-     never its label zone, so the selector and the key are the way to these records.\n    \
+     API's own account of why it stopped the response, which Claude Code writes when\n        \
+     `stop_reason` reads `refusal`. They render `[api <type>: <category>]`, or\n        \
+     `[api <type>]` with no category. The tag is display-only, because a pattern scan\n        \
+     matches a unit's text and never its label zone, so the selector and the key are the\n        \
+     way to these records.\n    \
      `pdf_pages` {first, last, count, path}\n        \
      rides the `agent.tool.result` of a Read that carried a `pages` parameter and\n        \
      renders `[pdf pages A-B of <basename>]`. It says which pages of which document the\n        \
      result holds, read off `toolUseResult.firstPage` plus the result's own content\n        \
      elements. The tag names the basename because it sits beside a leaf path on one\n        \
      line, and the key carries the whole path. `csift image` prints the same derivation\n        \
-     per page, and the two surfaces agree by construction. The gate has two halves. The\n        \
-     record's own result reads `type == \"parts\"` WITH a `firstPage`, AND the record\n        \
-     carries exactly one `tool_result` block, since a `parts` result describes one tool\n        \
-     call. The key is ABSENT on anything else (a screenshot, a build before the key\n        \
-     existed, the REPL tool's re-emitted pages, a two-block record), never a range that\n        \
-     starts at 1.\n    \
+     per page, and the two surfaces agree by construction. The key appears only when both\n        \
+     of two things hold. The record's own result reads `type == \"parts\"` WITH a\n        \
+     `firstPage`, AND the record carries exactly one `tool_result` block, since a `parts`\n        \
+     result describes one tool call. The key is ABSENT on anything else (a screenshot, a\n        \
+     build before the key existed, the REPL tool's re-emitted pages, a two-block record),\n        \
+     never a range that starts at 1.\n    \
      `interrupted_message_id`, `hook_run_id`, `scheduled_task_id`, `scheduled_fire_id`\n        \
      are the explicit joins, JSON only. The unit's ONE `for` edge comes from the first\n        \
      two.\n          \

@@ -41,8 +41,8 @@ pub(crate) const SECTION: &str = "\n\nTHINKING LEAVES (agent.thinking, agent.mes
      Two per-hit JSON keys come with them.\n    \
      `signature_len`          the character length of a thinking block's own signature.\n                             \
      It is NULL when the block carries no signature field at all,\n                             \
-     because absent and empty are different shapes and the salvage\n                             \
-     discriminator rests on exactly that difference. A\n                             \
+     because absent and empty are different shapes, and an EMPTY\n                             \
+     signature is what marks a [cancelled stream salvage] block. A\n                             \
      redacted_thinking block has no signature field, so it carries\n                             \
      no `signature_len`.\n    \
      `thinking_text_absent`   true on an agent.thinking.omitted unit alone, so a consumer\n                             \
