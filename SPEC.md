@@ -2954,7 +2954,7 @@ Measured payoff (225 MB file): parse-every-line **1.39 s** vs prefilter-then-par
 
 ### 7d. Two-stage prefilter on raw line bytes (no UTF-8 validation, no JSON parse)
 
-1. **Label prefilter** (cheap `memchr::memmem::Finder`, built once per needle, reused across all lines): a line that could match a requested `-t` selector must contain a marker substring — `"thinking"`, `"tool_use"`, `"tool_result"`, `"role":"assistant"`, etc. A line lacking **all** active markers is dropped pre-JSON. (Genuine-`user` is the exception: a `"type":"user"` line passing the substring gate still needs structural disambiguation from carriers, so it is parsed — but that's only ~8.8 K of 115 K lines, and only when the `user` role is active.) The marker→leaf wiring widened with the taxonomy but the mechanics are unchanged. One keep is a CONJUNCTION rather than a single needle: the `compact_boundary` keep also demands the key-only `"subtype"` bytes, since the literal is a word a payload can use in prose (§4.7 carries the counting rule and the corpus numbers). The literal is tested first, so the second `memmem` runs only on the handful of lines carrying the rare word and the contract above is unaffected.
+1. **Label prefilter** (cheap `memchr::memmem::Finder`, built once per needle, reused across all lines): a line that could match a requested `-t` selector must contain a marker substring — `"thinking"`, `"tool_use"`, `"tool_result"`, `"role":"assistant"`, etc. A line lacking **all** active markers is dropped pre-JSON. (Genuine-`user` is the exception: a `"type":"user"` line passing the substring gate still needs structural disambiguation from carriers, so it is parsed — but that's only ~8.8 K of 115 K lines, and only when the `user` role is active.) The marker→leaf wiring follows the taxonomy (§5.3 names each gate); the mechanics are the ones this item states. One keep is a CONJUNCTION rather than a single needle: the `compact_boundary` keep also demands the key-only `"subtype"` bytes, since the literal is a word a payload can use in prose (§4.7 carries the counting rule and the corpus numbers). The literal is tested first, so the second `memmem` runs only on the handful of lines carrying the rare word and the contract above is unaffected.
 2. **Keyword prefilter** (the user regex): a REQUIRED-NEEDLE set is derived from the pattern (`required_needles`): a whole-pattern plain literal is the fast path; a pattern WITH metacharacters goes through a NECESSITY-ONLY walk of its parsed HIR (`hir_needles`) — a literal node contributes its longest SAFE run (whitespace and JSON-escaped chars SPLIT runs, since a sub-run of a required literal is itself required), a concatenation contributes its strongest single part, an alternation gates only when EVERY branch contributes (result = the union, capped at 8 needles), and min-0 repetitions / classes / anchors contribute nothing. The safety predicate applies PER NEEDLE — whitespace-free, JSON-escape-free (`json_escapes_in_string`), ≥3 bytes — because JSON encoding + render-time whitespace normalization rewrite exactly those bytes; a needle passing it survives verbatim in the raw line whenever the decoded text matches, which is what makes HIR extraction safe here at all: the danger is an unsafe or non-required needle, and this walk emits neither. Prefilter = ANY needle present against the raw bytes: per-needle `memmem` when case-sensitive (`Prefilter::Literal`/`AnyLiteral`), one `(?i)`-escaped-literal alternation bytes regex when smart-case-insensitive (`CaselessLiteral`, Teddy-class). This is what turns `search "TodoWrite.*legacy|legacy.*TodoWrite"` from a full-regex crawl of every candidate line into a near-literal-speed scan (both branches require `TodoWrite`, so the union dedups to one needle and the §7f whole-file gate applies). A raw SYNTHESIZED-TEXT marker set (per-needle `memmem::Finder`s — deliberately NOT one Aho-Corasick automaton; task-notifications, AUQ, rejections, `-t`-gated compact boundaries, flag-gated persisted pointers) exempts the records whose matchable text is fabricated rather than verbatim. Empty pattern ⇒ pure filter (skip stage 2). Non-anchorable pattern ⇒ run `regex::bytes::Regex` directly on raw bytes (still far cheaper than JSON parse).
 
 Only lines passing **both** gates reach `serde_json::from_slice` → typed `Record` → exact field-level match + round-trip stitching. **`simd-json`/`sonic-rs` are NOT used** (and not a default dep): once the prefilter drops 98% of lines, total serde time is a few ms even on 225 MB; simd-json needs an owned, padded, mutable buffer (fights the zero-copy mmap `&[u8]`) and sonic-rs adds unsafe-heavy deps for a speedup on a tiny byte fraction. Capture most of the win instead with `serde_json::from_slice` + `#[serde(borrow)]` zero-copy fields. (Keep simd-json as a possible future `--feature`, not default.)
@@ -2968,75 +2968,19 @@ Only lines passing **both** gates reach `serde_json::from_slice` → typed `Reco
 
 ### 7f. Whole-file match gate (`search`)
 
-When stage-2 anchors a prefilter (7d) and the invocation is not an addressing fetch (`--line`/`--uuid`), a PARALLEL pre-scan (the same newline-aligned rayon chunking as the full scan — never a serial whole-mmap pass) can prove no candidate line matches: per line, no literal occurrence and no synthesized-text marker. Every emitted exchange requires ≥1 regex hit, so the file is skipped without building a single `Record`; a relaxed atomic flag short-circuits the pre-scan the moment a literal (or a conservative marker) hits, so a file WITH matches pays only a skim before its normal full scan. VERIFIABLE marker lines (task-notifications, AUQ answers, compact boundaries) do not force the full scan: stage 2 parses just those lines, re-renders their synthesized texts through the shared engines, and regex-checks them — only a synthesized match reopens the full scan. That re-render walks EVERY VIEW, not the line alone: the render seam dispatches on the line's own leaf when it has one and on the CALLER's class when it does not, so a gate that rendered only the line is structurally blind to every family reachable through a class — an isMeta injection and a `<task-notification>` carry no leaf of their own, and a file whose only hit lies in such a head is then pruned and reported as a definitive absence while `show --line` renders it. **Its bound, stated so a later reader need not re-derive it:** for a line WITH its own leaf the seam's answer does not vary with the view, so the loop is skipped; for a LEAFLESS one it makes 59 `render_one` calls (the 52 leaves whose category names a family, plus one more for each of the seven in a two-family category). Today each returns `None` on one cheap shape test and the regex is never reached — measured at +8.8% median on a 132 MB file where every line carries a marker, against a 0.4% same-binary control band, and inside that band on a 1%-marker mix. A family that fills its render makes the gate pay one render plus one `locate` per answering view, on marker lines only. Two obligations survive the skip: a gated file's candidate lines were each syntax-validated (`parse::validate_line_syntax`, allocation-free) so the malformed-line count stays exact (§0 no-silent-truncation), and a top-level session's pending elicitation-sidecar records (which live OUTSIDE the file) force the normal scan when present. This is the difference between "parse 5 GB" and "skim 5 GB" for the common needle-not-here case.
+When stage-2 anchors a prefilter (7d) and the invocation is not an addressing fetch (`--line`/`--uuid`), a PARALLEL pre-scan (the same newline-aligned rayon chunking as the full scan — never a serial whole-mmap pass) can prove no candidate line matches: per line, no literal occurrence and no synthesized-text marker. Every emitted exchange requires ≥1 regex hit, so the file is skipped without building a single `Record`; a relaxed atomic flag short-circuits the pre-scan the moment a literal (or a conservative marker) hits, so a file WITH matches pays only a skim before its normal full scan. VERIFIABLE marker lines (task-notifications, AUQ answers, compact boundaries) do not force the full scan: stage 2 parses just those lines, re-renders their synthesized texts through the shared engines, and regex-checks them — only a synthesized match reopens the full scan. That re-render walks EVERY VIEW, not the line alone: the render seam dispatches on the line's own leaf when it has one and on the CALLER's class when it does not, so a gate that rendered only the line is structurally blind to every family reachable through a class — an isMeta injection and a `<task-notification>` carry no leaf of their own, and a file whose only hit lies in such a head is then pruned and reported as a definitive absence while `show --line` renders it. **Its bound, stated so a later reader need not re-derive it:** for a line WITH its own leaf the seam's answer does not vary with the view, so the loop is skipped; for a LEAFLESS one it makes 59 `render_one` calls (the 52 leaves whose category names a family, plus one more for each of the seven in a two-family category). At the measured build each returns `None` on one cheap shape test and the regex is never reached — measured at +8.8% median on a 132 MB file where every line carries a marker, against a 0.4% same-binary control band, and inside that band on a 1%-marker mix. A family that fills its render makes the gate pay one render plus one `locate` per answering view, on marker lines only. Two obligations survive the skip: a gated file's candidate lines were each syntax-validated (`parse::validate_line_syntax`, allocation-free) so the malformed-line count stays exact (§0 no-silent-truncation), and a top-level session's pending elicitation-sidecar records (which live OUTSIDE the file) force the normal scan when present. This is the difference between "parse 5 GB" and "skim 5 GB" for the common needle-not-here case.
 
 ### 7g. The survival pass: the one cost the axis adds
 
-**The structural contract above is unchanged.** mmap, the memchr line scan, the byte
-prefilter, the seek-from-EOF tail reads, the rayon fan-out and the 7f whole-file gate all
-work exactly as they did, and no scan parses a payload it did not parse before. What
-§4.11 adds is ONE extra pass: every full-scan command BYTE-WALKS each line its own
-prefilter drops and lifts five structural fields plus the boundary fields off it
-(`parse::spine_record`), because the conversation chain threads through lines no label
-selector wants. The walk cannot stop early, because Claude Code writes `uuid` and `timestamp`
-AFTER the payload key on 662,470 of 673,710 admitted lines (claim REC-104), so it jumps
-string interiors with a SIMD `memchr2` and reads the payload bytes it never parses.
-`stats` pays nothing extra for it: `parse::line_type_and_spine` lifts the same row out of
-the validating parse its line-type census already runs.
+**The structural contract above is unchanged.** mmap, the memchr line scan, the byte prefilter, the seek-from-EOF tail reads, the rayon fan-out and the 7f whole-file gate are untouched by the axis, and the axis parses no payload. What §4.11 adds is ONE extra pass: every full-scan command BYTE-WALKS each line its own prefilter drops and lifts five structural fields plus the boundary fields off it (`parse::spine_record`), because the conversation chain threads through lines no label selector wants. The walk cannot stop early, because Claude Code writes `uuid` and `timestamp` AFTER the payload key on 662,470 of 673,710 admitted lines (claim REC-104), so it jumps string interiors with a SIMD `memchr2` and reads the payload bytes it never parses. `stats` pays nothing extra for it: `parse::line_type_and_spine` lifts the same row out of the validating parse its line-type census already runs.
 
-**Where that cost actually sits.** On a 397 MiB transcript the pass builds 100,387
-structural rows against as few as 183 records the command itself wanted. Carrying those
-rows in the SAME vector as the surface's own records reads `image` 1.74 to 1.77x,
-`show --branch-points` 1.54x, `verbatim` 1.35x, `recover` 1.19x, `stats` 1.17x, a heavy
-`-t user.unsent` search on a 721 MB transcript 1.17x, and `files` 0.84x (faster, because
-`ChainView` replaces four per-file chain builds with one), all against a build with no
-axis at all. The BYTE WALK is not that cost: it runs inside the parallel scan, so on
-`image` it is 103 ms of CPU for 17 ms of wall, and building a row is 25 ms of CPU for
-under 2 ms of wall. The clock time is SERIAL. In one shared vector each element is sized
-to a `Record` rather than to the narrow row, about 120 MB is moved twice per hand-off,
-and the chain build over that vector grows from 1 ms across 183 nodes to 46 ms across
-100,570.
+**Where that cost actually sits.** On a 397 MiB transcript the pass builds 100,387 structural rows against as few as 183 records the command itself wanted. Carrying those rows in the SAME vector as the surface's own records reads `image` 1.74 to 1.77x, `show --branch-points` 1.54x, `verbatim` 1.35x, `recover` 1.19x, `stats` 1.17x, a heavy `-t user.unsent` search on a 721 MB transcript 1.17x, and `files` 0.84x (faster, because `ChainView` replaces four per-file chain builds with one), all against a build with no axis at all. The BYTE WALK is not that cost: it runs inside the parallel scan, so on `image` it is 103 ms of CPU for 17 ms of wall, and building a row is 25 ms of CPU for under 2 ms of wall. The clock time is SERIAL. In one shared vector each element is sized to a `Record` rather than to the narrow row, about 120 MB is moved twice per hand-off, and the chain build over that vector grows from 1 ms across 183 nodes to 46 ms across 100,570.
 
-**The split.** The two kinds are separated from the scan down.
-`parse::scan_lines_parallel_split` is the two-stream form of the parallel scan: one
-`SplitVerdict` per line routes it to one of two output vectors, with the same
-newline-aligned chunking, the same line numbering and the same malformed accounting, and
-the single-stream scan IS that function with an uninhabited second stream, so there is
-one chunking implementation rather than two. The row itself is not a `Record`:
-`parse::SpineRow` carries the physical line, a `SpineKind` tag instead of a decoded type
-string, `uuid`, `parentUuid`, the RAW `timestamp` and `isSidechain`, with the rare fields
-behind one `Option<Box<SpineExtra>>` an ordinary attachment row never allocates.
-`size_of::<SpineRow>()` is 72 bytes against `size_of::<Record>()` 1,384, and the width is
-asserted by an exact unit pin rather than assumed. Consumers merge the two streams back
-by line into a BORROWED file-order row list (`search::Row`, plus a local merge of the same shape
-in `stats` and in `show --branch-points`), which is the index space every chain answer is
-addressed by, and the chain reads both kinds through ONE shape, `model::ChainNode`, whose
-message-derived accessors answer the same `false`/`None` a message-less record gave. The
-timestamp stays a raw string because the chain runs it through the same `timez::epoch_ms`
-at the same two call sites, so neither kind can answer a timestamp question the other
-would answer differently. `SummarizeIndex::from_nodes` runs the boundary-to-summary
-pairing (§4.7) over the same merged list, because a compaction boundary is a spine row
-under every selector that does not reach the boundary leaf.
+**The split.** The two kinds are separated from the scan down. `parse::scan_lines_parallel_split` is the two-stream form of the parallel scan: one `SplitVerdict` per line routes it to one of two output vectors, with the same newline-aligned chunking, the same line numbering and the same malformed accounting, and the single-stream scan IS that function with an uninhabited second stream, so there is one chunking implementation rather than two. The row itself is not a `Record`: `parse::SpineRow` carries the physical line, a `SpineKind` tag instead of a decoded type string, `uuid`, `parentUuid`, the RAW `timestamp` and `isSidechain`, with the rare fields behind one `Option<Box<SpineExtra>>` an ordinary attachment row never allocates. `size_of::<SpineRow>()` is 72 bytes against `size_of::<Record>()` 1,384, and the width is asserted by an exact unit pin rather than assumed. Consumers merge the two streams back by line into a BORROWED file-order row list (`search::Row`, plus a local merge of the same shape in `stats` and in `show --branch-points`), which is the index space every chain answer is addressed by, and the chain reads both kinds through ONE shape, `model::ChainNode`, whose message-derived accessors answer the same `false`/`None` a message-less record gave. The timestamp stays a raw string because the chain runs it through the same `timez::epoch_ms` at the same two call sites, so neither kind can answer a timestamp question the other would answer differently. `SummarizeIndex::from_nodes` runs the boundary-to-summary pairing (§4.7) over the same merged list, because a compaction boundary is a spine row under every selector that does not reach the boundary leaf.
 
-**The measurement.** Medians of 21 reps per cell, four arms (no axis at all, the axis with
-one shared vector, this tip, and a same-binary control), the arm order rotated by rep
-index and reversed on odd reps, wall from a monotonic clock and CPU from the child's own
-rusage. Six shapes run on the 397 MiB transcript and the heavy `-t user.unsent` search on
-the 721 MB one. Against the shared-vector arm: `image` -29.2%, `verbatim` -14.6%,
-`show --branch-points` -14.2%, `files` -8.1%, the heavy
-search -6.8%, `stats` -6.7%, `recover` -6.1%. Every shape is faster and none is slower,
-and the same-binary control band is at most 1.1% over the seven, so the smallest win is
-five times the drift. CPU medians move the same way (`image` 0.808x, `verbatim` 0.898x,
-`show --branch-points` 0.889x of that arm). A second, independent run of the same driver
-read the same direction with larger margins (`image` -31.8%, `verbatim` -16.0%). The two
-runs are reported side by side rather than averaged.
+**The measurement.** Medians of 21 reps per cell, four arms (no axis at all, the axis with one shared vector, the split build this section describes, and a same-binary control), the arm order rotated by rep index and reversed on odd reps, wall from a monotonic clock and CPU from the child's own rusage. Six shapes run on the 397 MiB transcript and the heavy `-t user.unsent` search on the 721 MB one. Against the shared-vector arm: `image` -29.2%, `verbatim` -14.6%, `show --branch-points` -14.2%, `files` -8.1%, the heavy search -6.8%, `stats` -6.7%, `recover` -6.1%. Every shape is faster and none is slower, and the same-binary control band is at most 1.1% over the seven, so the smallest win is five times the drift. CPU medians move the same way (`image` 0.808x, `verbatim` 0.898x, `show --branch-points` 0.889x of that arm). A second, independent run of the same driver read the same direction with larger margins (`image` -31.8%, `verbatim` -16.0%). The two runs are reported side by side rather than averaged.
 
-**What is left, and why it stays.** Against the no-axis arm: `image` 1.233x,
-`show --branch-points` 1.300x, `verbatim` 1.153x, `recover` 1.125x, the heavy search 1.089x, `stats` 1.073x, and
-`files` 0.776x. That residue is the axis itself, the parallel byte walk plus one chain
-build over the whole DAG, and both are what the answer is made of. An early stop in the
-key walk is impossible (REC-104, above), and a reverse scan from the line end lands within
-one percent of the forward walk on every shape.
+**What is left, and why it stays.** Against the no-axis arm: `image` 1.233x, `show --branch-points` 1.300x, `verbatim` 1.153x, `recover` 1.125x, the heavy search 1.089x, `stats` 1.073x, and `files` 0.776x. That residue is the axis itself, the parallel byte walk plus one chain build over the whole DAG, and both are what the answer is made of. An early stop in the key walk is impossible (REC-104, above), and a reverse scan from the line end lands within one percent of the forward walk on every shape.
 
 ### 7j. The crossing budget: the default is a MEASUREMENT
 
@@ -3048,23 +2992,11 @@ The crossing budget buys resolution and costs walk hops, so its DEFAULT is decid
 
 ### 7i. The provenance primitive: the cost is the OUTPUT it adds
 
-**What was measured.** The same rotated interleaved A/B as section 7h, run on an IDLE host
-(1-minute load average 3.34 at the start): arm A the pre-primitive tip, arm B this one, 30
-rows over three size classes - tiny, compacted, and the 397 MiB LANDMARK - 21 timed
-repetitions per cell, 84 pairs, plus the same-binary control band per class. Exit codes
-match on 84 of 84 pairs.
+**What was measured.** The same rotated interleaved A/B as section 7h, run on an IDLE host (1-minute load average 3.34 at the start): arm A the build before the primitive (the base), arm B the build carrying it (the tip), 30 rows over three size classes - tiny, compacted, and the 397 MiB LANDMARK - 21 timed repetitions per cell, 84 pairs, plus the same-binary control band per class. Exit codes match on 84 of 84 pairs.
 
-**The bands, and the rows outside them.** The control band (the largest same-binary median
-drift) reads 0.0139 tiny, 0.0360 compacted, 0.0148 landmark. Outside: on the compacted
-class `C05` (`search '' {T} --format json`, the whole-scope dump) at 1.1169 and `E01` at
-1.0456; on the landmark `C05` at 1.1994, then `H03` (`search 'the'`) 1.0370, `B02` 1.0340,
-`B05` 1.0301, `H01` (`search 'x'`) 1.0255, `B06` 1.0249, `H06` 1.0237, `H08` 1.0188 - and
-`B10` 0.976 and `H07` 0.971 the other way. The tiny class scatters both ways at about five
-percent and is noise-limited at sub-10 ms runs.
+**The bands, and the rows outside them.** The control band (the largest same-binary median drift) reads 0.0139 tiny, 0.0360 compacted, 0.0148 landmark. Outside: on the compacted class `C05` (`search '' {T} --format json`, the whole-scope dump) at 1.1169 and `E01` at 1.0456; on the landmark `C05` at 1.1994, then `H03` (`search 'the'`) 1.0370, `B02` 1.0340, `B05` 1.0301, `H01` (`search 'x'`) 1.0255, `B06` 1.0249, `H06` 1.0237, `H08` 1.0188 - and `B10` 0.976 and `H07` 0.971 the other way. The tiny class scatters both ways at about five percent and is noise-limited at sub-10 ms runs.
 
-**The ratio tracks the BYTES, row for row.** Every row outside its band prints more, and
-the rows that are byte-identical are inside. Measured on the landmark, arm A against arm B,
-stdout bytes:
+**The ratio tracks the BYTES, row for row.** Every row outside its band prints more, and the rows that are byte-identical are inside. Measured on the landmark, arm A against arm B, stdout bytes:
 
 | row | what it runs | output growth | measured ratio |
 |---|---|---|---|
@@ -3075,395 +3007,78 @@ stdout bytes:
 | `H06` | `(a+)+b` | +2.81% | 1.0237 |
 | `B02` | the script-mention regex | +2.56% | 1.0340 |
 
-That is the primitive's own surface: `[root L<n> +<hops>]` in the label zone of every text
-hit, and `for_root` plus `for[]` on every JSON hit. The whole-scope dump emits 256,717 hits
-over 5,270 exchanges, and the two keys add 61.4 MB - 239 bytes per hit. A binary printing
-three percent more cannot sit inside a band measured on a binary printing the same bytes.
+That is the primitive's own surface: `[root L<n> +<hops>]` in the label zone of every text hit, and `for_root` plus `for[]` on every JSON hit. The whole-scope dump emits 256,717 hits over 5,270 exchanges, and the two keys add 61.4 MB - 239 bytes per hit. A binary printing three percent more cannot sit inside a band measured on a binary printing the same bytes.
 
-**Where the time actually goes, by ablation.** Each probe is the shipped tip with ONE thing
-removed, built release and measured as user+sys CPU, medians of five to eleven interleaved
-reps:
+**Where the time actually goes, by ablation.** Each probe is the tip with ONE thing removed, built release and measured as user+sys CPU, medians of five to eleven interleaved reps:
 
-- the whole-scope JSON row with the two KEYS' projection removed and every bit of the
-  computation kept: 6.54 s against a base of 6.52 s and a tip of 7.13 s. The projection is
-  essentially the entire regression on that row.
-- the per-turn root table's uuid-to-position map removed: 7.20 s, which is the tip within
-  noise. The table is NOT the cost, on the row where the whole file is one hit after
-  another.
-- on the wide-match TEXT row, the engine's two edges removed: 4.42 s against a tip of 4.47 s
-  and a base of 4.34 s - about 40 percent of that row's regression.
-- the `tool_use_id` index, the label-zone tag's `format!`, and the root's per-hit uuid clone,
-  each removed alone: none moves its row outside the noise.
+- the whole-scope JSON row with the two KEYS' projection removed and every bit of the computation kept: 6.54 s against a base of 6.52 s and a tip of 7.13 s. The projection is essentially the entire regression on that row.
+- the per-turn root table's uuid-to-position map removed: 7.20 s, which is the tip within noise. The table is NOT the cost, on the row where the whole file is one hit after another.
+- on the wide-match TEXT row, the engine's two edges removed: 4.42 s against a tip of 4.47 s and a base of 4.34 s - about 40 percent of that row's regression.
+- the `tool_use_id` index, the label-zone tag's `format!`, and the root's per-hit uuid clone, each removed alone: none moves its row outside the noise.
 
-**What was DONE about it.** The edges the ablation named are built only where a reader
-exists (`SearchArgs::projects_engine_edges`): `parent` and `result_of` ride JSON alone, so a
-text scan that does not census them never builds them. Measured: the wide-match text row
-moves from 4.50 s to 4.44 s of a 4.34 s base, and the selective row `B08` returns to its
-base exactly (2.29 s both). Output is byte-identical either way - 70,800,770 bytes on the
-landmark wide-match row with and without the gate.
+**What was DONE about it.** The edges the ablation named are built only where a reader exists (`SearchArgs::projects_engine_edges`): `parent` and `result_of` ride JSON alone, so a text scan that does not census them never builds them. Measured: the wide-match text row moves from 4.50 s to 4.44 s of a 4.34 s base, and the selective row `B08` returns to its base exactly (2.29 s both). Output is byte-identical either way - 70,800,770 bytes on the landmark wide-match row with and without the gate.
 
-**The NINE relations that followed, measured on an idle host.** The second half of the
-primitive (section 4.12's `supersedes`, `continues`, `replays`, `branches`, `pairs`,
-`precedes`, `preserves`, `repairs`, and `reports` widened to both pulse carriers) was
-measured by the same driver once the host was idle (ten consecutive 30 s samples under a
-1-minute load average of 7 with no compiler alive, 3.8 at the start): arm A the tip the
-relations were built from, arm B the tip that carries them, 31 rows over the three size
-classes - the 30 above plus `K01`-`K03`, which cover `--count-by for-kind` and `--for` - 21
-timed repetitions per cell, 93 pairs, the same-binary control band per class first. Exit
-codes match on 93 of 93 pairs; 62 rows are byte-identical and 31 print more. The control
-band reads 0.0364 tiny, 0.0249 compacted, 0.0206 landmark. 90 of the 93 rows sit inside
-their class band. The three outside are `A03` on the tiny class at 1.0552 (+0.4 ms on a
-6.7 ms `show --line`, a noise-limited row), `H05` on the landmark at 1.0297 (+27 ms on a
-0.91 s zero-hit scan, byte-identical) and `H04` on the landmark at 1.0401 (+51 ms on a
-1.27 s needle-less regex scan, printing 0.1 percent more). That 51 ms is the widest
-absolute slowdown over all 93 rows. The whole-scope JSON dump `C05` reads 1.0009 on the
-landmark (2.891 s to 2.894 s), because the four survival relations ride the reader-gated
-JSON path and the five that render add one tag to units that already print. Class medians
-read 0.998 tiny, 1.001 compacted and 1.001 landmark, over all rows and over the
-byte-identical rows alike. `K01`, the `for-kind` census, reads 1.0034 while printing 85
-percent more bytes (the nine relations are rows of that census); `K02` and `K03`, two
-`--for` closures, read 1.0019 and 0.9958, byte-identical. The byte accounting taken before
-the host went idle stands beside those ratios: every acid row of the
-tiny and compacted classes under a release build of the pre-relation tip and one of this
-one, stdouts compared byte for byte. 128 rows, 106 byte-identical, 22 differing, 0 exit-code
-differences, and 2 line-count differences - both of them `K01`, the `for-kind` census, where
-a relation the scope carries IS a row. Every differing byte is accounted to a named relation:
-a `[for: pairs|precedes|preserves|repairs|reports L<n>]` tag in a label zone, a
-`"kind":"..."` entry in a `for[]` array, a census key, the `hook_run` respelling, or the
-`--help` text. Two rows print FEWER bytes, which is the one-relation-one-edge stand-down
-turning an existing `parent` edge into a `pairs` one (`"kind":"parent"` 681 to 679 on the
-compacted whole-scope dump, 9 to 7 on `E01`).
+**The NINE relations that followed, measured on an idle host.** The second half of the primitive (section 4.12's `supersedes`, `continues`, `replays`, `branches`, `pairs`, `precedes`, `preserves`, `repairs`, and `reports` widened to both pulse carriers) was measured by the same driver once the host was idle (ten consecutive 30 s samples under a 1-minute load average of 7 with no compiler alive, 3.8 at the start): arm A the tip the relations were built from, arm B the tip that carries them, 31 rows over the three size classes - the 30 above plus `K01`-`K03`, which cover `--count-by for-kind` and `--for` - 21 timed repetitions per cell, 93 pairs, the same-binary control band per class first. Exit codes match on 93 of 93 pairs; 62 rows are byte-identical and 31 print more. The control band reads 0.0364 tiny, 0.0249 compacted, 0.0206 landmark. 90 of the 93 rows sit inside their class band. The three outside are `A03` on the tiny class at 1.0552 (+0.4 ms on a 6.7 ms `show --line`, a noise-limited row), `H05` on the landmark at 1.0297 (+27 ms on a 0.91 s zero-hit scan, byte-identical) and `H04` on the landmark at 1.0401 (+51 ms on a 1.27 s needle-less regex scan, printing 0.1 percent more). That 51 ms is the widest absolute slowdown over all 93 rows. The whole-scope JSON dump `C05` reads 1.0009 on the landmark (2.891 s to 2.894 s), because the four survival relations ride the reader-gated JSON path and the five that render add one tag to units that already print. Class medians read 0.998 tiny, 1.001 compacted and 1.001 landmark, over all rows and over the byte-identical rows alike. `K01`, the `for-kind` census, reads 1.0034 while printing 85 percent more bytes (the nine relations are rows of that census); `K02` and `K03`, two `--for` closures, read 1.0019 and 0.9958, byte-identical. The byte accounting taken before the host went idle stands beside those ratios: every acid row of the tiny and compacted classes under a release build of the pre-relation tip and one of the tip carrying the relations, stdouts compared byte for byte. 128 rows, 106 byte-identical, 22 differing, 0 exit-code differences, and 2 line-count differences - both of them `K01`, the `for-kind` census, where a relation the scope carries IS a row. Every differing byte is accounted to a named relation: a `[for: pairs|precedes|preserves|repairs|reports L<n>]` tag in a label zone, a `"kind":"..."` entry in a `for[]` array, a census key, the `hook_run` respelling, or the `--help` text. Two rows print FEWER bytes, which is the one-relation-one-edge stand-down turning an existing `parent` edge into a `pairs` one (`"kind":"parent"` 681 to 679 on the compacted whole-scope dump, 9 to 7 on `E01`).
 
-**The gate does not cover all nine, and that is the shape of the cost.** Four of them -
-the SURVIVAL relations - render no tag and ride the same `projects_engine_edges` gate the
-two one-hop edges take, so a default text scan builds none of them. The other five RENDER,
-because no family owns their leaf and nothing else on the unit gives their target as an
-address, so `record_edges` builds them whatever the reader asked for. What that costs is one
-`match` on the unit's own leaf per emitted hit, falling through for every leaf but the eight
-that carry one; what it buys is that the tag is in the text a person reads. The byte
-accounting above and the idle-host ratios beside it state the rest.
+**The gate does not cover all nine, and that is the shape of the cost.** Four of them - the SURVIVAL relations - render no tag and ride the same `projects_engine_edges` gate the two one-hop edges take, so a default text scan builds none of them. The other five RENDER, because no family owns their leaf and nothing else on the unit gives their target as an address, so `record_edges` builds them whatever the reader asked for. What that costs is one `match` on the unit's own leaf per emitted hit, falling through for every leaf but the eight that carry one; what it buys is that the tag is in the text a person reads. The byte accounting above and the idle-host ratios beside it state the rest.
 
-**What is left, and why it stays.** The residue is the bytes: a per-hit tag the reader sees,
-and two per-hit JSON keys a consumer follows. `for_root` is answered for EVERY unit by
-design (section 4.12) - that is the primitive, not an implementation detail - so the floor
-for a wide-match row is the cost of printing it. At this tip the wide-match text rows pay
-about 2.3 percent of CPU for 3.1 percent more output, and the whole-scope JSON dump about
-9.2 percent of CPU for 17.6 percent more output: both SUB-LINEAR in the bytes they add,
-which is the strongest statement available while the fields ship.
+**What is left, and why it stays.** The residue is the bytes: a per-hit tag the reader sees, and two per-hit JSON keys a consumer follows. `for_root` is answered for EVERY unit by design (section 4.12) - that is the primitive, not an implementation detail - so the floor for a wide-match row is the cost of printing it. With the nine relations built, the wide-match text rows pay about 2.3 percent of CPU for 3.1 percent more output, and the whole-scope JSON dump about 9.2 percent of CPU for 17.6 percent more output: both SUB-LINEAR in the bytes they add, which is the strongest statement available while the fields ship.
 
 ### 7h. The taxonomy: the INTEGRATION pass, and the WHOLE REWRITE against the last release
 
-**What this section measures, and what it does not.** The taxonomy rewrite landed as six
-family branches merged onto one commit, and then an integration pass on top of that commit.
-The A/B below has arm A at the MERGED commit, so what it measures is the INTEGRATION
-pass - the shared-engine changes, the render fixes and the docs that ride with them - and
-not the rewrite as a whole. The rewrite's own cost against the last installed release is
-the separate measurement at the end of this section. Read every
-number here as "what the integration pass cost on top of the picked taxonomy", which is the
-question it can answer.
+**What this section measures, and what it does not.** The taxonomy rewrite is six family changes on one commit plus an INTEGRATION pass on top of it (the shared-engine changes, the render fixes and the docs that ride with them). The A/B below has arm A at the commit carrying the six families and arm B after the integration pass, so what it measures is the integration pass and not the rewrite as a whole. The rewrite's own cost against the last installed release is the separate measurement at the end of this section. Read every number here as "what the integration pass cost on top of the six families", which is the question it can answer.
 
-**The instrument.** A ROTATED INTERLEAVED A/B over a corpus of real invocations: 60 command
-shapes drawn from actual LLM use of csift, each run against a TINY transcript and against a
-COMPACTED one, 21 timed repetitions per cell with the arm order reversed on odd reps so
-neither arm owns the warm half, medians of those 21, and an untimed comparison pass that
-byte-compares the two arms' stdout. 122 (row, size) pairs.
+**The instrument.** A ROTATED INTERLEAVED A/B over a corpus of real invocations: 60 command shapes drawn from actual LLM use of csift, each run against a TINY transcript and against a COMPACTED one, 21 timed repetitions per cell with the arm order reversed on odd reps so neither arm owns the warm half, medians of those 21, and an untimed comparison pass that byte-compares the two arms' stdout. 122 (row, size) pairs.
 
-**The control band, and what it is made of.** The same driver ran with A = B = this tip, on
-the same host in the same session, so every ratio it produces is the host's own noise. Over
-the same 122 pairs: the largest same-binary median drift is 4.58% (`H07/tiny` at 1.0458),
-the 90th-percentile relative IQR of a single arm's own distribution is 9.17%, and the band
-is their sum, 13.75% - a B/A ratio inside [0.8625, 1.1375] is noise. The band is WIDE
-because the host was not idle: `uptime` read a 1-minute load average between 4.0 and 14.8
-across the run, with a media-analysis daemon and the Spotlight store among the top
-consumers. The DRIFT term alone, 4.58%, is the tighter reading for a directional claim,
-because it is the only one that measures two medians against each other.
+**The control band, and what it is made of.** The same driver ran with A = B = the integration-pass build, on the same host in the same session, so every ratio it produces is the host's own noise. Over the same 122 pairs: the largest same-binary median drift is 4.58% (`H07/tiny` at 1.0458), the 90th-percentile relative IQR of a single arm's own distribution is 9.17%, and the band is their sum, 13.75% - a B/A ratio inside [0.8625, 1.1375] is noise. The band is WIDE because the host was not idle: `uptime` read a 1-minute load average between 4.0 and 14.8 across the run, with a media-analysis daemon and the Spotlight store among the top consumers. The DRIFT term alone, 4.58%, is the tighter reading for a directional claim, because it is the only one that measures two medians against each other.
 
-**The result: nothing is outside the band, and the default path is well inside the drift
-term.** Of 122 pairs, ZERO sit outside 13.75%. The DEFAULT-PATH set is the driver's own
-`default_path` column, 24 ids curated as the invocations a reader runs without naming a
-label - 48 pairs over the two size classes that ran, and not the wider set a text rule like
-"names no `-t`" would collect. Of those 48 the worst is `B06/compacted` at
-1.0372, then `H07/compacted` 1.0369, `B03/compacted` 0.9634, `B04/tiny` 1.0327; every one
-is under the 4.58% same-binary drift, in both directions. So the integration pass did not
-make a bare scan slower - which is the narrower of the two statements a reader might want
-here, and the one the arms support.
+**The result: nothing is outside the band, and the default path is well inside the drift term.** Of 122 pairs, ZERO sit outside 13.75%. The DEFAULT-PATH set is the driver's own `default_path` column, 24 ids curated as the invocations a reader runs without naming a label - 48 pairs over the two size classes that ran, and not the wider set a text rule like "names no `-t`" would collect. Of those 48 the worst is `B06/compacted` at 1.0372, then `H07/compacted` 1.0369, `B03/compacted` 0.9634, `B04/tiny` 1.0327; every one is under the 4.58% same-binary drift, in both directions. So the integration pass did not make a bare scan slower - which is the narrower of the two statements a reader might want here, and the one the arms support.
 
-**The GATED rows, which is where a cost would show.** `D04` and `D05` are the census and
-the selector under a gated leaf - the paths that now parse lines a flagless scan never
-touches. `D04` reads 1.0119 compacted and 1.0142 tiny; `D05` reads 1.0051 and 1.0045. The
-three rows a family render makes the whole-file gate pay for (`G01`, `G02`, `G04`) read
-between 0.9923 and 1.0161. All are inside the drift term, so the gated paths cost what
-they cost before within this host's ability to tell.
+**The GATED rows, which is where a cost would show.** `D04` and `D05` are the census and the selector under a gated leaf - the paths that parse lines a flagless scan never touches. `D04` reads 1.0119 compacted and 1.0142 tiny; `D05` reads 1.0051 and 1.0045. The three rows a family render makes the whole-file gate pay for (`G01`, `G02`, `G04`) read between 0.9923 and 1.0161. All are inside the drift term, so the gated paths cost what they cost before within this host's ability to tell.
 
-**STDOUT identity.** 110 of 122 pairs are byte-identical; 2 are excluded as
-time-dependent (`whoami` prints a live instant, so even two runs of ONE binary differ);
-and 10 differ by design, in four groups. `A05` and `A08` are `--help` pages and differ
-ONLY in the usage line's binary name, an artefact of the two arms being differently-named
-files, plus - for `A08` - the surface changes this version documents. `D05` is the census
-under `harness.hook.context`, whose attachment units now render their family facts. `F03`
-is `show --line 1..200 --format json`, which gained `queue_operation` and `queue_reason`.
-`D06` is `-t harness`, which reaches the leaves whose renders moved. Exit codes match on
-122 of 122 pairs.
+**STDOUT identity.** 110 of 122 pairs are byte-identical; 2 are excluded as time-dependent (`whoami` prints a live instant, so even two runs of ONE binary differ); and 10 differ by design, in four groups. `A05` and `A08` are `--help` pages and differ ONLY in the usage line's binary name, an artefact of the two arms being differently-named files, plus - for `A08` - the surface changes this version documents. `D05` is the census under `harness.hook.context`, whose attachment units render their family facts. `F03` is `show --line 1..200 --format json`, which gained `queue_operation` and `queue_reason`. `D06` is `-t harness`, which reaches the leaves whose renders moved. Exit codes match on 122 of 122 pairs.
 
-**What was NOT measured, and why.** The LANDMARK size class (38 rows on the largest
-transcripts) was not run. The tiny-and-compacted pair alone took hours of wall on this
-host, and the band it produced is 13.75% wide for load reasons rather than code reasons -
-a third class measured on a host that had grown busier still would buy less information per
-hour than it cost. The per-record widths a size-dependent cost would have to travel through
-are pinned exactly instead (`size_of::<Record>()` 1,384 and `size_of::<SpineRow>()` 72,
-both unchanged by this version).
+**What was NOT measured, and why.** The LANDMARK size class (38 rows on the largest transcripts) was not run. The tiny-and-compacted pair alone took hours of wall on this host, and the band it produced is 13.75% wide for load reasons rather than code reasons - a third class measured on a host that had grown busier still would buy less information per hour than it cost. The per-record widths a size-dependent cost would have to travel through are pinned exactly instead (`size_of::<Record>()` 1,384 and `size_of::<SpineRow>()` 72, both unchanged by this version).
 
-**THE WHOLE REWRITE, against the last installed release.** A different run, on an IDLE
-host (one-minute load average 3.8 at its start, after ten consecutive 30 s samples under 7
-with no compiler alive): arm A the last installed release before the rewrite, arm B this
-tip's release build, the 24 default-path rows over all three size classes at the same 21
-reps, the same-binary control band first over the same 72 pairs - every one byte-identical
-with matching exit codes - reading 0.0274 tiny, 0.0293 compacted and 0.0148 landmark (the
-class medians of that drift 0.011, 0.011 and 0.005). The A/B was read TWICE on the
-compacted and landmark classes, because one cell of the first reading was disturbed: the
-script-mention regex row on the landmark carried an interquartile range ten times the
-control's on both arms, while the same binary had read that row an hour earlier at a
-fortieth of that spread. The second reading, whose every cell sits inside the control's own
-spread, is the one quoted here; the two agree on every other row within two points. Exit
-codes match on 72 of 72 pairs. Stdout is byte-identical on 12 of the 48 compacted-and-
-landmark pairs (the zero-hit scans and the censuses) and differs on 36, which is the
-rewrite's own surface: the label taxonomy, `for_root` and `for[]` on every hit, the crossing
-keys, the `list` and `image` columns.
+**THE WHOLE REWRITE, against the last installed release.** A different run, on an IDLE host (one-minute load average 3.8 at its start, after ten consecutive 30 s samples under 7 with no compiler alive): arm A the last installed release before the rewrite, arm B the release build carrying the rewrite, the 24 default-path rows over all three size classes at the same 21 reps, the same-binary control band first over the same 72 pairs - every one byte-identical with matching exit codes - reading 0.0274 tiny, 0.0293 compacted and 0.0148 landmark (the class medians of that drift 0.011, 0.011 and 0.005). The A/B was read TWICE on the compacted and landmark classes, because one cell of the first reading was disturbed: the script-mention regex row on the landmark carried an interquartile range ten times the control's on both arms, while the same binary had read that row an hour earlier at a fortieth of that spread. The second reading, whose every cell sits inside the control's own spread, is the one quoted here; the two agree on every other row within two points. Exit codes match on 72 of 72 pairs. Stdout is byte-identical on 12 of the 48 compacted-and-landmark pairs (the zero-hit scans and the censuses) and differs on 36, which is the rewrite's own surface: the label taxonomy, `for_root` and `for[]` on every hit, the crossing keys, the `list` and `image` columns.
 
-The rewrite's cost on a LANDMARK SCAN is the four byte-identical landmark rows, zero-hit
-scans over the 397 MiB transcript printing 83 bytes: 1.037, 1.073, 1.039 and 1.037, that is
-24 to 53 ms on runs of 0.63 to 0.73 s, ABOVE the landmark band on all four. That is the
-survival axis, the crossing and the label engine on every parsed line, and it agrees with
-the per-command axis ratios of section 7g. The growth rows on the landmark read 1.026 to
-1.104 for 3 to 13 percent more bytes, the widest absolute slowdown +74 ms (the
-script-mention regex, 1.076 to 1.150 s); `show --line` on one record reads 1.094 while
-printing twice the bytes, the families' facts on that record. Where the rewrite is FASTER:
-the whole-scope JSON dump 0.677 (2.204 to 1.491 s while printing 27 percent more bytes -
-section 7k's ordered-parallel render), the two wide-match text scans `search 'x'` and
-`search 'the'` 0.915 and 0.916 (1.04 to 0.95 s each), `(a+)+b` 0.966 and one wide literal
-0.980. Class medians: compacted 1.023 (rows of 12 to 20 ms, the slowest +2 ms), landmark
-1.038; the heaviest row of the whole set runs in 1.49 s where it ran in 2.20.
+The rewrite's cost on a LANDMARK SCAN is the four byte-identical landmark rows, zero-hit scans over the 397 MiB transcript printing 83 bytes: 1.037, 1.073, 1.039 and 1.037, that is 24 to 53 ms on runs of 0.63 to 0.73 s, ABOVE the landmark band on all four. That is the survival axis, the crossing and the label engine on every parsed line, and it agrees with the per-command axis ratios of section 7g. The growth rows on the landmark read 1.026 to 1.104 for 3 to 13 percent more bytes, the widest absolute slowdown +74 ms (the script-mention regex, 1.076 to 1.150 s); `show --line` on one record reads 1.094 while printing twice the bytes, the families' facts on that record. Where the rewrite is FASTER: the whole-scope JSON dump 0.677 (2.204 to 1.491 s while printing 27 percent more bytes - section 7k's ordered-parallel render), the two wide-match text scans `search 'x'` and `search 'the'` 0.915 and 0.916 (1.04 to 0.95 s each), `(a+)+b` 0.966 and one wide literal 0.980. Class medians: compacted 1.023 (rows of 12 to 20 ms, the slowest +2 ms), landmark 1.038; the heaviest row of the whole set runs in 1.49 s where it ran in 2.20.
 
-THE ACCEPTANCE RULE a rewrite is judged by has two halves, and this section states them
-because the band alone cannot judge a rewrite: the same-binary band on the rows whose
-output is unchanged, and an ABSOLUTE CEILING on the heaviest rows - no row of the set may
-run a second slower than it did, because the wall-clock a reader waits on is what the
-contract protects, and a band measured on a binary that does less cannot be met by one
-that adds an axis to every scan. Under the band the scan cost sits 2 to 6 points above the
-landmark band; under the ceiling every row passes by an order of magnitude, the widest
-slowdown being 74 ms and the heaviest row 713 ms faster. The four scan figures are the
-receipt the next release measures against.
+THE ACCEPTANCE RULE a rewrite is judged by has two halves, and this section states them because the band alone cannot judge a rewrite: the same-binary band on the rows whose output is unchanged, and an ABSOLUTE CEILING on the heaviest rows - no row of the set may run a second slower than it did, because the wall-clock a reader waits on is what the contract protects, and a band measured on a binary that does less cannot be met by one that adds an axis to every scan. Under the band the scan cost sits 2 to 6 points above the landmark band; under the ceiling every row passes by an order of magnitude, the widest slowdown being 74 ms and the heaviest row 713 ms faster. The four scan figures are the receipt the next release measures against.
 
 ### 7k. The RENDER is the other serial half
 
-**The measurement that opened it.** Everything 7a to 7f buys is spent before the first
-output byte. On the landmark session (a 396.7 MiB top-level transcript plus 3,513 subagent
-transcripts; 1.18 GB, which is 415,935,073 + 768,136,982 bytes over 1 + 3,513 files - every
-`*.jsonl` csift parses for that target, `journal.jsonl` excluded, and NOT the sidecar's
-`tool-results/` and `*.meta.json`, which csift never opens) a whole-scope `--format json`
-dump cost 7.42 s of CPU against a `-c` run of the same query at 5.48 s, so 1.94 s of CPU
-sat in the render - on ONE thread, with nine rayon workers parked in `__psynch_cvwait` for the whole of it. A `sample` of the
-main thread put 2,043 of its 4,657 samples inside `render_json`, and the SELF time inside
-that phase decomposed as 804 ms of `BTreeMap::insert` plus `memcmp` and `memmove` (building
-the `Value` tree, one allocated node per key), 476 ms of `Value::serialize` and
-`serialize_str`, 336 ms of `drop_in_place<Value>` plus `mi_free`, 163 ms of allocation, and
-about 104 ms of the projection logic itself. The TEXT path pays a different bill for the
-same reason: `search 'the'`'s 297,976 rows through `println!` are 297,976 `write(2)` calls
-plus a backward newline scan per call, measured as 0.45 s of the 0.59 s its render phase
-costs, with `write` and the `LineWriter`'s `memrchr` taking 250 of the phase's 422
-main-thread samples. That is not the widest text row in the set - a whole-scope dump,
-`search '' <landmark>`, prints 493,296 - but it is the row the render phase was measured
-on, and the two numbers are named apart because a syscall count attached to the wrong row
-is a number nobody can reproduce.
+**The measurement that opened it.** Everything 7a to 7f buys is spent before the first output byte. On the landmark session (a 396.7 MiB top-level transcript plus 3,513 subagent transcripts; 1.18 GB, which is 415,935,073 + 768,136,982 bytes over 1 + 3,513 files - every `*.jsonl` csift parses for that target, `journal.jsonl` excluded, and NOT the sidecar's `tool-results/` and `*.meta.json`, which csift never opens) a whole-scope `--format json` dump cost 7.42 s of CPU against a `-c` run of the same query at 5.48 s, so 1.94 s of CPU sat in the render - on ONE thread, with nine rayon workers parked in `__psynch_cvwait` for the whole of it. A `sample` of the main thread put 2,043 of its 4,657 samples inside `render_json`, and the SELF time inside that phase decomposed as 804 ms of `BTreeMap::insert` plus `memcmp` and `memmove` (building the `Value` tree, one allocated node per key), 476 ms of `Value::serialize` and `serialize_str`, 336 ms of `drop_in_place<Value>` plus `mi_free`, 163 ms of allocation, and about 104 ms of the projection logic itself. The TEXT path pays a different bill for the same reason: `search 'the'`'s 297,976 rows through `println!` are 297,976 `write(2)` calls plus a backward newline scan per call, measured as 0.45 s of the 0.59 s its render phase costs, with `write` and the `LineWriter`'s `memrchr` taking 250 of the phase's 422 main-thread samples. That is not the widest text row in the set - a whole-scope dump, `search '' <landmark>`, prints 493,296 - but it is the row the render phase was measured on, and the two numbers are named apart because a syscall count attached to the wrong row is a number nobody can reproduce.
 
-**The mechanism, and what it does NOT change.** Every row-dumping surface writes through
-ONE `text::Out` - a `BufWriter` over a held `StdoutLock`, one syscall per megabyte instead
-of one per line. The lock is held for the writer's life, and a stray `println!` fails in
-TWO different ways depending on which thread prints - both bad, only one loud. On the SAME
-thread the lock is REENTRANT, so the print reaches the inner `LineWriter` directly and lands
-AHEAD of what the buffer still holds: measured, a stray line after a `write_ordered` call
-comes out FIRST, with no error and exit 0. On a WORKER thread, inside the `write_ordered`
-render closure, reentrancy does not apply because another thread holds the lock: the worker
-parks on stdout, the main thread parks on that worker's buffer, and the PROCESS HANGS with
-nothing written - measured at 800 exchanges, while 3 finish, because rayon runs a small item
-set inline and the hang therefore appears only at scale. So a surface that builds an `Out`
-routes every stdout byte through it - its SCOPE and DUPLICATE banners included, which is
-why it builds the writer FIRST - the render closure prints nothing at all, and every
-stderr note whose order against stdout the contract states is preceded by an explicit flush.
-None of that rests on a reader noticing this paragraph: every module that builds or writes
-through an `Out` carries `#![deny(clippy::print_stdout, clippy::print_stderr)]` and every
-legitimate site an `#[allow]` with its reason, so a stray print is a clippy error in a gate
-that runs with `-D warnings`. On top of that, `search` renders its EXCHANGE rows in
-parallel: an exchange row is a pure projection of its own exchange, so `text::write_ordered`
-renders fixed-size chunks on the rayon pool into per-chunk byte buffers and writes the
-buffers in INDEX ORDER, which is the byte stream a serial loop would have produced. The
-only cross-row decision the text render makes - which row carries the single
-image-extraction hint - is taken once, before any worker starts.
+**The mechanism, and what it does NOT change.** Every row-dumping surface writes through ONE `text::Out` - a `BufWriter` over a held `StdoutLock`, one syscall per megabyte instead of one per line. The lock is held for the writer's life, and a stray `println!` fails in TWO different ways depending on which thread prints - both bad, only one loud. On the SAME thread the lock is REENTRANT, so the print reaches the inner `LineWriter` directly and lands AHEAD of what the buffer still holds: measured, a stray line after a `write_ordered` call comes out FIRST, with no error and exit 0. On a WORKER thread, inside the `write_ordered` render closure, reentrancy does not apply because another thread holds the lock: the worker parks on stdout, the main thread parks on that worker's buffer, and the PROCESS HANGS with nothing written - measured at 800 exchanges, while 3 finish, because rayon runs a small item set inline and the hang therefore appears only at scale. So a surface that builds an `Out` routes every stdout byte through it - its SCOPE and DUPLICATE banners included, which is why it builds the writer FIRST - the render closure prints nothing at all, and every stderr note whose order against stdout the contract states is preceded by an explicit flush. None of that rests on a reader noticing this paragraph: every module that builds or writes through an `Out` carries `#![deny(clippy::print_stdout, clippy::print_stderr)]` and every legitimate site an `#[allow]` with its reason, so a stray print is a clippy error in a gate that runs with `-D warnings`. On top of that, `search` renders its EXCHANGE rows in parallel: an exchange row is a pure projection of its own exchange, so `text::write_ordered` renders fixed-size chunks on the rayon pool into per-chunk byte buffers and writes the buffers in INDEX ORDER, which is the byte stream a serial loop would have produced. The only cross-row decision the text render makes - which row carries the single image-extraction hint - is taken once, before any worker starts.
 
-**What DID move: the exit code of a write that cannot land.** `println!` PANICS on a write
-error, so a command piped into a reader that goes away - `| head`, a closed pipe - aborted
-the process with exit 101 and a std panic message where csift's own belongs; a backtrace
-prints only under `RUST_BACKTRACE=1`. Through the buffer the failure is an ordinary `Err`
-and takes the one arm every other failure takes: `csift: error: Broken pipe (os error 32)`
-on stderr, a non-zero exit. That is also why every render calls `Out::flush` explicitly
-instead of leaving the last write to `BufWriter::drop`, which SWALLOWS the error - exit 0
-on a stream the consumer never received is the silent failure the output contract forbids.
+**What the writer changes: the exit code of a write that cannot land.** `println!` PANICS on a write error, so a command piped into a reader that goes away - `| head`, a closed pipe - aborts the process with exit 101 and a std panic message where csift's own belongs; a backtrace prints only under `RUST_BACKTRACE=1`. Through the buffer the failure is an ordinary `Err` and takes the one arm every other failure takes: `csift: error: Broken pipe (os error 32)` on stderr, a non-zero exit. That is also why every render calls `Out::flush` explicitly instead of leaving the last write to `BufWriter::drop`, which SWALLOWS the error - exit 0 on a stream the consumer never received is the silent failure the output contract forbids.
 
-The RULE is the writer that makes the FAILING write, not the subcommand, and it has to be
-stated that way because a list of subcommands is not stable under it: a surface whose rows
-go through the buffer but whose FIRST stdout byte is a `println!` aborts at that byte,
-before the buffer is ever reached. The scope and duplicate banners were exactly that, and
-the reasoning that left them outside - a `LineWriter` has already flushed them, so they
-cannot land out of order - answered the ordering question and not the exit-code one. So the
-same query reported or aborted depending on how wide its scope happened to be, which is a
-seam no reader can predict from the command they typed. Both banners go through the
-surface's own writer now, and a buffered surface has NO carve-out: every byte it writes is
-a byte its `Out` made, so its answer to a closed pipe is one answer.
+The RULE is the writer that makes the FAILING write, not the subcommand, and it has to be stated that way because a list of subcommands is not stable under it: a surface whose rows go through the buffer but whose FIRST stdout byte is a `println!` aborts at that byte, before the buffer is ever reached. The scope and duplicate banners are exactly such a first byte. Printing them with `println!` above the writer answers the ordering question (a `LineWriter` has already flushed them, so they cannot land out of order) and not the exit-code one: the same query would report or abort depending on how wide its scope happened to be, which is a seam no reader can predict from the command they typed. So both banners go through the surface's own writer, and a buffered surface has NO carve-out: every byte it writes is a byte its `Out` made, so its answer to a closed pipe is one answer.
 
-Measured on two fixtures with stdout wired to a pipe whose read end was closed before the
-spawn (every write fails from its first byte, which a `| head -c 1` race cannot guarantee).
-On a one-session-plus-subagent fixture, 47 distinct argv rows covering every subcommand and
-every terminal mode: TWENTY-FOUR exit 1 with csift's own line - `search` text, JSON,
-`--raw` and `--siblings`, `show` rendered, `--raw`, `--turn` and `--uuid`, `agents` in both
-projections, `files` in its text, `--by timeline` and JSON forms, `image` in both, and all
-six `verbatim` rows (text, JSON, `--slice`, the `--subagents` span and a `--budget 1` skip
-in both formats), with the three `--no-subagents` repeats of `search` and `files` reading
-the same, which is the seam closing. TWENTY-ONE abort with a std panic message, because a
-`println!` makes the first failing write: `list`, `stats` in both projections, `show
---branch-points`, `recover` in all six forms measured (the default restore, `--patches`,
-`--salvage`, `--coverage`, `--list-backups` and the JSON projection) plus two of them
-re-run under `--no-subagents`, `status`, `wait`, `whoami`, `send`, `msg`, `deliver`, and
-`search`'s `-c`, `-l` and `--count-by` terminal printers. The remaining two rows write no
-stdout at all: `plan` with no binding, and `ack`, which refuses before it writes. On a
-second fixture holding TWO byte-identical copies of one session, where the `copies` banner
-is the first stdout byte of every spanning surface, 15 rows split 11 reporting, 3 aborting
-(`list`, `stats`, `recover --patches`) and one writing nothing (`show`, which refuses on
-unmerged copies). Against a release build of the base commit 44 of the 47 read 101, the
-exceptions being those two and `show --raw`, which never went through `println!` and
-already exited 1. One row is outside the rule on both arms and is named so nobody
-re-discovers it as a regression: `csift --version` is clap's own writer, and it exits 0 on
-a closed pipe.
+**Measured** on two fixtures with stdout wired to a pipe whose read end was closed before the spawn (every write fails from its first byte, which a `| head -c 1` race cannot guarantee):
 
-**The report goes to stderr, and stderr can be the same closed pipe.** `csift ... 2>&1 |
-head -c 1` hands both streams one pipe: the stdout write fails and reaches the error arm,
-and the error arm's own `eprintln!` then failed on the same pipe and PANICKED, so the
-reporting surfaces exited 1 with stderr open and 101 with both streams on the pipe - the
-exit code a caller branches on depended on where stderr pointed. `main`'s error arm and every
-stderr line a buffered surface prints (the resolution notes, `search`'s pre-scan advisories
-and zero-match diagnosis, the `--raw` and cap notes after a flush, `verbatim`'s
-no-compaction note and its `--out` refusal) go through `text::stderr_line`, which writes the
-line as one write and drops a failure: when stderr cannot carry a line no stream is left to
-say so on, and the stdout failure still decides the exit code. Measured on a
-one-session-plus-subagent fixture, 30 argv rows, each run with stdout on a pipe whose read
-end was closed before the spawn and stderr either an open pipe or that same closed pipe: the
-20 reporting rows (`search` text, JSON, `--raw` and a zero match in both formats; `show`
-rendered by line, JSON, `--turn`, and `--raw` by line and by turn; `files` in its text,
-`--by timeline` and JSON forms; `agents` in both projections; `image`; `verbatim` text and
-JSON) read 1 and 101 at the base and 1 and 1 now, and the 10 `println!` rows (`search -c`,
-`-l`, `--count-by`, `show --branch-points`, `list` and `stats` in both projections, `recover`
-default, `--patches` and `--coverage`, and `status`) read 101 on both, before and after,
-because they abort on their own stdout write before any report exists. With stdout an
-ordinary pipe and stderr closed, a run whose note came after its stream - a `--raw` cap drop
-on `search` or `show`, a zero-match diagnosis, `verbatim`'s no-compaction note - aborted with
-101 and, for the two whose note preceded the stream, with nothing on stdout; each now exits
-0 with its whole stream.
+- On a one-session-plus-subagent fixture, 47 distinct argv rows covering every subcommand and every terminal mode. TWENTY-FOUR exit 1 with csift's own line - `search` text, JSON, `--raw` and `--siblings`, `show` rendered, `--raw`, `--turn` and `--uuid`, `agents` in both projections, `files` in its text, `--by timeline` and JSON forms, `image` in both, and all six `verbatim` rows (text, JSON, `--slice`, the `--subagents` span and a `--budget 1` skip in both formats), with the three `--no-subagents` repeats of `search` and `files` reading the same, which is the seam closed. TWENTY-ONE abort with a std panic message, because a `println!` makes the first failing write: `list`, `stats` in both projections, `show --branch-points`, `recover` in all six forms measured (the default restore, `--patches`, `--salvage`, `--coverage`, `--list-backups` and the JSON projection) plus two of them re-run under `--no-subagents`, `status`, `wait`, `whoami`, `send`, `msg`, `deliver`, and `search`'s `-c`, `-l` and `--count-by` terminal printers. The remaining two rows write no stdout at all: `plan` with no binding, and `ack`, which refuses before it writes.
+- On a second fixture holding TWO byte-identical copies of one session, where the `copies` banner is the first stdout byte of every spanning surface, 15 rows split 11 reporting, 3 aborting (`list`, `stats`, `recover --patches`) and one writing nothing (`show`, which refuses on unmerged copies).
+- Against a release build of the base commit, which printed every row with `println!`, 44 of the 47 read 101, the exceptions being those two and `show --raw`, which never went through `println!` and exited 1 on both arms.
+- One row is outside the rule on both arms and is named so nobody re-discovers it as a regression: `csift --version` is clap's own writer, and it exits 0 on a closed pipe.
 
-**The memory bound is the look-ahead, and the look-ahead is UP TO TWICE 128 rows.** 8 rows
-per chunk and 16 chunks per wave: 128 consecutive rows are rendered before any of them is
-written, so peak memory rises by the rendered bytes of 128 rows rather than by the stream.
-But each chunk renders into a `Vec` grown by `extend` and `write!`, and a `Vec` that has
-doubled sits at up to twice the bytes it holds, with sixteen of them live at once - so the
-bound is 2 x 128 x whatever a ROW is, and none of those three terms may be dropped -
-plus, while a wave renders, ONE in-flight row per worker, which for the JSON projector is
-the `serde_json::Value` tree it builds before serializing it into its chunk's buffer. That
-last term is bounded by the pool, not by the look-ahead, and the chunk buffers are the part
-a reader sizing a run works from. On the
-landmark's 411 MB of JSON (rows averaging 78 KB) that is 10 to 20 MB against a peak of
-about 1,570 MiB, and it does not stand out of the noise: medians of 13 interleaved reps read
-1,570.4 MiB for a release build of the base and 1,570.5 MiB for this tip, a difference of
-0.1 MiB, against per-arm spreads of 12.4 and 17.2 MiB that overlap.
+**The report goes to stderr, and stderr can be the same closed pipe.** `csift ... 2>&1 | head -c 1` hands both streams one pipe: the stdout write fails and reaches the error arm, and an `eprintln!` in that arm fails on the same pipe and PANICS, so a reporting surface would exit 1 with stderr open and 101 with both streams on the pipe - the exit code a caller branches on would depend on where stderr pointed. So `main`'s error arm and every stderr line a buffered surface prints (the resolution notes, `search`'s pre-scan advisories and zero-match diagnosis, the `--raw` and cap notes after a flush, `verbatim`'s no-compaction note and its `--out` refusal) go through `text::stderr_line`, which writes the line as one write and drops a failure: when stderr cannot carry a line no stream is left to say so on, and the stdout failure still decides the exit code.
 
-The observable peak is NOT a floor on that bound, and the counter-example is measured. On
-a synthetic transcript of 200 user records carrying about 2 MiB of text each, read with
-`search <needle> --no-truncate --format json` so one rendered row is 4,195,818 B, 128 rows
-is 512.2 MiB. What the peak-RSS delta against that figure reads is a RANGE, not a pair:
-three runs of five interleaved pairs each, on this host at one-minute load averages of 7
-to 27, 8 to 10 and 7, read medians of 715.8, 844.2 and 723.7 MiB, with the widest single
-observation 929.3 and the narrowest 522.3, and two of the three reproduce the base median
-of 1,627.5 MiB to the byte. All fifteen sit under twice 128 rows (1,024.4 MiB), which is
-the bound as stated above, and the widest is 1.81x the one-copy figure. The same shape at
-160 rows of 4.55 MiB measured a delta between 0 and +127 MiB against a 2,941 MiB base,
-because there the buffers were mostly satisfied out of pages the process already held:
-what the peak shows depends on the allocator's state, which is the whole reason a reader
-sizing a run works from the bound and not from an observation.
+- Measured on a one-session-plus-subagent fixture, 30 argv rows, each run with stdout on a pipe whose read end was closed before the spawn and stderr either an open pipe or that same closed pipe. The 20 reporting rows (`search` text, JSON, `--raw` and a zero match in both formats; `show` rendered by line, JSON, `--turn`, and `--raw` by line and by turn; `files` in its text, `--by timeline` and JSON forms; `agents` in both projections; `image`; `verbatim` text and JSON) read 1 and 101 at the base and 1 and 1 at the measured build. The 10 `println!` rows (`search -c`, `-l`, `--count-by`, `show --branch-points`, `list` and `stats` in both projections, `recover` default, `--patches` and `--coverage`, and `status`) read 101 on both arms, because they abort on their own stdout write before any report exists.
+- With stdout an ordinary pipe and stderr closed, a run whose note came after its stream - a `--raw` cap drop on `search` or `show`, a zero-match diagnosis, `verbatim`'s no-compaction note - aborted with 101 at the base and, for the two whose note preceded the stream, with nothing on stdout; each exits 0 with its whole stream at the measured build.
 
-**The numbers, with their caveat.** This host was LOADED throughout (one-minute load
-average 7 to 27 from other builds), so wall carries noise that the CPU columns do not; the
-driver rotates and interleaves the two arms, which is what makes the ratios readable at
-all. Medians of 7 interleaved reps on the landmark, base against tip: the JSON dump 2.958 s
--> 1.532 s (0.518x), a `--for` closure 1.080 -> 0.901 (0.835x), `search 'x'` 1.247 -> 1.040
-(0.834x), `search 'the'` 1.140 -> 0.931 (0.816x), a catastrophic-backtracking regex row
-1.019 -> 0.912 (0.895x), `show --branch-points` 0.397 -> 0.355, the `agents` tree 0.664 ->
-0.619, `files --by timeline` 0.890 -> 0.858, and the rows whose output is small - a heavy
-regex, `--count-by label`, `stats --format json`, `agents --format json` - between 0.987x
-and 0.998x. CPU, medians of 5 at load 13 to 20: the JSON dump 7.27 -> 7.55 (the fan-out's
-own cost, now spread over ten cores), the two wide text rows 4.68 -> 4.21 and 4.65 -> 4.17
-with their sys halves 1.10 -> 0.70 and 1.07 -> 0.68. Small inputs do not regress: over the
-128 tiny-and-compacted pairs the ratio median is 1.009 with a maximum of 1.069, against a
-same-binary control band on the same rows whose median is 0.9997 and whose maximum is
-1.065 - about one percent of a five-to-twenty-five millisecond run, which is the 1 MiB
-buffer and the wave setup.
+**The memory bound is the look-ahead, and the look-ahead is UP TO TWICE 128 rows.** 8 rows per chunk and 16 chunks per wave: 128 consecutive rows are rendered before any of them is written, so peak memory rises by the rendered bytes of 128 rows rather than by the stream. But each chunk renders into a `Vec` grown by `extend` and `write!`, and a `Vec` that has doubled sits at up to twice the bytes it holds, with sixteen of them live at once - so the bound is 2 x 128 x whatever a ROW is, and none of those three terms may be dropped - plus, while a wave renders, ONE in-flight row per worker, which for the JSON projector is the `serde_json::Value` tree it builds before serializing it into its chunk's buffer. That last term is bounded by the pool, not by the look-ahead, and the chunk buffers are the part a reader sizing a run works from. On the landmark's 411 MB of JSON (rows averaging 78 KB) that is 10 to 20 MB against a peak of about 1,570 MiB, and it does not stand out of the noise: medians of 13 interleaved reps read 1,570.4 MiB for a release build of the base and 1,570.5 MiB for the tip, a difference of 0.1 MiB, against per-arm spreads of 12.4 and 17.2 MiB that overlap.
 
-**The FLOOR, stated rather than claimed away.** A render change can never get below the
-same query with `-c`, which is the scan, the chain and the hit build with the render
-removed. On this host those floors are 1.120 s for the JSON dump (tip: 1.532), 0.920 s for
-`search 'the'` (tip: 0.931, at its floor), 0.910 s for `search 'x'` (tip: 1.040) and
-1.140 s for the heavy regex (tip: 1.189). The heavy regex therefore cannot be brought under
-a second by render work at all: its output is 2.5 MB and its clock is the regex over
-1.18 GB.
+The observable peak is NOT a floor on that bound, and the counter-example is measured. On a synthetic transcript of 200 user records carrying about 2 MiB of text each, read with `search <needle> --no-truncate --format json` so one rendered row is 4,195,818 B, 128 rows is 512.2 MiB. What the peak-RSS delta against that figure reads is a RANGE, not a pair: three runs of five interleaved pairs each, on this host at one-minute load averages of 7 to 27, 8 to 10 and 7, read medians of 715.8, 844.2 and 723.7 MiB, with the widest single observation 929.3 and the narrowest 522.3, and two of the three reproduce the base median of 1,627.5 MiB to the byte. All fifteen sit under twice 128 rows (1,024.4 MiB), which is the bound as stated above, and the widest is 1.81x the one-copy figure. The same shape at 160 rows of 4.55 MiB measured a delta between 0 and +127 MiB against a 2,941 MiB base, because there the buffers were mostly satisfied out of pages the process already held: what the peak shows depends on the allocator's state, which is the whole reason a reader sizing a run works from the bound and not from an observation.
 
-**What is left serial, and why.** The head banner, the footer, the JSON header and the JSON
-summary are per-RUN, not per-row. `-c`, `-l` and `--count-by` emit one datum or a small
-census and are untouched. `search --raw` is buffered but serial: its dedup set is
-sequential state. `verbatim` is BUFFERED in both formats but renders serially: a session's
-rows are one budgeted window walked in order, not an independent unit per row. It was left
-out at first on a count taken WITHOUT its documented span - `verbatim @<landmark>` is 162
-rows because the budget bounds one session, while `verbatim @<landmark> --subagents` is
-125,269 rows and 34.3 MB of text, 6.8x the `agents` tree's 18,308 and 19x
-`files --by timeline`'s 6,590, and its JSON is 55,218 rows and 91.9 MB. Medians of 5
-interleaved reps at a host load of 6 to 10, stdout to `/dev/null`: the text span's sys time
-0.62 s -> 0.59 s and its wall 1.370 -> 1.310, the JSON span's sys 0.61 -> 0.59, the
-162-row row unchanged at 1.02x, peak RSS unchanged at about 1,005 MiB. Thirty milliseconds
-for 125,269 syscalls is the per-line write cost this whole section is about, and it is what
-makes the next sentence a measurement rather than an excuse: `recover` keeps `println!`
-because its row loops are bounded by ONE FILE's history rather than by the transcript. The
-selection rule is named so the numbers come back: rank the landmark's paths by how many
-`files --by timeline --format json` rows name each one, and take the busiest. That path
-prints 467 `--patches` lines (37,591 B), 2,977 `--salvage` and 48 `--coverage`. Over the
-40 busiest of that ranking - 36 real files, the other four being the class markers
-`fmt:cargo`, `interp:python`, `git:add` and `git:commit`, which are flags rather than
-paths - the maxima are 2,912 lines for
-`--patches`, 2,977 for `--salvage` and 540 for `--coverage`. At the 0.24 microseconds per
-line the span above measures, the busiest mode of the busiest path is under a millisecond
-of writes inside a run of 1.1 to 1.4 s, and its default restore mode already writes the
-whole content in one call.
+**The numbers, with their caveat.** This host was LOADED throughout (one-minute load average 7 to 27 from other builds), so wall carries noise that the CPU columns do not; the driver rotates and interleaves the two arms, which is what makes the ratios readable at all. Medians of 7 interleaved reps on the landmark, base against tip: the JSON dump 2.958 s -> 1.532 s (0.518x), a `--for` closure 1.080 -> 0.901 (0.835x), `search 'x'` 1.247 -> 1.040 (0.834x), `search 'the'` 1.140 -> 0.931 (0.816x), a catastrophic-backtracking regex row 1.019 -> 0.912 (0.895x), `show --branch-points` 0.397 -> 0.355, the `agents` tree 0.664 -> 0.619, `files --by timeline` 0.890 -> 0.858, and the rows whose output is small - a heavy regex, `--count-by label`, `stats --format json`, `agents --format json` - between 0.987x and 0.998x. CPU, medians of 5 at load 13 to 20: the JSON dump 7.27 -> 7.55 (the fan-out's own cost, spread over ten cores), the two wide text rows 4.68 -> 4.21 and 4.65 -> 4.17 with their sys halves 1.10 -> 0.70 and 1.07 -> 0.68. Small inputs do not regress: over the 128 tiny-and-compacted pairs the ratio median is 1.009 with a maximum of 1.069, against a same-binary control band on the same rows whose median is 0.9997 and whose maximum is 1.065 - about one percent of a five-to-twenty-five millisecond run, which is the 1 MiB buffer and the wave setup.
 
-**The `Value` tree, measured and NOT replaced.** An ablation of the JSON dump (the same
-projectors, rendered to a sink that discards, medians of 5 at load 12 to 13) reads: the
-pipeline with the row render skipped 5.25 s of CPU, equal to `-c`, so the pipeline itself
-is free; building the `Value` tree and dropping it 7.11; building and serializing it 7.51;
-and the full run, writing 411 MB, 7.73. So of the render's 2.48 s of CPU, 2.26 is the tree
-and its serialization and 0.22 is the write, and the `sample` decomposition above puts the
-projection logic inside that 2.26 at about 0.1. A streaming projector - a
-`serde_json::Serializer` driven by a hand-written `serialize_entry` sequence per row, which
-keeps the no-`derive(Serialize)` law - would therefore save at most about 2.1 s of CPU, or
-roughly 0.2 s of wall once the fan-out spreads it. It is NOT implemented, for two reasons
-that are worth writing down: `json!` builds a `BTreeMap`, so its keys serialize SORTED,
-while a streaming writer emits them in call order - reproducing the current bytes would
-mean hand-ordering every key and pinning that order with a drift test - and the
-`attach_facts` extension point merges a family's facts into an already-built object with an
-array-append rule, which a stream cannot re-open a written key to do. The parallel render
-reaches the targets without it, so the question stays open rather than answered.
+**The FLOOR, stated rather than claimed away.** A render change can never get below the same query with `-c`, which is the scan, the chain and the hit build with the render removed. On this host those floors are 1.120 s for the JSON dump (tip: 1.532), 0.920 s for `search 'the'` (tip: 0.931, at its floor), 0.910 s for `search 'x'` (tip: 1.040) and 1.140 s for the heavy regex (tip: 1.189). The heavy regex therefore cannot be brought under a second by render work at all: its output is 2.5 MB and its clock is the regex over 1.18 GB.
+
+**What is left serial, and why.** The head banner, the footer, the JSON header and the JSON summary are per-RUN, not per-row. `-c`, `-l` and `--count-by` emit one datum or a small census and are untouched. `search --raw` is buffered but serial: its dedup set is sequential state. `verbatim` is BUFFERED in both formats but renders serially: a session's rows are one budgeted window walked in order, not an independent unit per row. Its row count has to be taken WITH its documented span, because the two differ by three orders of magnitude: `verbatim @<landmark>` is 162 rows because the budget bounds one session, while `verbatim @<landmark> --subagents` is 125,269 rows and 34.3 MB of text, 6.8x the `agents` tree's 18,308 and 19x `files --by timeline`'s 6,590, and its JSON is 55,218 rows and 91.9 MB. Medians of 5 interleaved reps at a host load of 6 to 10, stdout to `/dev/null`: the text span's sys time 0.62 s -> 0.59 s and its wall 1.370 -> 1.310, the JSON span's sys 0.61 -> 0.59, the 162-row row unchanged at 1.02x, peak RSS unchanged at about 1,005 MiB. Thirty milliseconds for 125,269 syscalls is the per-line write cost this whole section is about, and it is what makes the next sentence a measurement rather than an excuse: `recover` keeps `println!` because its row loops are bounded by ONE FILE's history rather than by the transcript. The selection rule is named so the numbers come back: rank the landmark's paths by how many `files --by timeline --format json` rows name each one, and take the busiest. That path prints 467 `--patches` lines (37,591 B), 2,977 `--salvage` and 48 `--coverage`. Over the 40 busiest of that ranking - 36 real files, the other four being the class markers `fmt:cargo`, `interp:python`, `git:add` and `git:commit`, which are flags rather than paths - the maxima are 2,912 lines for `--patches`, 2,977 for `--salvage` and 540 for `--coverage`. At the 0.24 microseconds per line the span above measures, the busiest mode of the busiest path is under a millisecond of writes inside a run of 1.1 to 1.4 s, and its default restore mode already writes the whole content in one call.
+
+**The `Value` tree, measured and NOT replaced.** An ablation of the JSON dump (the same projectors, rendered to a sink that discards, medians of 5 at load 12 to 13) reads: the pipeline with the row render skipped 5.25 s of CPU, equal to `-c`, so the pipeline itself is free; building the `Value` tree and dropping it 7.11; building and serializing it 7.51; and the full run, writing 411 MB, 7.73. So of the render's 2.48 s of CPU, 2.26 is the tree and its serialization and 0.22 is the write, and the `sample` decomposition above puts the projection logic inside that 2.26 at about 0.1. A streaming projector - a `serde_json::Serializer` driven by a hand-written `serialize_entry` sequence per row, which keeps the no-`derive(Serialize)` law - would therefore save at most about 2.1 s of CPU, or roughly 0.2 s of wall once the fan-out spreads it. It is NOT implemented, for two reasons that are worth writing down: `json!` builds a `BTreeMap`, so its keys serialize SORTED, while a streaming writer emits them in call order - reproducing the current bytes would mean hand-ordering every key and pinning that order with a drift test - and the `attach_facts` extension point merges a family's facts into an already-built object with an array-append rule, which a stream cannot re-open a written key to do. The parallel render reaches the targets without it, so the question stays open rather than answered.
 
 ---
 
