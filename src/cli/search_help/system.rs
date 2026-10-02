@@ -16,51 +16,63 @@
 
 /// This family's `search --help` section. See the module doc.
 pub(crate) const SECTION: &str = "\n\nSYSTEM LEAVES (harness.system, harness.schedule.event)\n  \
-     Each `type:\"system\"` event kind renders its OWN fields, not a shared \
-     `[<subtype> <level>]` head. `harness.system.refusal` reads `[refusal <subtype>] \
-     originalModel=<v> fallbackModel=<v|none> apiRefusalCategory=<v>` in the harness's own \
-     key words, with `fallbackModel=none` printed rather than elided because the absence \
-     of a second model is what separates the two subtypes (with no source line the head \
-     stops at the subtype rather than reporting a key it never read); \
-     `harness.system.api-error` reads `[api-error status=<s> type=<kind> retry \
-     <attempt>/<max> in <ms>ms]` followed by the failure's own wording (an attempt the \
-     line omits prints as `?`, since a bare maximum would read as an attempt number). \
-     The kind and the wording are read where the shape puts them, which is not the same \
-     place twice: a connection failure carries its wording in `error.message` and names \
-     no kind, while an HTTP failure names the kind in `error.type` and keeps the response \
-     body it received, so its wording sits two hops down the `error` chain. \
-     `harness.system.notice` reads `[notice <level>] <content>`; `harness.system.kill` \
-     reads the bare `[kill]` (the record carries no payload on disk); \
-     `harness.system.command` reads `[command] <content>` and is the one LLM-visible \
-     member - the request assembler re-mints it as a user message; \
-     `harness.schedule.event` reads `[scheduled <when>] task=<id> cron=<expr> \
-     prompt=<cut>`, the instant taken from the content's parenthesised tail. \
-     A fallback-served assistant turn (its sole block is the API's `fallback` block) \
-     renders under `agent.message.plain`, on a scan as under an address, with the \
-     label-zone marker `[served by <to.model>, fell back from <from.model>]` and the \
-     marker's own words as its body, so a model id or `fell back` finds it. \
-     Per-hit JSON keys, each present only when the line carried it: `retried`, \
-     `original_model`, `fallback_model`, `category` (refusal); `status`, `retry_attempt`, \
-     `max_retries`, `retry_in_ms`, `error` (type and message only) (api-error); `task_id`, \
-     `cron`, `prompt` (cut at 200 chars) (schedule.event); `served_by`, `fell_back_from` \
-     (the fallback turn). The instant is the engine's `scheduled_at` field on BOTH halves \
-     of the pair and means one thing on each - when the schedule fired: the fired PROMPT \
-     reads it off its event sibling, the EVENT reads its own parenthesised tail. The head \
-     carries it too, because every key this family exposes is also in the rendered text. \
-     PROVENANCE: a leaf that NAMES another record carries a `for` fact, rendered \
-     `[for: <kind> L<n>]` when this transcript holds the named record, `[for: <kind> \
-     <id> (not in this file)]` when it does not - a uuid cut to its eight-character \
-     handle, any other id whole - and `[for: <kind> unknown (<reason>)]` \
-     when the record names none - the kinds are `refused` (a refusal's \
-     `refusedUserMessageUuid`, basis key), `wraps` (a delivered command's `parentUuid`, \
-     basis position - a run of local commands chains stdout to stdout, so the link names \
-     the record above rather than the wrapper by construction), `armed_by` (a fire \
-     record's `taskId`, always unknown: the arming call is joined by matching that id \
-     inside a tool result, which a uuid map cannot do - the id itself is in the head and \
-     in `task_id`) and `banner` (the fallback turn, always unknown: the banner names the \
-     turn and not the reverse). JSON `for` is an ARRAY, one object per edge, each with \
-     `kind`, `basis`, `target` (`line`, `uuid`, `session`, `note`) and `reason`. \
-     ONE law is not this family's to relax: an `api_error` line carries the whole HTTP \
-     response header set inside `error.headers`, and NO rendered or JSON path prints any \
-     of it - `--raw` is the documented way to those bytes. That is also why this family \
-     renders its named fields rather than the verbatim line the bookkeeping leaves use.";
+     Each `type:\"system\"` event kind renders its OWN fields, with no shared\n  \
+     `[<subtype> <level>]` head.\n    \
+     harness.system.refusal\n      \
+     [refusal <subtype>] originalModel=<v> fallbackModel=<v|none> apiRefusalCategory=<v>\n      \
+     The keys are the harness's own words. `fallbackModel=none` is printed, never elided,\n      \
+     because the absence of a second model is what separates the two subtypes. With no\n      \
+     source line the head stops at the subtype, since it reports no key it never read.\n    \
+     harness.system.api-error\n      \
+     [api-error status=<s> type=<kind> retry <attempt>/<max> in <ms>ms], then the\n      \
+     failure's own wording\n      \
+     An attempt the line omits prints as `?`, since a bare maximum would read as an\n      \
+     attempt number. The kind and the wording are read where the shape puts them, and\n      \
+     that differs by shape. A connection failure carries its wording in `error.message`\n      \
+     and names no kind. An HTTP failure names the kind in `error.type` and keeps the\n      \
+     response body it received, so its wording sits two hops down the `error` chain.\n    \
+     harness.system.notice\n      \
+     [notice <level>] <content>\n    \
+     harness.system.kill\n      \
+     [kill], bare, because the record carries no payload on disk\n    \
+     harness.system.command\n      \
+     [command] <content>. This is the one LLM-visible member. The request assembler\n      \
+     re-mints it as a user message.\n    \
+     harness.schedule.event\n      \
+     [scheduled <when>] task=<id> cron=<expr> prompt=<cut>, with the instant taken\n      \
+     from the content's parenthesised tail\n\n  \
+     A fallback-served assistant turn (its sole block is the API's `fallback` block)\n  \
+     renders under `agent.message.plain`, on a scan as under an address. It carries the\n  \
+     label-zone marker `[served by <to.model>, fell back from <from.model>]`, and the\n  \
+     marker's own words are its body. A model id or `fell back` therefore finds it.\n\n  \
+     The per-hit JSON keys, each present only when the line carried it.\n    \
+     refusal          `retried`, `original_model`, `fallback_model`, `category`\n    \
+     api-error        `status`, `retry_attempt`, `max_retries`, `retry_in_ms`, `error`\n                     \
+     (type and message only)\n    \
+     schedule.event   `task_id`, `cron`, `prompt` (cut at 200 chars)\n    \
+     fallback turn    `served_by`, `fell_back_from`\n  \
+     The instant is the engine's `scheduled_at` field on BOTH halves of the pair, and it\n  \
+     means one thing on each, which is when the schedule fired. The fired PROMPT reads it\n  \
+     off its event sibling, and the EVENT reads its own parenthesised tail. The head\n  \
+     carries it too, because every key this family exposes is also in the rendered text.\n\n  \
+     PROVENANCE. A leaf that NAMES another record carries a `for` fact.\n    \
+     [for: <kind> L<n>]                      this transcript holds the named record\n    \
+     [for: <kind> <id> (not in this file)]   it does not. A uuid is cut to its\n                                            \
+     eight-character handle, and any other id prints whole.\n    \
+     [for: <kind> unknown (<reason>)]        the record names none\n  \
+     The kinds are these.\n    \
+     refused    a refusal's `refusedUserMessageUuid`, basis key\n    \
+     wraps      a delivered command's `parentUuid`, basis position. A run of local commands\n               \
+     chains stdout to stdout, so by construction the link names the record above,\n               \
+     and that need not be the wrapper.\n    \
+     armed_by   a fire record's `taskId`, always unknown. The arming call is joined by\n               \
+     matching that id inside a tool result, which a uuid map cannot do. The id\n               \
+     itself is in the head and in `task_id`.\n    \
+     banner     the fallback turn, always unknown, because the banner names the turn and\n               \
+     not the reverse\n  \
+     JSON `for` is an ARRAY, one object per edge, each with `kind`, `basis`, `target`\n  \
+     (`line`, `uuid`, `session`, `note`) and `reason`.\n\n  \
+     ONE law is not this family's to relax. An `api_error` line carries the whole HTTP\n  \
+     response header set inside `error.headers`, and NO rendered or JSON path prints any\n  \
+     of it. `--raw` is the documented way to those bytes. The same law is why this family\n  \
+     renders its named fields, where the bookkeeping leaves render the verbatim line.";

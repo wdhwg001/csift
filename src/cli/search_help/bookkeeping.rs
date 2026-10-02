@@ -17,42 +17,47 @@
 
 /// This family's `search --help` section. See the module doc.
 pub(crate) const SECTION: &str = "\n\nBOOKKEEPING LEAVES (harness.bookkeeping)\n  \
-     A `harness.bookkeeping` unit renders its key=value HEAD and then the line's own \
-     VERBATIM JSON as the body, so every key and every full uuid on the line stays \
-     matchable and not only the few a head names.\n\n  \
-     SIXTEEN of the eighteen non-transcript line types build that head from their own \
-     bytes, and it opens with the line's own `type` value - `[cost-state \
-     totalCostUSD=1.5 totalDuration=42 startTime=1767225600000]` - so the types \
-     that share one leaf (mode/permission-mode, ai-title/agent-name, the three artifact \
-     ledgers) stay apart in the output even though their label does not tell them \
-     apart. The other two are `file-history-snapshot` and `file-history-delta`, one \
-     leaf: they keep the head built from the fields csift models, `[file-history \
-     snapshot at <ts>: <path>@vN]`, which names the tracked path where a raw key walk \
-     could only print the snapshot object as JSON.\n\n  \
-     Two rules decide a head's values, and there is no third. A key naming an ACCOUNT, \
-     an ORGANISATION or a RECORD prints its first 8 characters (leafUuid, \
-     parentLastUuid, accountUuid, ownerAccountUuid, ownerOrganizationUuid, \
-     vetoedAgainstAccountUuid). Every other value is cut at 80 characters with the \
-     shared `... (+N chars)` marker, an OBJECT value printing as its sorted key list, \
-     which is where the artifact ids are. A session-shaped value (bridgeSessionId, \
-     parentSessionId) prints whole under the second rule rather than the first, because \
-     it is a join key carried to another file and half a uuid joins nothing.\n\n  \
-     Every unit of the family carries the marker [not delivered]: none of these lines \
-     reaches the model, which is what the JSON `delivered` field says about all \
-     thirteen leaves.\n\n  \
-     FIVE line types also name something outside themselves. Three name a RECORD and \
-     ride the shared provenance edge - `[for: leaf L42]` in the label zone, a `for` \
-     array in JSON: `last-prompt` -> leaf (its leafUuid), a file-history line -> \
-     versions (its messageId), `fork-context-ref` -> forked_from (the record the \
-     forked agent's prefix was cut at, with the parent session beside it), and \
-     `continued-in` -> continued_in (the CHILD transcript a background handover moved \
-     to - a whole file and no record in it, so the edge renders \
-     `[for: continued_in @<session>]`, an `@` target you can feed straight back). A \
-     uuid resolves to a LINE of this transcript when one carries it, else the id \
-     prints with `(not in this file)`, and a line naming no such key renders \
-     `[for: <kind> unknown (<reason>)]` rather than dropping the edge. ONE relation \
-     is not an edge, because its target is an INSTANT rather than a record or a file: \
-     `cost-state` renders `[checkpoint closes <instant>]` (JSON \
-     `checkpoint_closes_at_utc` and `checkpoint_closes_at_local`, the timestamp pair, plus \
-     `checkpoint_join`) - startTime plus totalDuration, \
-     the instant `list` joins a cleared session on as `cleared_from`.";
+     A `harness.bookkeeping` unit renders its key=value HEAD and then the line's own\n  \
+     VERBATIM JSON as the body. Every key and every full uuid on the line therefore stays\n  \
+     matchable, beyond the few a head names.\n\n  \
+     SIXTEEN of the eighteen non-transcript line types build that head from their own\n  \
+     bytes, and it opens with the line's own `type` value, as in\n  \
+     `[cost-state totalCostUSD=1.5 totalDuration=42 startTime=1767225600000]`. The types\n  \
+     that share one leaf (mode/permission-mode, ai-title/agent-name, the three artifact\n  \
+     ledgers) therefore stay apart in the output, although their label does not tell them\n  \
+     apart. The other two are `file-history-snapshot` and `file-history-delta`, which share\n  \
+     one leaf. They keep the head built from the fields csift models,\n  \
+     `[file-history snapshot at <ts>: <path>@vN]`, which names the tracked path where a raw\n  \
+     key walk could only print the snapshot object as JSON.\n\n  \
+     Two rules decide a head's values, and there is no third.\n    \
+     a key naming an ACCOUNT, an   prints its first 8 characters (leafUuid, parentLastUuid,\n    \
+     ORGANISATION or a RECORD      accountUuid, ownerAccountUuid, ownerOrganizationUuid,\n                                  \
+     vetoedAgainstAccountUuid)\n    \
+     every other value             is cut at 80 characters with the shared\n                                  \
+     `... (+N chars)` marker. An OBJECT value prints as its\n                                  \
+     sorted key list, which is where the artifact ids are.\n  \
+     A session-shaped value (bridgeSessionId, parentSessionId) prints whole under the\n  \
+     second rule, because it is a join key carried to another file and half a uuid joins\n  \
+     nothing.\n\n  \
+     Every unit of the family carries the marker [not delivered]. None of these lines\n  \
+     reaches the model, which is what the JSON `delivered` field says about all thirteen\n  \
+     leaves.\n\n  \
+     FIVE line types also name something outside themselves. Three name a RECORD and one\n  \
+     names a FILE, and those four ride the shared provenance edge, `[for: leaf L42]` in the\n  \
+     label zone and a `for` array in JSON.\n    \
+     `last-prompt`          -> leaf, its leafUuid\n    \
+     a file-history line    -> versions, its messageId\n    \
+     `fork-context-ref`     -> forked_from, the record the forked agent's prefix was cut\n                              \
+     at, with the parent session beside it\n    \
+     `continued-in`         -> continued_in, the CHILD transcript a background handover\n                              \
+     moved to\n  \
+     The `continued-in` target is a whole file and no record in it, so its edge renders\n  \
+     `[for: continued_in @<session>]`, an `@` target you can feed straight back. A uuid\n  \
+     resolves to a LINE of this transcript when one carries it. Otherwise the id prints\n  \
+     with `(not in this file)`, and a line naming no such key renders\n  \
+     `[for: <kind> unknown (<reason>)]` in place of a dropped edge.\n\n  \
+     ONE relation is no edge, because its target is an INSTANT, neither a record nor a\n  \
+     file. `cost-state` renders `[checkpoint closes <instant>]`, the startTime plus\n  \
+     totalDuration, which is the instant `list` joins a cleared session on as\n  \
+     `cleared_from`. JSON carries it as the timestamp pair `checkpoint_closes_at_utc` and\n  \
+     `checkpoint_closes_at_local`, plus `checkpoint_join`.";

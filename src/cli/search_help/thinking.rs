@@ -19,26 +19,32 @@
 
 /// This family's `search --help` section. See the module doc.
 pub(crate) const SECTION: &str = "\n\nTHINKING LEAVES (agent.thinking, agent.message.plain)\n  \
-     Two of the four thinking leaves carry no text at all and render an EMPTY body: \
-     agent.thinking.omitted, the signed block whose `thinking` the API returned empty, \
-     marked [no summary text]; and agent.thinking.redacted, the opaque ciphertext block, \
-     marked [redacted thinking] (its `data` payload is printed on no path but --raw). \
-     Neither is reachable by a pattern scan - there is nothing rendered to match - so \
-     reach them with an empty pattern plus an exact -t, with --count-by label, or with a \
-     `show` address.\n  \
-     Two more markers name text the CLIENT wrote into the assistant's role. A thinking \
-     block with text and an empty signature, on a record carrying the <synthetic> model \
-     sentinel, is the block salvaged from a stream the person cancelled: it keeps \
-     agent.thinking.summary and is marked [cancelled stream salvage]. An assistant text \
-     block whose WHOLE trimmed text is [Thinking removed] is the stand-in the client \
-     pushes when stripping thinking emptied the message: it keeps agent.message.plain and \
-     is marked [thinking removed by the client], so those three words never read as the \
-     assistant speaking. Both markers are display-only and ride search and show; \
-     `verbatim` replays the record's own text unmarked.\n  \
-     Two per-hit JSON keys come with them. `signature_len` is the character length of a \
-     thinking block's own signature, and it is NULL when the block carries no signature \
-     field at all - absent and empty are different shapes, and the salvage discriminator \
-     rests on exactly that difference; a redacted_thinking block has no signature field, \
-     so it carries no `signature_len`. `thinking_text_absent` is true on an \
-     agent.thinking.omitted unit alone, so a consumer can tell an API that sent no \
-     summary text from an excerpt that merely rendered empty.";
+     Two of the four thinking leaves carry no text at all and render an EMPTY body.\n    \
+     agent.thinking.omitted    the signed block whose `thinking` the API returned empty,\n                              \
+     marked [no summary text]\n    \
+     agent.thinking.redacted   the opaque ciphertext block, marked [redacted thinking].\n                              \
+     Its `data` payload is printed on no path but --raw.\n  \
+     A pattern scan reaches neither, because nothing is rendered to match. Reach them with\n  \
+     an empty pattern plus an exact -t, with --count-by label, or with a `show` address.\n\n  \
+     Two more markers name text the CLIENT wrote into the assistant's role.\n    \
+     [cancelled stream salvage]         a thinking block with text and an empty signature,\n                                       \
+     on a record carrying the <synthetic> model sentinel.\n                                       \
+     It is the block salvaged from a stream the person\n                                       \
+     cancelled, and it keeps agent.thinking.summary.\n    \
+     [thinking removed by the client]   an assistant text block whose WHOLE trimmed text is\n                                       \
+     [Thinking removed], the stand-in the client pushes\n                                       \
+     when stripping thinking emptied the message. It\n                                       \
+     keeps agent.message.plain, and the marker keeps those\n                                       \
+     three words from reading as the assistant speaking.\n  \
+     Both markers are display-only and ride search and show. `verbatim` replays the\n  \
+     record's own text unmarked.\n\n  \
+     Two per-hit JSON keys come with them.\n    \
+     `signature_len`          the character length of a thinking block's own signature.\n                             \
+     It is NULL when the block carries no signature field at all,\n                             \
+     because absent and empty are different shapes and the salvage\n                             \
+     discriminator rests on exactly that difference. A\n                             \
+     redacted_thinking block has no signature field, so it carries\n                             \
+     no `signature_len`.\n    \
+     `thinking_text_absent`   true on an agent.thinking.omitted unit alone, so a consumer\n                             \
+     can tell an API that sent no summary text from an excerpt that\n                             \
+     merely rendered empty.";

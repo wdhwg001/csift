@@ -32205,7 +32205,7 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "352-357",
+          "lines": "478-483",
           "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The leaf it gated has a name: select it with\n    /// `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -45603,8 +45603,8 @@
         },
         {
           "path": "src/cli/search_help/intro.rs",
-          "lines": "216-218",
-          "snippet": "        28 of the 73 leaves are outside a bare role or category - the two scan-layer user\\n  \\\n        leaves, `user.queued` and all 13 bookkeeping leaves (non-transcript lines with no\\n  \\\n        message field), the two textless thinking leaves, the message-less system records\\n  \\"
+          "lines": "230-232",
+          "snippet": "          AXIS 1, LEAF VISIBILITY. 28 of the 73 leaves are outside a bare role or category. They\\n  \\\n        are the two scan-layer user leaves, `user.queued` and all 13 bookkeeping leaves\\n  \\\n        (non-transcript lines with no message field), the two textless thinking leaves, the\\n  \\"
         }
       ],
       "states": [
@@ -49339,7 +49339,7 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "352-357",
+          "lines": "478-483",
           "snippet": "    /// and then a hard error naming the successor, so a stale invocation fails loudly\n    /// instead of silently scanning less than it asked for (the `turns` tombstone\n    /// precedent). The leaf it gated has a name: select it with\n    /// `-t harness.hook.context`.\n    #[arg(long, hide = true)]\n    pub additional_context: bool,"
         }
       ],
@@ -49756,8 +49756,8 @@
       "code": [
         {
           "path": "src/cli/search_args.rs",
-          "lines": "202-204",
-          "snippet": "    /// pending under any selector) \u00b7 `model` (per assistant model, the raw `message.model`\n    /// value; Claude Code's own `<synthetic>` placeholder, a CC-fabricated stand-in\n    /// assistant record such as an API-error notice, is reported verbatim) \u00b7 `attachment`"
+          "lines": "291-293",
+          "snippet": "    ///   model       per assistant model, the raw `message.model` value. Claude Code's own\n    ///               `<synthetic>` placeholder, a stand-in assistant record Claude Code\n    ///               fabricates (an API-error notice, for one), is reported verbatim."
         }
       ],
       "states": [
@@ -80691,8 +80691,8 @@
         },
         {
           "path": "src/cli/search_args.rs",
-          "lines": "65-67",
-          "snippet": "    /// Filter to one or more `-t`/`--label` SELECTORS (dotted `role.class.sub`, repeatable). A\n    /// selector matches a record label by dot-SEGMENT prefix, in three forms: a bare ROLE\n    /// (`-t user`) or CATEGORY selects the leaves the model RECEIVES - on the first of THREE"
+          "lines": "83-85",
+          "snippet": "    /// Filter to records whose label matches a SELECTOR (repeatable). A label is a dotted\n    /// `role.category.leaf` path, and a selector matches it by dot-SEGMENT prefix. A\n    /// selector takes one of three forms."
         }
       ],
       "states": [

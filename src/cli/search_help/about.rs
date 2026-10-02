@@ -4,72 +4,89 @@
 //! docs in `search_args.rs` fill that file to its line budget on their own.
 
 /// The `long_about` of `csift search --help` (see the module doc).
-pub(crate) const SEARCH_LONG_ABOUT: &str = "Regex-search transcripts, returning the COMPLETE round-trip exchange \
-        containing each hit; never a bare fragment. A turn is delimited by a genuine \
-        user message; the emitted exchange is the whole turn (the opening user record \
-        plus every assistant/thinking/tool_use/tool_result record chained under it \
-        until the next genuine user). So a matched tool_use comes WITH its \
-        tool_result, a matched user turn WITH the agent's response, etc.\n\n\
-        The PATTERN is ripgrep-like and defaults to SMART-CASE: case-insensitive \
-        unless it spells an uppercase letter - a literal, or a character in a bracket \
-        class such as `[A-Z]`, while an escape like `\\S`, `\\W`, `\\D` or `\\B` is no \
-        letter; `-i` forces case-insensitive and always wins. `--multiline` lets `.` cross newlines. An EMPTY pattern is a \
-        pure filter; it matches every label-eligible record, so combine it with \
-        `--label` / `--since` / `--turn` (a bare empty pattern with no other \
-        filter warns that it will emit a lot).\n\n\
-        LABELS (`-t`, repeatable): a dotted `role.category.leaf` SELECTOR - 3 roles, 17 \
-        categories, 73 leaves. A selector matches a record label iff it is a dot-SEGMENT prefix \
-        of the label's path, so `-t agent.tool` covers use+result and `-t agent` the whole role. \
-        The categories: user | agent.{message,thinking,tool,communication} | \
-        harness.{notification,compaction,command,interrupt,schedule,resume,hook,context,enforce,\
-        turn,system,bookkeeping}; `csift search --help` lists every leaf under each. A bare ROLE \
-        or CATEGORY selects only the leaves the model RECEIVES; a GLOB (`-t 'user.*'`) or an \
-        exact LEAF reaches every record. With none given, every leaf a default scan reaches is \
-        eligible; a gated leaf still needs its own `-t` (see the leaf tree). `-T`/\
-        `--label-not` EXCLUDES with the same grammar (the rg -t/-T duality): the effective set \
-        is (-t selectors, or ALL) minus (-T selectors), and ONLY a -T that cancels your -t is a \
-        hard error. `harness.bookkeeping` is the one category whose whole face is invisible: \
-        the bare form is accepted, matches nothing by the law, and says so with the remedy. \
-        Every retired spelling is a hard error naming its successors - `harness.meta` and every \
-        `harness.meta.*` path, the flat `thinking`/`tool`/`tool-response`, \
-        `harness.schedule.continuation`. The human turn is \
-        `user.message`; an AskUserQuestion answer is `user.answer` (the full Q+options+answer \
-        unit); a plan-rejection-with-message is `user.rejection` (+ a [plan: …] pointer). An \
-        inbound peer/teammate message is `agent.communication.inbox` (NOT `user`); a \
-        `<task-notification>` automation pulse is `harness.notification.*` (NOT `user`). A \
-        tool named after harness machinery still classifies by ROLE: a `ScheduleWakeup` CALL \
-        (arming a timer) is `agent.tool.use` like any other tool: `harness.schedule.wakeup` \
-        is only the FIRED tick, the harness-injected marker-carrying wakeup prompt. A \
-        custom-prompt tick carries no marker at all: it lands under `harness.schedule.fire`, \
-        the prompt a scheduled task fires, recognised by its parent link to the scheduler's \
-        own fire record rather than by its text.\n\n\
-        AUTOMATION TRIGGERS: a `<task-notification>` (a background-command / workflow / \
-        spawned-agent / monitor COMPLETION pulse Claude Code injects as a `type:\"user\"` record) \
-        OPENS a turn like a human message but classifies under `harness.notification.<kind>` \
-        (kind = background-command | workflow | subagent | monitor | task, read from the \
-        summary). It renders as the parsed `[<kind> <task-id>[, <task-id>…] <status>] <summary>` \
-        attribution label - every task the pulse closes, never the raw `<task-id>`/`<output-file>` \
-        XML, and never the internal scan marker, which becomes a trailing \
-        `(orphan reconciliation: <kind>)` instead (JSON `task_ids` / `orphan_kind`). Match it like \
-        any other text (e.g. `search 'background-command' -t harness.notification.background-command`).\n\n\
-        WINDOWING: `--turn` takes the shared range grammar: `N` (one turn) · `A..B` \
-        (closed) · `N..` (turn N → the end) · `..N` (start → N) · `-k` = k-th FROM THE END \
-        (`-3..` = the last 3 turns), 0-based on turn-boundary order, and INTERSECTS with \
-        `--since`/`--until` (both filters AND). Time bounds accept ISO8601 (`2026-06-01` = local \
-        midnight · `2026-06-01T05:00:00` BARE = that LOCAL wall-clock time · \
-        `2026-06-01T05:00:00Z`/`…+10:00` = explicit zone) or a relative form (`2h`, `3d`, `90m`, `45s`, `1w`, `2mo`, `1y`; a leading `-` is tolerated) meaning \
-        \"that long ago\" in the system local timezone.\n\n\
-        ZERO MATCHES IS A DEFINITIVE ANSWER, NOT A FAILURE: a no-match search prints a stderr \
-        diagnosis: \"DEFINITIVE absence (exit 0), NOT an error\", the active filters, and (when a \
-        `-t`/`-T` filter was on) an active probe that NAMES the label(s) the pattern DOES occur \
-        under (e.g. it was excluded by your `-t user.message` but occurs under `agent.tool.use`). \
-        Under `--turn` it also counts the records the pattern and the label filter match OUTSIDE \
-        turn numbering - a recalled draft, a rewound turn, a record on an abandoned branch, \
-        which a turn window leaves out - on a line of its own, printed first when there are \
-        any, with the two ways to reach them: drop `--turn`, or window by time with \
-        `--since`/`--until`. The terminal modes (`-c`, `-l`, `--count-by`) print the same \
-        stderr lines. Read the diagnosis and adjust the filter; do NOT assume a syntax error. To SEE a scope's \
-        record-types before you filter, run `--count-by label` (a per-leaf census; with an empty \
-        pattern it censuses the whole scope).\n\n\
-        `--max-count` caps emitted exchanges but reports the dropped count (default: \
-        unlimited; no cap); there is NO silent truncation anywhere.";
+pub(crate) const SEARCH_LONG_ABOUT: &str =
+    "Regex-search transcripts and return the COMPLETE round-trip exchange around \
+        each hit,\nnever a bare fragment. An exchange is one whole turn. It holds the record \
+        that opened\nthe turn plus every assistant, thinking, tool_use and tool_result record \
+        chained under\nit, up to the next turn opener (the `--turn` flag lists the openers). A \
+        matched tool_use\ntherefore comes with its tool_result, and a matched user turn comes \
+        with the agent's\nresponse.\n\n\
+        The PATTERN is ripgrep-like and SMART-CASE by default. It matches case-insensitively\n\
+        unless it spells an uppercase letter, as a literal or inside a bracket class such as\n\
+        `[A-Z]`. An escape like `\\S`, `\\W`, `\\D` or `\\B` is no letter. `-i` forces \
+        case-insensitive\nmatching and always wins. `--multiline` lets `.` cross newlines. \
+        An EMPTY pattern is a\npure filter that matches every label-eligible record, so \
+        combine it with `--label`,\n`--since` or `--turn`. A bare empty pattern with no other \
+        filter warns that it will\nemit a lot.\n\n\
+        LABELS (`-t`, repeatable)\n\
+        A label is a dotted `role.category.leaf` path, over 3 roles, 17 categories and 73 \
+        leaves.\nA SELECTOR matches a record label when it is a dot-SEGMENT prefix of the \
+        label's path.\nUnder that rule `-t agent.tool` covers use and result, and `-t agent` \
+        covers the whole\nrole. The categories are these, and the leaf tree below lists every leaf \
+        under each:\n\n  \
+          user\n  \
+          agent.{message,thinking,tool,communication}\n  \
+          harness.{notification,compaction,command,interrupt,schedule,resume,hook,context,\n  \
+          \x20        enforce,turn,system,bookkeeping}\n\n\
+        A selector reaches different records depending on its form.\n\n  \
+          a bare ROLE or CATEGORY     only the leaves the model RECEIVES\n  \
+          a GLOB (`-t 'user.*'`)      every record under the prefix\n  \
+          an exact LEAF               every record of that leaf\n\n\
+        With no `-t`, every leaf a default scan reaches is eligible. A gated leaf still \
+        needs\nits own `-t` (see the leaf tree's GATE words). `-T`/`--label-not` EXCLUDES \
+        with the same\ngrammar, the rg -t/-T duality. The effective set is the -t selectors \
+        (or ALL) minus the\n-T selectors, and ONLY a -T that cancels your -t is a hard \
+        error. `harness.bookkeeping`\nis the one category whose whole face is invisible. \
+        Its bare form is accepted, matches\nnothing by the law, and says so with the \
+        remedy. Every retired spelling is a hard error\nnaming its successors. The retired \
+        spellings are `harness.meta` and every `harness.meta.*`\npath, the flat \
+        `thinking`/`tool`/`tool-response`, and `harness.schedule.continuation`.\n\n\
+        Where some records land:\n\n  \
+          the human turn                              `user.message`\n  \
+          an AskUserQuestion answer                   `user.answer`, the full \
+          Q+options+answer unit\n  \
+          a plan rejection with a message             `user.rejection`, plus a [plan: …] \
+          pointer\n  \
+          an inbound peer or teammate message         `agent.communication.inbox`, NOT \
+          `user`\n  \
+          a `<task-notification>` automation pulse    `harness.notification.*`, NOT \
+          `user`\n\n\
+        A tool named after harness machinery still classifies by ROLE. A `ScheduleWakeup` \
+        CALL\n(arming a timer) is `agent.tool.use` like any other tool. \
+        `harness.schedule.wakeup` is only\nthe FIRED tick, the harness-injected \
+        marker-carrying wakeup prompt. A custom-prompt tick\ncarries no marker at all. It \
+        lands under `harness.schedule.fire`, the prompt a scheduled\ntask fires, which is \
+        recognised by its parent link to the scheduler's own fire record and\nnever by its \
+        text. A `<task-notification>` pulse OPENS a turn and is labelled by its kind, as\n\
+        AUTOMATION TRIGGERS below describes.\n\n\
+        WINDOWING\n\
+        `--turn` takes the shared range grammar, 0-based on turn-boundary order.\n\n  \
+          N       one turn\n  \
+          A..B    a closed range\n  \
+          N..     turn N → the end\n  \
+          ..N     the start → turn N\n  \
+          -k      the k-th turn FROM THE END (`-3..` = the last 3 turns)\n\n\
+        `--turn` INTERSECTS with `--since`/`--until`, and both filters AND. A time bound \
+        is\nISO8601 or a relative form, and a relative form means \"that long ago\" in the \
+        system\nlocal timezone.\n\n  \
+          2026-06-01                local midnight that day\n  \
+          2026-06-01T05:00:00       a BARE datetime, that LOCAL wall-clock time\n  \
+          2026-06-01T05:00:00Z      an explicit zone (`…+10:00` works too)\n  \
+          2h 3d 90m 45s 1w 2mo 1y   relative forms (a leading `-` is tolerated)\n\n\
+        ZERO MATCHES IS A DEFINITIVE ANSWER, NOT A FAILURE\n\
+        A no-match search exits 0 and prints a diagnosis on stderr. It reads \"DEFINITIVE\n\
+        absence (exit 0), NOT an error\" and lists the active filters. When a `-t`/`-T` \
+        filter was\non, an active probe NAMES the label(s) the pattern DOES occur under. \
+        For example, the\npattern was excluded by your `-t user.message` but occurs under \
+        `agent.tool.use`. Under\n`--turn` the diagnosis also counts the records the pattern \
+        and the label filter match\nOUTSIDE turn numbering, which a turn window leaves out. \
+        These are a recalled draft, a\nrewound turn and a record on an abandoned branch. \
+        The count gets a line of its own,\nprinted first when there are any, and it names \
+        the two ways to reach them. One is to\ndrop `--turn`, the other to window by time \
+        with `--since`/`--until`. The terminal modes\n(`-c`, `-l`, `--count-by`) print the \
+        same stderr lines. Read the diagnosis and adjust the\nfilter, because an empty \
+        result is never a syntax error. To SEE a scope's record types\nbefore you filter, \
+        run `--count-by label`, a per-leaf census that covers the whole scope\nwith an \
+        empty pattern.\n\n\
+        `--max-count` caps the emitted exchanges and reports how many it dropped. The \
+        default is\nunlimited, with no cap. Nothing anywhere is truncated silently.";

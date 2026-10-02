@@ -16,46 +16,51 @@
 /// This family's `search --help` section. See the module doc.
 pub(crate) const SECTION: &str =
     "\n\nATTACHMENT LEAVES (harness.hook, harness.context, agent.message.structured)\n  \
-     An attachment line keeps TWO copies of itself and the unit says which one it is \
-     showing. `[rendered]` is the harness converter's own output - the text the model \
-     received, and what a resume replays; `[payload]` is the line's own payload, either a \
-     field of it (a hook run's stdout, a hook's injected strings) or the verbatim payload \
-     JSON. The word rides JSON as `body_source`. A `queued_command` can carry a SECOND \
-     conversion for a human turn: which copy the model got depends on the turn it was \
-     replayed into, which the record does not say, so the body stays the ordinary one and \
-     the unit adds `[human-turn render differs]` (JSON `human_turn_render_differs`) rather \
-     than choosing.\n  \
-     Each unit also names ITSELF: `[hook <event> <name>]` for injected context, `[hook \
-     <event> <name> exit <code> <ms>ms]` for a hook run (`[hook <payload type>]` for the \
-     other six outcome types), `[context <payload type>]` for the context leaves, \
-     `[structured]` for a schema-bound subagent's own answer, and `[mid-turn]` for the \
-     person's steer, which is a `user.message` that reached the model in the MIDDLE of a \
-     turn rather than opening one - and which takes the same body rule as every other \
-     view, so a steer whose record carries a conversion reads `[rendered]`.\n  \
-     PROVENANCE, three facts on every attachment unit. Two are `for` edges in the shared \
-     form: `attached_to` from the record's own `parentUuid` and `for_tool_use` from the \
-     payload's inner `toolUseID`, rendering `[for: <kind> L<line>]` when the target is a \
-     line of this transcript, `[for: <kind> <id> (not in this file)]` for an id no line \
-     here carries (which a tool-call id always is - it is a wire id, never a record \
-     uuid, so it prints WHOLE: only a uuid-shaped target is cut to its eight-character \
-     handle), and `[for: <kind> unknown (<reason>)]` when the line names nothing at all. \
-     Both fold into the ONE JSON `for` array, each entry `{kind,basis,target,reason}` with \
-     the WHOLE uuid under `target.uuid` (what `show --uuid` takes) beside `target.line`. \
-     The third is `[produced_by <command>]` from a hook run's own `command`, JSON \
-     `produced_by:{command,hook_name,payload_type}` - a command is not a record, so it \
-     keeps a key of its own and is rendered whole rather than cut to an id handle. Its \
-     two empties differ: `no command on this line; hookName=<name>` for a hook line that \
-     records no command, `no producer key; type=<t>` for a payload type that is no hook's \
-     output. The three facts ride every attachment unit INCLUDING an addressed record \
-     csift models no leaf for: the shape stands in for the leaf path there and the three \
-     render after it, exactly as they do on a labelled unit.\n  \
-     MATCHING follows the BODY. A record that carries a conversion is searchable by the \
-     converted text, not by the payload text it replaced, and `--raw` does not recover the \
-     difference (the raw backfill runs after the match phase); the way to the bytes is an \
-     address - `csift show @<id> --line N --raw`. The decoded body is searchable by an \
-     ordinary pattern: a needle the prefilter can use carries no whitespace, no double \
-     quote, no backslash, no control character and no DEL, and such a run sits verbatim \
-     inside the raw line's JSON string, so the line prefilter and the whole-file gate see \
-     what the render does. The backslash is on that list because a line stores it \
-     doubled, so a needle splits there - `C:\\Users\\dev` derives `Users`, which is in \
-     the bytes, and the pattern matches.";
+     An attachment line keeps TWO copies of itself, and the unit says which one it shows.\n    \
+     [rendered]   the harness converter's own output, the text the model received and what\n                 \
+     a resume replays\n    \
+     [payload]    the line's own payload, either a field of it (a hook run's stdout, a\n                 \
+     hook's injected strings) or the verbatim payload JSON\n  \
+     The word rides JSON as `body_source`. A `queued_command` can carry a SECOND conversion\n  \
+     for a human turn. Which copy the model got depends on the turn it was replayed into,\n  \
+     and the record does not say which. The body stays the ordinary one, and the unit adds\n  \
+     `[human-turn render differs]` (JSON `human_turn_render_differs`) and chooses neither.\n\n  \
+     Each unit also names ITSELF.\n    \
+     [hook <event> <name>]                     injected context\n    \
+     [hook <event> <name> exit <code> <ms>ms]  a hook run\n    \
+     [hook <payload type>]                     the other six outcome types\n    \
+     [context <payload type>]                  the context leaves\n    \
+     [structured]                              a schema-bound subagent's own answer\n    \
+     [mid-turn]                                the person's steer\n  \
+     The steer is a `user.message` that reached the model in the MIDDLE of a turn and opened\n  \
+     none. It takes the same body rule as every other view, so a steer whose record carries\n  \
+     a conversion reads `[rendered]`.\n\n  \
+     PROVENANCE. Every attachment unit carries three facts. Two are `for` edges in the\n  \
+     shared form, `attached_to` from the record's own `parentUuid` and `for_tool_use` from\n  \
+     the payload's inner `toolUseID`.\n    \
+     [for: <kind> L<line>]                   the target is a line of this transcript\n    \
+     [for: <kind> <id> (not in this file)]   no line here carries the id\n    \
+     [for: <kind> unknown (<reason>)]        the line names nothing at all\n  \
+     A tool-call id always takes the middle form, because it is a wire id and never a record\n  \
+     uuid. It prints WHOLE, since only a uuid-shaped target is cut to its eight-character\n  \
+     handle. Both edges fold into the ONE JSON `for` array, each entry\n  \
+     `{kind,basis,target,reason}`, with the WHOLE uuid under `target.uuid` (what\n  \
+     `show --uuid` takes) beside `target.line`.\n  \
+     The third fact is `[produced_by <command>]`, from a hook run's own `command`, with JSON\n  \
+     `produced_by:{command,hook_name,payload_type}`. A command is not a record, so it keeps a\n  \
+     key of its own and renders whole, never cut to an id handle. Its two empties differ.\n    \
+     `no command on this line; hookName=<name>`   a hook line that records no command\n    \
+     `no producer key; type=<t>`                  a payload type that is no hook's output\n  \
+     The three facts ride every attachment unit, INCLUDING an addressed record csift models\n  \
+     no leaf for. The shape stands in for the leaf path there, and the three render after\n  \
+     it, exactly as they do on a labelled unit.\n\n  \
+     MATCHING follows the BODY. A record that carries a conversion is searchable by the\n  \
+     converted text, and the payload text it replaced no longer matches. `--raw` does not\n  \
+     recover the difference, because the raw backfill runs after the match phase. The way\n  \
+     to the bytes is an address, `csift show @<id> --line N --raw`.\n  \
+     The decoded body is searchable by an ordinary pattern. A needle the prefilter can use\n  \
+     carries no whitespace, no double quote, no backslash, no control character and no DEL.\n  \
+     Such a run sits verbatim inside the raw line's JSON string, so the line prefilter and\n  \
+     the whole-file gate see what the render does. The backslash is on that list because a\n  \
+     line stores it doubled and a needle splits there. `C:\\Users\\dev` derives `Users`,\n  \
+     which is in the bytes, and the pattern matches.";
