@@ -2484,1289 +2484,1214 @@ non-breaking surface change bumps the PATCH.
 
 ### Added
 
-- **The unsent diff line.** A rendered `user.unsent` draft now says how far it sits from
-  the message that replaced it: `differs from the sent message in N chars (P% of the
-  final): may carry an addition or a correction`, with `superseding_line`,
-  `superseding_uuid`, `diff_chars`, `diff_pct` and `diff_exact` in JSON (on the `search`
-  exchange row and the `show` record row). N counts insertions plus deletions of a
-  shortest character-level edit script, so it is the work the edit did and not a length
-  difference; P is N over the final message's length and can exceed 100 when the draft
-  was the longer text. The engine is a bounded char-level Myers walk with no new
-  dependency, and it runs only when a draft is actually rendered, so `-c`, `-l` and
-  `--count-by` pay nothing. Measured over the whole corpus after the replay guard below,
-  on a population of 887 drafts (a live corpus gains drafts as sessions run, so a re-run
-  sees a slightly larger one): 877 exact, the other 10 reporting a proven floor between
-  3,813 and 9,360 characters, the largest draft (237,434 characters) diffed in 0.755 ms,
-  and both a whole-corpus draft scan and a broad search within noise of 0.11.0.
+- A rendered `user.unsent` draft now carries an unsent diff line. It says how far the
+  draft sits from the message that replaced it, as `differs from the sent message in N
+  chars (P% of the final): may carry an addition or a correction`. JSON carries
+  `superseding_line`, `superseding_uuid`, `diff_chars`, `diff_pct` and `diff_exact`, on
+  the `search` exchange row and the `show` record row. N counts insertions plus deletions of
+  a shortest character-level edit script. It is the work the edit did and not a length
+  difference. P is N over the final message's length, and it can exceed 100 when the draft
+  was the longer text. The engine is a bounded char-level Myers walk with no new dependency.
+  It runs only when a draft is actually rendered, so `-c`, `-l` and `--count-by` pay
+  nothing. It was measured over the whole corpus after the replay guard below, on a
+  population of 887 drafts. A live corpus gains drafts as sessions run, so a re-run sees a
+  slightly larger one. 877 read exact, and the other 10 report a proven floor between 3,813
+  and 9,360 characters. The largest draft (237,434 characters) diffed in 0.755 ms. A
+  whole-corpus draft scan and a broad search both ran within noise of 0.11.0.
 
 ### Changed
 
-- **`user.unsent` is documented as retroactive.** A draft and its resend are the same
-  record shape (same key set on 852 of 886 pairs; nothing but identity and time always
-  differs), and no successor line shape separates the two populations — every shape that
+- `user.unsent` is documented as retroactive. A draft and its resend are the same record
+  shape, with the same key set on 852 of 886 pairs, and nothing but identity and time
+  always differs. No successor line shape separates the two populations. Every shape that
   reads zero after a control record reads zero because that window is cut at the next
-  assistant reply, not because of anything about drafts. So the only discriminator is the
-  later sibling, and a hook running at prompt submit cannot apply the label, because that
-  sibling is the prompt being submitted. The closest approximation, skipping a trailing
-  turn-opener that no assistant record follows, hides 92.2% of drafts but wrongly skips
-  2.9% of genuine messages, and is now stated as a heuristic in SKILL's wrong-assumptions
-  table rather than implied to be the label. Censused over the full populations: all 886
-  drafts, each joined to the survivor csift itself names, against all 2,595 `user.message`
-  records of the 28 draft-carrying sessions. Recorded as ledger claim TURN-026, which
-  carries the commands and the whole per-shape table.
+  assistant reply, and for no reason that has to do with drafts. The only discriminator is
+  therefore the later sibling. A hook running at prompt submit cannot apply the label,
+  because that sibling is the prompt being submitted. The closest approximation skips a
+  trailing turn-opener that no assistant record follows. It hides 92.2% of drafts but
+  wrongly skips 2.9% of genuine messages. SKILL's wrong-assumptions table now states it as a
+  heuristic and no longer implies it is the label. The census covered the full populations,
+  all 886 drafts, each joined to the survivor csift itself names, against all 2,595
+  `user.message` records of the 28 draft-carrying sessions. It is recorded as ledger claim
+  TURN-026, which carries the commands and the whole per-shape table.
 
 ### Fixed
 
-- **A replayed record is no longer read as a resend, and turn numbers shift where it was.**
-  A compaction re-anchor re-appends a block of already-written records with their uuids
-  preserved, and a re-appended user message keeps its `parentUuid` too, differing from the
+- A replayed record is no longer read as a resend, and turn numbers shift where it was. A
+  compaction re-anchor re-appends a block of already-written records with their uuids
+  preserved. A re-appended user message keeps its `parentUuid` too and differs from the
   original in one field (`promptId`). The draft rule groups openers by `parentUuid` and
-  keeps the last, so it read the copy as a later sibling: the ORIGINAL message, sent and
+  keeps the last, so it read the copy as a later sibling. The original message, sent and
   answered, was labelled `user.unsent`, dropped from turn numbering, and shown as differing
   from the sent message in 0 chars. Seven genuine messages were affected in one session.
-  Same-uuid openers under one parent now collapse to their first occurrence: the first
-  keeps its label and its turn, the copy opens nothing but stays a turn member, so it is
-  still addressable and still renders like every other replayed record. **Turn numbering
-  shifts on any transcript carrying a replayed block** — as it did for the v0.5 slash-wrapper
-  fix and the 0.9.2 draft work. Re-read the `tN` from current output rather than reusing a
-  noted one; `--uuid` is the address that survives. Recorded as ledger claim CMP-019.
-- **An unedited resend says so.** A draft whose text is identical to the message that
-  replaced it now reads `identical to the sent message` rather than `differs from the sent
+  Same-uuid openers under one parent now collapse to their first occurrence. The first
+  keeps its label and its turn. The copy opens nothing but stays a turn member, so it is
+  still addressable and still renders like every other replayed record. Turn numbering
+  shifts on any transcript carrying a replayed block, as it did for the v0.5 slash-wrapper
+  fix and the 0.9.2 draft work. A `tN` noted earlier has to be read again from current
+  output, and `--uuid` is the address that survives. This is recorded as ledger claim
+  CMP-019.
+- An unedited resend says so. A draft whose text is identical to the message that replaced
+  it now reads `identical to the sent message`, where it read `differs from the sent
   message in 0 chars`.
 
 ### Changed
 
-- **BREAKING: a bare role selector now selects what the model RECEIVED, per record.** It
-  used to decide that per leaf, from a table of which labels are conversation. Claude Code
+- A bare role selector now selects what the model received, per record, and this is
+  BREAKING. It used to decide that per leaf, from a table of which labels are conversation. Claude Code
   decides it per record, with one drop predicate inside the assembler that builds an API
-  request, and that predicate disagrees with the leaf table in exactly three cases. csift
-  mirrors those three and nothing else. The two census changes, measured on this corpus
-  with the two builds run back to back over 72 top-level transcripts:
+  request. That predicate disagrees with the leaf table in exactly three cases, and csift
+  mirrors those three and nothing else. The two census changes were measured on this corpus,
+  with the two builds run back to back over 72 top-level transcripts.
   - `-t harness` now surfaces `system`/`local_command` records, a slash command's own echo
     and its stdout, because the assembler re-mints them as a user message and sends them.
     Sixteen records appear where 0.11.0 showed none, although `harness.meta.system` is an
     invisible leaf and stays one by default.
-  - `-t agent` now drops the API-error placeholders, the assistant records Claude Code
-    fabricates when a call fails and never sends back. `agent.message` falls by exactly
-    118, the whole population of records carrying `isApiErrorMessage` (118 of 118 also
-    carry the `<synthetic>` model that the predicate tests for). An `isVirtual` record
-    leaves a bare `-t user` the same way.
-  Globs (`-t 'agent.*'`), intermediate prefixes and exact leaf paths are untouched and
-  still reach every record, so nothing became unreachable. Under those forms an
-  undelivered record renders `[not delivered]` in the label zone, and every JSON hit
-  gained a `delivered` field carrying the verdict. Recorded as ledger claims CLS-026 and
-  CLS-027.
+  - `-t agent` now drops the API-error placeholders. Claude Code fabricates those assistant
+    records when a call fails and never sends them back. `agent.message` falls by exactly
+    118, the whole population of records carrying `isApiErrorMessage`, and 118 of 118 also
+    carry the `<synthetic>` model that the predicate tests for. An `isVirtual` record leaves
+    a bare `-t user` the same way.
 
-- **A bare `-t harness` admits the `type:"system"` lines.** Those lines were gated behind
-  an explicit selector, so the delivered record above could not have been reached at all.
-  The other five gated leaves keep the explicit-selector rule exactly, and the per-record
-  rule drops every other system record the admission parsed. `gated_leaves_unreached` and
-  its stderr note now report what the scan actually parsed instead of which selector was
-  typed, and the note's leaf list is derived from the gated set instead of typed out.
+  Globs (`-t 'agent.*'`), intermediate prefixes and exact leaf paths are untouched and still
+  reach every record, so nothing became unreachable. Under those forms an undelivered record
+  renders `[not delivered]` in the label zone, and every JSON hit gained a `delivered` field
+  carrying the verdict. This is recorded as ledger claims CLS-026 and CLS-027.
 
-- **Slash commands the model never sees, documented.** Three families leave nothing on
-  disk, so finding no wrapper record is not evidence a command was not run: `/btw`,
-  `/tasks` (= `/bashes`) and `/release-notes` return skip on every normal exit, any panel
-  closed with Escape writes nothing whatever its own option was, and `/rewind`
-  (= `/checkpoint`/`/undo`) and `/stop` take the same path through the `local` result map.
-  A record on disk is not a record the model saw either: `/release-notes` appends a
-  harness notice and then returns skip, so it is rendered to the human and dropped by the
-  assembler. SKILL's wrong-assumptions table carries both rows. Recorded as ledger claims
-  TURN-027 through TURN-030 and MISC-031.
+- A bare `-t harness` admits the `type:"system"` lines. Those lines were gated behind an
+  explicit selector, so the delivered record above could not have been reached at all. The
+  other five gated leaves keep the explicit-selector rule exactly. The per-record rule drops
+  every other system record the admission parsed. `gated_leaves_unreached` and its stderr
+  note now report what the scan actually parsed, where they used to report which selector
+  was typed. The note's leaf list is derived from the gated set and no longer typed out.
+
+- Slash commands the model never sees are now documented. Three families leave nothing on
+  disk, so finding no wrapper record is not evidence a command was not run. `/btw`,
+  `/tasks` (= `/bashes`) and `/release-notes` return skip on every normal exit. Any panel
+  closed with Escape writes nothing, whatever its own option was. `/rewind`
+  (= `/checkpoint`/`/undo`) and `/stop` take the same path through the `local` result
+  map. A record on disk is not always a record the model saw either. `/release-notes`
+  appends a harness notice and then returns skip, so the notice is rendered to the human
+  and dropped by the assembler. SKILL's wrong-assumptions table carries both rows. This is
+  recorded as ledger claims TURN-027 through TURN-030 and MISC-031.
 
 ## [0.11.0] - 2026-09-06
 
-The csift channel: a way to get a message to a Claude Code lane the official channel
-cannot reach, and to find out afterwards whether it arrived.
+This release adds the csift channel. It carries a message to a Claude Code lane the
+official channel cannot reach, and it can tell afterwards whether the message arrived.
 
 ### Changed
 
-- **BREAKING: the read-only law becomes a writers law.** Through 0.10.5 csift wrote
-  nothing at all. From 0.11.0 exactly three commands write, `send`, `deliver` and `ack`,
-  and they write exactly one place: a `csift-channel` directory csift creates in the
-  session's own sidecar folder. Never a transcript, never the team mailbox, never the
-  cross-session messaging socket, never the session registry, never any settings file.
-  csift does not install its hook either; `deliver --recipe` prints the block and you
-  paste it. Every other subcommand still only reads. Nothing that worked before stops
-  working, but the promise a reader had is narrower now, and a narrower promise is a
-  breaking one.
+- The read-only law becomes a writers law, and this is BREAKING. Through 0.10.5 csift wrote nothing
+  at all. From 0.11.0 exactly three commands write, `send`, `deliver` and `ack`. They write
+  exactly one place, a `csift-channel` directory csift creates in the session's own sidecar
+  folder. They never write a transcript, the team mailbox, the cross-session messaging
+  socket, the session registry or any settings file. csift does not install its hook
+  either. `deliver --recipe` prints the block, and you paste it. Every other subcommand
+  still only reads. Nothing that worked before stops working. The promise a reader had is
+  narrower now, though, and a narrower promise is a breaking one.
 
 ### Added
 
-- **`csift send @<lane> "message"`** queues one message for one lane: a top-level
-  session, an unnamed subagent, a teammate, a workflow lane. It exists because the
-  official channel is not weaker for some receivers, it is absent: a running workflow
-  lane cannot be reached by the send tool at all, an unnamed subagent has no arm to
-  address its own parent subagent, nothing wakes an idle session that published no
-  socket, and a sender outside Claude Code holds no tool to call. Every send prints one
-  verdict, `OK`, `FULL`, `MAY-FAIL`, `UNPREDICTABLE` or `REFUSED`, and exits 0 even for a
-  refusal, because a refusal is a definitive answer about the receiver and not a usage
-  error. Where an official transport does exist, csift prints the exact call for you to
-  make and still queues its own copy.
-- **`csift deliver --slot k`** is the hook entry that carries the channel into a lane.
-  You never run it by hand: `csift deliver --recipe` prints the settings block (both the
-  plain and the PowerShell command form, any number of slots) and a human installs it.
-  Slot k emits chunk k of what is waiting, the slots of one event order themselves, and a
-  queue message at a turn boundary may block the turn from ending while the harness's own
-  block cap allows it.
-- **`csift msg <id>`** answers the question a queue cannot: did it actually arrive. The
-  per-lane ledger records what csift emitted, the receiver's transcript proves what
-  landed, and `msg` joins the two into one verdict (`DELIVERED`, `INTENT-ONLY`, `QUEUED`,
-  `HELD`, `EXPIRED`, `ACKED`, `REFUSED`). The proof half on its own is exactly
+- `csift send @<lane> "message"` queues one message for one lane, which can be a
+  top-level session, an unnamed subagent, a teammate or a workflow lane. It exists because
+  for some receivers the official channel is absent outright. The send tool cannot reach a
+  running workflow lane at all. An unnamed subagent has no arm to address its own parent
+  subagent. Nothing wakes an idle session that published no socket. A sender outside Claude
+  Code holds no tool to call. Every send prints one verdict, `OK`, `FULL`, `MAY-FAIL`,
+  `UNPREDICTABLE` or `REFUSED`, and exits 0 even for a refusal. A refusal is a definitive
+  answer about the receiver and not a usage error. Where an official transport does exist,
+  csift prints the exact call for you to make and still queues its own copy.
+- `csift deliver --slot k` is the hook entry that carries the channel into a lane. You
+  never run it by hand. `csift deliver --recipe` prints the settings block, in both the
+  plain and the PowerShell command form and for any number of slots, and a human installs
+  it. Slot k emits chunk k of what is waiting, and the slots of one event order themselves.
+  A queue message at a turn boundary may block the turn from ending, as far as the
+  harness's own block cap allows.
+- `csift msg <id>` answers the question a queue cannot, whether the message actually
+  arrived. The per-lane ledger records what csift emitted, and the receiver's transcript
+  proves what landed. `msg` joins the two into one verdict (`DELIVERED`, `INTENT-ONLY`,
+  `QUEUED`, `HELD`, `EXPIRED`, `ACKED`, `REFUSED`). The proof half on its own is exactly
   `csift search '<id>' @<lane> --additional-context`, so the join can be audited without
-  trusting it. **`csift ack <id>`** records the one thing only a receiver can say.
-- **`whoami` grew a lane layer**: a `@<agent-id>` target, the `self`, `parent` and
-  `topology` sections, `--to @<lane>` for a reach prediction that sends nothing, and
-  `--peers`, which lists every live lane as id, kind and state and deliberately nothing
-  else. A description or a role-shaped name is the material one lane would use to claim
-  standing over another, so the census answers who is alive, not who should be obeyed.
-  Outside Claude Code, `whoami` now prints the not-a-lane answer with the one channel out
-  and what a receiver needs installed.
-- **`agent.communication.channel`**, the 35th label. A delivery lands in the receiving
-  lane as a hook-context attachment, and this is the one attachment leaf a default search
-  reaches, because a message addressed at the lane is not machinery. It renders verbatim,
-  envelope header and all, so a reader can see who sent it, under what relation, and that
-  it came from neither the user nor the harness.
-- **`@<Name>@<Team>`**, a teammate's routing form, as a target. A teammate carries two ids
-  minted apart at spawn: the routing form the official send tool needs, which can collide
-  when two teammates share a name, and the transcript form on disk, which never does.
+  trusting it. `csift ack <id>` records the one thing only a receiver can say.
+- `whoami` grew a lane layer. It takes a `@<agent-id>` target and prints `self`, `parent`
+  and `topology` sections. `--to @<lane>` gives a reach prediction that sends nothing.
+  `--peers` lists every live lane as id, kind and state, and deliberately nothing else. A
+  description or a role-shaped name is the material one lane would use to claim standing
+  over another, so the census answers who is alive and never who should be obeyed. Outside
+  Claude Code, `whoami` now prints the not-a-lane answer, with the one channel out and what a
+  receiver needs installed.
+- `agent.communication.channel` is the 35th label. A delivery lands in the receiving lane
+  as a hook-context attachment. This is the one attachment leaf a default search reaches,
+  because a message addressed at the lane is not machinery. It renders verbatim, envelope
+  header and all, so a reader can see who sent it, under what relation, and that it came
+  from neither the user nor the harness.
+- `@<Name>@<Team>`, a teammate's routing form, works as a target. A teammate carries two
+  ids minted apart at spawn. The routing form is what the official send tool needs, and it
+  can collide when two teammates share a name. The transcript form on disk never collides.
   csift resolves either, keys its own work on the transcript form, and now prints both
   wherever a teammate appears.
-- The **settings cascade** csift reads to answer "will a delivery hook actually run
-  there": five scopes in Claude Code's own order, `env` merged per key, `hooks`
-  concatenated per event, plugin hook manifests unioned, the policy tier composed
-  first-wins, and the three policy switches that can empty the whole hook set. What is
-  not observable from disk is listed as such, so a gate verdict says "unknown" with its
-  evidence instead of implying the file scopes are the whole story. `plan` now reads its
+- csift reads the settings cascade to answer whether a delivery hook will actually run in a
+  lane. It reads five scopes in Claude Code's own order, merges `env` per key, concatenates
+  `hooks` per event, unions plugin hook manifests, composes the policy tier first-wins, and
+  applies the three policy switches that can empty the whole hook set. What is not
+  observable from disk is listed as such. A gate verdict therefore says "unknown" with its
+  evidence and never implies the file scopes are the whole story. `plan` now reads its
   `plansDirectory` through the same model, with its precedence unchanged.
 
 ## [0.10.5] - 2026-09-05
 
-A correction release for the introspection ledger and for four csift defects the ledger's
+This release corrects the introspection ledger, and four csift defects that the ledger's
 own drift verdicts had named and the previous release shipped around.
 
 ### Fixed
 
-- `image` joins the `#N` handle by NUMBER. A record's `imagePasteIds` lists the ids in the
-  order of its image blocks, while the `[Image #N]` markers keep the operator's text order;
-  the two diverge on 18 of 662 corpus records, and the positional zip gave those a silently
-  wrong handle. Without the array the positional zip stays, under its count guard.
+- `image` joins the `#N` handle by number. A record's `imagePasteIds` lists the ids in the
+  order of its image blocks, while the `[Image #N]` markers keep the operator's text order.
+  The two diverge on 18 of 662 corpus records, and the positional zip gave those a silently
+  wrong handle. Without the array, the positional zip stays, under its count guard.
 - `recover` no longer replays a Read echo that carries no text. Claude Code blanks the text
-  of a tool result older than its retention window before persisting it (320 such echoes in
-  the reference corpus, `content` empty with the line counts intact), and four result arms
-  never carry a text; a blanked echo of a complete read used to replay as a whole-file
-  snapshot of nothing. Each is now a counted `blanked-read` with a soft annotation boundary.
+  of a tool result older than its retention window before persisting it. The reference
+  corpus holds 320 such echoes, with `content` empty and the line counts intact. Four result
+  arms never carry a text at all. A blanked echo of a complete read used to replay as a
+  whole-file snapshot of nothing. Each is now a counted `blanked-read` with a soft
+  annotation boundary.
 - The `status`/`wait` pid probe pins `LC_ALL=C` and `TZ=UTC` on its own `ps` call, as the
-  harness does for its `procStart`; under a German or French locale the rendering parsed
-  under neither English pattern and the pid-reuse guard was silently skipped.
-- Search hits carry `refetch_uuid` beside `refetch`: a line number is a durable address only
-  while the transcript is append-only, and three harness paths rewrite a live transcript in
-  place; the uuid survives them.
-- Four statements csift printed or taught were wrong at 2.1.258 and are corrected with
-  their dates: TaskStop resolves a teammate by its name or `name@team` from Claude Code
-  2.1.198 (the agents footer, the JSON control hint, the SKILL rows and hook recipe said it
-  rejects every form); the file-history store is also written by an approved in-place `sed`
-  preview (`recover --list-backups` said bash edits never land there); the pending
-  AskUserQuestion split is a timing outcome of the write frontier, not a question-count
-  rule and not a 2.1.258 change (a comment, a note, the help and three documents said
-  otherwise).
+  harness does for its `procStart`. Under a German or French locale the rendering parsed
+  under neither English pattern, and the pid-reuse guard was silently skipped.
+- Search hits carry `refetch_uuid` beside `refetch`. A line number is a durable address
+  only while the transcript is append-only, and three harness paths rewrite a live
+  transcript in place. The uuid survives them.
+- Four statements csift printed or taught were wrong at 2.1.258, and they are corrected
+  with their dates. TaskStop resolves a teammate by its name or `name@team` from Claude
+  Code 2.1.198. The agents footer, the JSON control hint, the SKILL rows and the hook recipe
+  said it rejects every form. The file-history store is also written by an approved
+  in-place `sed` preview, where `recover --list-backups` said bash edits never land there.
+  The pending AskUserQuestion split is a timing outcome of the write frontier. It is
+  neither a question-count rule nor a 2.1.258 change, though a comment, a note, the help and
+  three documents said otherwise.
 
 ### Changed
 
-- Ledger schema: the attribution `upstream` (the producer lies outside the shipped binary by
-  construction: the model or API side, the operating system, a native runtime binding, with
-  the client-side treatment traced), and three new gate rules: a claim's latest check is
-  never `drifted`, no open leg is an unconsumed text correction or a recorded rejection,
-  and every claim below end-to-end carries its leg fields. Ledger text now follows the
-  prose law: no dates, no csift versions, no audit narrative; the commit and the release
-  carry those.
-- README: the verification section states what the project will never publish (the
-  method, a mechanical ledger comparison, any corpus) and why the ledger is re-verified
-  periodically rather than for every Claude Code release.
+- The ledger schema gains the attribution `upstream`. It marks a producer that lies outside
+  the shipped binary by construction, on the model or API side, in the operating system or
+  in a native runtime binding, with the client-side treatment traced. Three new gate rules
+  arrive with it. A claim's latest check is never `drifted`. No open leg is an unconsumed
+  text correction or a recorded rejection. Every claim below end-to-end carries its leg
+  fields. Ledger text now follows the prose law, with no dates, no csift versions and no
+  audit narrative, and the commit and the release carry those.
+- The README's verification section states what the project will never publish (the
+  method, a mechanical ledger comparison, any corpus). It also states why the ledger is
+  re-verified periodically and not for every Claude Code release.
 
 ## [0.10.4] - 2026-09-04
 
 ### Fixed
 
 - `wait` and the `status`/`wait` tail window no longer memory-map a live transcript. A
-  mapped file that another process truncates faults with SIGBUS on the first page
-  touched past the new end, and nothing catches it; Claude Code does rewrite a
-  transcript in place (a rewind tombstone truncates and rewrites the tail, an armed
-  local GC rewrites on compaction), so a long `wait` polling a live file every few
-  hundred milliseconds carried that risk on every poll. Both readers now use plain
-  positional reads, which return fewer bytes on a shrink and never fault. The one-shot
-  full scans keep the memory map, whose sub-second life bounds the exposure.
-- `wait` detects a transcript that shrank between two polls, moves its baseline to the
-  new end and reports it (`transcript shrank N time(s)` in the activity line, JSON
-  `shrinks`); before, a shrunk file was skipped silently.
+  mapped file that another process truncates faults with SIGBUS on the first page touched
+  past the new end, and nothing catches it. Claude Code does rewrite a transcript in place.
+  A rewind tombstone truncates and rewrites the tail, and an armed local GC rewrites on
+  compaction. A long `wait` polling a live file every few hundred milliseconds carried that
+  risk on every poll. Both readers now use plain positional reads, which return fewer bytes
+  on a shrink and never fault. The one-shot full scans keep the memory map, whose
+  sub-second life bounds the exposure.
+- `wait` detects a transcript that shrank between two polls. It moves its baseline to the
+  new end and reports the event (`transcript shrank N time(s)` in the activity line, JSON
+  `shrinks`). Before this, a shrunk file was skipped silently.
 
 ## [0.10.3] - 2026-09-04
 
-The attribution push: every claim in the introspection ledger now states how its
-behavior was traced (the producing code in the shipped Claude Code binary, a specimen
-on disk or in a live trial, both, or neither), the README carries the tally as a
-gate-generated table, and the five defects the tracing found in csift are fixed.
+This release completes the attribution work. Every claim in the introspection ledger now
+states how its behavior was traced. The trace can rest on the producing code in the
+shipped Claude Code binary, on a specimen on disk or in a live trial, on both, or on
+neither. The README carries the tally as a gate-generated table, and the five defects the
+tracing found in csift are fixed.
 
 ### Fixed
 
-- `search`/`verbatim`/`show`: an AskUserQuestion answered through the freeform
-  `toolUseResult.response` field (the binary's `The user responded: ...` branch, which
-  leaves `answers` empty) classifies as `user.answer` and opens a turn like every
-  other answer. The AUQ unit renders the questions asked and a `response:` line. The
-  marker joins the answer prefixes and the verifiable synth needles, so the whole-file
-  gate stays sound. The idle-timeout branch (`No response after ...`) is not an answer
-  and still opens no turn.
-- `status`/`wait`: a completion pulse whose status is `blocked` (Claude Code's
-  remote-agent notifier writes it) or any literal csift does not know is its own bucket
-  (`N blocked`, `N with an unknown status`; JSON `blocked`, `other`) instead of being
-  booked as a clean completion.
+- In `search`, `verbatim` and `show`, an AskUserQuestion answered through the freeform
+  `toolUseResult.response` field classifies as `user.answer` and opens a turn like every
+  other answer. That field is the binary's `The user responded: ...` branch, which leaves
+  `answers` empty. The AUQ unit renders the questions asked and a `response:` line. The
+  marker joins the answer prefixes and the verifiable synth needles, so the whole-file gate
+  stays sound. The idle-timeout branch (`No response after ...`) is not an answer and still
+  opens no turn.
+- In `status` and `wait`, a completion pulse whose status is `blocked`, or any literal
+  csift does not know, gets its own bucket (`N blocked`, `N with an unknown status`, JSON
+  `blocked`, `other`). Claude Code's remote-agent notifier writes `blocked`. Such pulses
+  used to be booked as a clean completion.
 - `wait --until notification` fires in every watched lane. Claude Code normally delivers a
-  pulse to the main transcript, but one addressed to the owning agent lands in that
-  agent's lane (2 of 2906 delivered records in the reference corpus), and the main-only
+  pulse to the main transcript. One addressed to the owning agent lands in that agent's
+  lane instead (2 of 2906 delivered records in the reference corpus), and the main-only
   scope could never fire on it.
-- `recover`: a Read cut at its token budget (`truncatedByTokenCap`) is never replayed as
-  a whole-file snapshot. On a file whose lines are too long to paginate the harness
-  recounts `numLines` from the cut slice, so it can equal `totalLines` and the old
-  full-read test accepted truncated content as the whole file.
-- `image` lists the images of a `queued_command` attachment: a prompt queued and then
-  edited or recalled never becomes a user record, so its pasted images existed only
-  there (45 of 52 such blocks in the reference corpus had no other copy).
+- `recover` never replays a Read cut at its token budget (`truncatedByTokenCap`) as a
+  whole-file snapshot. On a file whose lines are too long to paginate, the harness recounts
+  `numLines` from the cut slice, so it can equal `totalLines`. The old full-read test then
+  accepted truncated content as the whole file.
+- `image` lists the images of a `queued_command` attachment. A prompt queued and then
+  edited or recalled never becomes a user record, so its pasted images existed only there.
+  45 of 52 such blocks in the reference corpus had no other copy.
 
 ### Changed
 
-- `INTROSPECTION.json`: every claim carries `producer_trace` (`complete` | `partial` |
+- In `INTROSPECTION.json`, every claim carries `producer_trace` (`complete` | `partial` |
   `none`), `specimen` (`observed` | `none`) and the derived `attribution` (`end-to-end`
-  | `producer-only` | `specimen-only` | `partial-producer` | `by-elimination`), plus
-  `open_legs` naming the instrument that would close each missing leg. A complete
-  producer trace is three hops in the binary, quoted verbatim at byte offsets: the
-  trigger, the gate and the writer. A negative ("nothing else writes this") closes only
-  by an `enumeration` of every site in the binary, each read; a claim whose text a hop
-  refuted was rewritten, not annotated; an end-to-end claim carries no open leg (a
-  non-gap note lives in `residue`). Version floors were checked against historical
-  builds fetched by version and bisected on string literals. The gate refuses a
-  by-elimination claim that `holds`, a leg pair that disagrees with its attribution, an
-  end-to-end claim with an open leg, and a README tally that disagrees with the ledger.
-- README: a "How much of this is verified" section with the tally table, regenerated
-  from the ledger and checked by the gate.
+  | `producer-only` | `specimen-only` | `partial-producer` | `by-elimination`). It also
+  carries `open_legs`, naming the instrument that would close each missing leg. A complete
+  producer trace is three hops in the binary, quoted verbatim at byte offsets, which are the
+  trigger, the gate and the writer. A negative ("nothing else writes this") closes only by
+  an `enumeration` of every site in the binary, each read. A claim whose text a hop refuted
+  was rewritten and not annotated. An end-to-end claim carries no open leg, and a non-gap
+  note lives in `residue`. Version floors were checked against historical builds fetched by
+  version and bisected on string literals. The gate refuses a by-elimination claim that
+  `holds`, a leg pair that disagrees with its attribution, an end-to-end claim with an open
+  leg, and a README tally that disagrees with the ledger.
+- The README gains a "How much of this is verified" section with the tally table,
+  regenerated from the ledger and checked by the gate.
 
 ## [0.10.2] - 2026-09-03
 
-The first re-read of the introspection ledger after 0.10.1: the 17 claims that had no
-code site were anchored, every site the release had moved was relocated, and the
-reading turned up the defects below. Each fix carries its claim update with the
+This release is the first re-read of the introspection ledger after 0.10.1. The 17 claims
+that had no code site were anchored, and every site the release had moved was relocated.
+The reading turned up the defects below. Each fix carries its claim update, with the
 instrument that measured it.
 
 ### Fixed
 
-- `wait --until notification` never fired on a completion absorbed mid-turn. Claude
-  Code delivers a `<task-notification>` as a user record only when the session is idle;
-  a pulse that lands mid-turn exists only on a `queue-operation` enqueue line and a
-  `queued_command` attachment (this corpus: 3218 pulse-bearing user records against
-  5893 enqueue lines). The condition and the wait activity census now read the same
-  three carriers the background section joins; a queue remove or dequeue repeats the
-  enqueue's pulse and counts nothing.
-- `plan`: the slug-only binding resolved `plansDirectory` against the slug record's
-  own `cwd`, which follows the tracked shell cwd and can already sit in a
-  subdirectory, so the plan file was joined under that subdirectory and a
-  project-scope `plansDirectory` was silently dropped. Claude Code memoizes the
-  directory at its first access early in the session, so csift now binds against the
-  transcript's first recorded cwd and reads the settings scopes from that root.
-- `search`: a subagent transcript that is a `/fork` clone (line 1 is a
+- `wait --until notification` never fired on a completion absorbed mid-turn. Claude Code
+  delivers a `<task-notification>` as a user record only when the session is idle. A pulse
+  that lands mid-turn exists only on a `queue-operation` enqueue line and a
+  `queued_command` attachment. This corpus holds 3218 pulse-bearing user records against
+  5893 enqueue lines. The condition and the wait activity census now read the same three
+  carriers the background section joins. A queue remove or dequeue repeats the enqueue's
+  pulse and counts nothing.
+- `plan`'s slug-only binding resolved `plansDirectory` against the slug record's own
+  `cwd`. That cwd follows the tracked shell cwd and can already sit in a subdirectory, so
+  the plan file was joined under that subdirectory, and a project-scope `plansDirectory`
+  was silently dropped. Claude Code memoizes the directory at its first access early in
+  the session. csift now binds against the transcript's first recorded cwd and reads the
+  settings scopes from that root.
+- In `search`, a subagent transcript that is a `/fork` clone (line 1 is a
   `fork-context-ref` record) had its first turn-opener labeled as the spawn-prompt seed
-  (`agent.communication.inbox`) although it is the parent's own human message; 10 of
-  the 42 clones in this corpus carry such a record. A clone now has no seed.
-- `agents`: the global spawn index folded subagent locals later-wins, so a clone's
-  copy of a sibling's spawn record could re-parent that sibling onto the clone. The
-  fold is first-wins (main first, then discovery order).
-- `search`: a superseded draft whose text is sectioned (a pulse or relay shape) fanned
-  out into per-section classes its own `labels[]` did not carry; it keeps the single
-  `user.unsent` view now.
+  (`agent.communication.inbox`). That opener is in fact the parent's own human message,
+  and 10 of the 42 clones in this corpus carry such a record. A clone now has no seed.
+- In `agents`, the global spawn index folded subagent locals later-wins. A clone's copy of
+  a sibling's spawn record could therefore re-parent that sibling onto the clone. The fold
+  is first-wins now, the main transcript first and then discovery order.
+- In `search`, a superseded draft whose text is sectioned (a pulse or relay shape) fanned
+  out into per-section classes that its own `labels[]` did not carry. It now keeps the
+  single `user.unsent` view.
 - Two shipped strings had lost their line-continuation backslashes and printed runs of
-  spaces: the `wait` timeout-guard message and a `recover` bash-append boundary detail.
+  spaces. They were the `wait` timeout-guard message and a `recover` bash-append boundary
+  detail.
 
 ### Changed
 
-- `show --turn` help says what the fetch omits: the gated non-record lines a turn carries
-  (turn-duration, stop-hooks, away-summary, queue, snapshot, system) are addressed by
-  `--line`/`--uuid` or `search -t harness.meta`, never by a turn range.
-- `search --help` names the eight LLM-invisible leaves (the two of 0.9.4 plus the six
-  gated leaves) instead of "exactly two".
-- The ledger gate requires at least one code site per claim; AGENTS.md section 7.1
+- `show --turn` help says what the fetch omits. A turn carries gated non-record lines
+  (turn-duration, stop-hooks, away-summary, queue, snapshot, system). They are addressed by
+  `--line`/`--uuid` or `search -t harness.meta`, and never by a turn range.
+- `search --help` names the eight LLM-invisible leaves, the two of 0.9.4 plus the six gated
+  leaves, where it said "exactly two".
+- The ledger gate requires at least one code site per claim. AGENTS.md section 7.1
   documents the ledger schema, the verdict semantics, the six gate rules and the four
   procedures.
 
 ## [0.10.1] - 2026-09-03
 
-Verified against a real Claude Code 2.1.258 session on Windows 11 ARM64 (a Sonnet 5
-build with four subagents and a dev server left running as a background task), which
-the 0.10.0 release matrix never exercised: its Windows suite was green while the pid
-probe was compiled out there.
+This release was verified against a real Claude Code 2.1.258 session on Windows 11 ARM64,
+a Sonnet 5 build with four subagents and a dev server left running as a background task.
+The 0.10.0 release matrix never exercised that shape. Its Windows suite was green while the
+pid probe was compiled out there.
 
 ### Fixed
 
-- `status` / `wait`: the registry's `shell` status was read as a running shape. The
-  harness writes `shell` only as `idle` relabeled while a background shell task is
-  open, so a session that had ended its turn with `npm run dev` running reported
-  `running` and `wait --until stop` could not fire even under a lens that ignored the
-  dev server. `shell` now reads as the idle-with-background-shell shape it is: the
-  seventh verdict when the scan counts the task, `idle-eot` when the lens excludes it,
-  with a note either way. `busy` is the only registry running signal.
-- `status` / `wait` on Windows: the pid probe now exists there. `procStart` in a
-  Windows registry row is a FILETIME tick count (100ns since 1601), not an asctime
-  string, so the old parser silently skipped the reuse guard; the probe now reads the
-  owner's start time through PowerShell `Get-Process` (falling back to `tasklist` for
-  liveness alone), compares instants with the same 2s tolerance, and reports
-  `stale-dead` for a dead owner. A row whose `pidDomain` names another domain
-  (`darwin`, `linux`, `win32:<host>`) is never probed and the verdict says so.
-- `status` / `wait`: a child lane whose completion notification already landed in the
-  main transcript is `settled` regardless of its tail, so a subagent that finished
-  seconds ago no longer counts as a live lane for up to 300 seconds.
-- `plan`: the slug-only binding resolved a relative `plansDirectory` against the
-  config home and took an absolute one verbatim. Claude Code resolves it against the
-  project root (the session's cwd) through the merged settings scopes, and refuses a
-  value that escapes that root, falling back to `~/.claude/plans`. csift now does the
-  same, reading the user, project and project-local settings in that precedence. The
-  introspection ledger's first audit caught this one.
-- `agents`: a `/fork` child reported depth 65. Its transcript is a clone of the parent's
-  and carries the spawning tool_use itself, so the spawn join named the child as its own
-  parent and the depth walk ran to its cycle cap. csift now reads the `parentAgentId`
-  the harness writes into the child's meta.json and never accepts a node as its own
-  parent. Also from the audit: the parent's record of a subagent return carries an
-  appended continuation footer, not a truncation (help and docs corrected), and
-  recover's Bash read anchors already reach built-in and teammate lanes, whose results
-  carry the `toolUseResult` echo; only workflow lanes lack it (comment corrected).
-- `search`: an inbound peer message relayed mid-turn carried no label at all. Claude
-  Code 2.1.258 relays under three preambles ("Another Claude session sent a message:",
-  the same "while you were working:" form, and "A peer session sent a message while
-  you were working:"); csift knew only the first, so 29 of 47 `<agent-message>` records
-  in the reference corpus were invisible to every census. All three are section
-  boundaries now, and the corpus-wide `agent.communication.inbox` census moves from
-  8721 to 8750 records.
-- `search`: the third AskUserQuestion answer phrasing Claude Code 2.1.258 writes
-  ("The user answered: ...") is an answer marker and a turn opener; the unanswered
-  branch ("The user did not answer the questions.") never is. The retired "User has
-  answered your questions" form stays recognised for older transcripts.
-- `status` / `wait`: the registry reader takes `procStartFt` when a row carries it
-  beside `procStart`, matching the harness's own `procStartFt ?? procStart` readers.
+- `status` and `wait` read the registry's `shell` status as a running shape. The harness
+  writes `shell` only as `idle` relabeled while a background shell task is open. A session
+  that had ended its turn with `npm run dev` running reported `running`, and
+  `wait --until stop` could not fire even under a lens that ignored the dev server. `shell`
+  now reads as the idle-with-background-shell shape it is. It gives the seventh verdict when
+  the scan counts the task, and `idle-eot` when the lens excludes it, with a note either
+  way. `busy` is the only registry running signal.
+- `status` and `wait` now have a pid probe on Windows. `procStart` in a Windows registry
+  row is a FILETIME tick count (100ns since 1601) and not an asctime string, so the old
+  parser silently skipped the reuse guard. The probe now reads the owner's start time
+  through PowerShell `Get-Process`, falling back to `tasklist` for liveness alone. It
+  compares instants with the same 2s tolerance and reports `stale-dead` for a dead owner. A
+  row whose `pidDomain` names another domain (`darwin`, `linux`, `win32:<host>`) is never
+  probed, and the verdict says so.
+- In `status` and `wait`, a child lane whose completion notification already landed in the
+  main transcript is `settled` whatever its tail says. A subagent that finished seconds ago
+  no longer counts as a live lane for up to 300 seconds.
+- `plan`'s slug-only binding resolved a relative `plansDirectory` against the config home
+  and took an absolute one verbatim. Claude Code resolves it against the project root (the
+  session's cwd) through the merged settings scopes. It refuses a value that escapes that
+  root and falls back to `~/.claude/plans`. csift now does the same, reading the user,
+  project and project-local settings in that precedence. The introspection ledger's first
+  audit caught this one.
+- In `agents`, a `/fork` child reported depth 65. Its transcript is a clone of the
+  parent's and carries the spawning tool_use itself. The spawn join named the child as its
+  own parent, and the depth walk ran to its cycle cap. csift now reads the `parentAgentId`
+  the harness writes into the child's meta.json, and it never accepts a node as its own
+  parent. Two more findings came from the audit. The parent's record of a subagent return
+  carries an appended continuation footer and no truncation, and the help and docs are
+  corrected. recover's Bash read anchors already reach built-in and teammate lanes, whose
+  results carry the `toolUseResult` echo. Only workflow lanes lack it, and the comment is
+  corrected.
+- In `search`, an inbound peer message relayed mid-turn carried no label at all. Claude
+  Code 2.1.258 relays under three preambles. They are "Another Claude session sent a
+  message:", the same "while you were working:" form, and "A peer session sent a message
+  while you were working:". csift knew only the first, so 29 of 47 `<agent-message>`
+  records in the reference corpus were invisible to every census. All three are section
+  boundaries now. The corpus-wide `agent.communication.inbox` census moves from 8721 to
+  8750 records.
+- In `search`, the third AskUserQuestion answer phrasing that Claude Code 2.1.258 writes
+  ("The user answered: ...") is an answer marker and a turn opener. The unanswered branch
+  ("The user did not answer the questions.") never is. The retired "User has answered your
+  questions" form stays recognised for older transcripts.
+- In `status` and `wait`, the registry reader takes `procStartFt` when a row carries it
+  beside `procStart`. That matches the harness's own `procStartFt ?? procStart` readers.
 
 ### Added
 
-- `waiting-hitl` gains two instruments beside the elicitation sidecar: the registry's
-  `waiting` status (the harness sets it for any blocking dialog, including permission
-  prompts, plan approvals and sandbox or worker requests) and an unreturned
-  `AskUserQuestion` / `ExitPlanMode` at the main tail. Claude Code 2.1.258 writes a
-  multi-question AskUserQuestion to the transcript at question time; a single-question
-  one still stays buffered until answered, which the sidecar covers. The idle-verdict
-  honesty note now names the registry status it saw instead of calling every
-  permission prompt invisible.
-- `INTROSPECTION.json`: a structured ledger of every Claude Code behavior csift depends
-  on, one claim per entry with its code site, its verbatim snippet, the version it was
-  pinned against and a per-release check record carrying the instrument, the
-  observation and the counting rule. A pre-commit gate ties the README's
-  "verified against Claude Code" badge to the ledger: the badge version is admitted
-  only when every claim carries a check at that version, snippets must still exist in
-  their files, and check evidence must be claim-specific.
-- README badges for the verified Claude Code version and the crate-wide mutation score
-  (cargo-mutants over the whole crate: killed mutants, counting a mutant that hangs the
-  suite as killed, over every viable mutant; the release notes carry the caught-only
-  floor and the timeout share).
-- `harness.meta.system`, the 34th label: a gated catch-all for every other `type:"system"`
-  subtype the harness writes for its own UI and never sends to the model, such as the
-  `informational` warning that Remote Control disconnected after an account switch,
-  `api_error`, the model-refusal fallbacks, `agents_killed`, `local_command` and
-  `scheduled_task_fire`. It renders as `[<subtype> <level>] <content>`, is scanned only
-  under an explicit `-t` like the other promoted leaves, and `show --line` renders it
+- `waiting-hitl` gains two instruments beside the elicitation sidecar. One is the
+  registry's `waiting` status. The harness sets it for any blocking dialog, including
+  permission prompts, plan approvals and sandbox or worker requests. The other is an
+  unreturned `AskUserQuestion` / `ExitPlanMode` at the main tail. Claude Code 2.1.258
+  writes a multi-question AskUserQuestion to the transcript at question time. A
+  single-question one still stays buffered until answered, and the sidecar covers it. The
+  idle-verdict honesty note now names the registry status it saw, where it used to call
+  every permission prompt invisible.
+- `INTROSPECTION.json` is a structured ledger of every Claude Code behavior csift depends
+  on. Each entry is one claim, with its code site, its verbatim snippet, the version it was
+  pinned against, and a per-release check record carrying the instrument, the observation
+  and the counting rule. A pre-commit gate ties the README's "verified against Claude Code"
+  badge to the ledger. The badge version is admitted only when every claim carries a check
+  at that version. Snippets must still exist in their files, and check evidence must be
+  claim-specific.
+- The README gains badges for the verified Claude Code version and the crate-wide mutation
+  score. The score is cargo-mutants over the whole crate, killed mutants over every viable
+  mutant, counting a mutant that hangs the suite as killed. The release notes carry the
+  caught-only floor and the timeout share.
+- `harness.meta.system` is the 34th label. It is a gated catch-all for every other
+  `type:"system"` subtype the harness writes for its own UI and never sends to the model.
+  Examples are the `informational` warning that Remote Control disconnected after an account
+  switch, `api_error`, the model-refusal fallbacks, `agents_killed`, `local_command` and
+  `scheduled_task_fire`. It renders as `[<subtype> <level>] <content>`. Like the other
+  promoted leaves, it is scanned only under an explicit `-t`, and `show --line` renders it
   without `--raw`. The compaction boundary keeps its own leaf.
 
 ### Changed
 
 - README highlight 8 is laid out as short lines.
-- Documentation records the re-measured laws: the registry status vocabulary
-  `busy | shell | idle | waiting` and what each means, the `claude -p` row with a null
-  status, the multi-question AskUserQuestion flush, the Windows record shapes (both
-  `Bash` and `PowerShell` tools in one session, the same background-task result
-  grammar, task output files under the local temp dir).
+- The documentation records the re-measured laws. They cover the registry status
+  vocabulary `busy | shell | idle | waiting` and what each value means, the `claude -p` row
+  with a null status, and the multi-question AskUserQuestion flush. They also cover the
+  Windows record shapes, with both `Bash` and `PowerShell` tools in one session, the same
+  background-task result grammar, and task output files under the local temp dir.
 
 ## [0.10.0] - 2026-09-02
 
-Sessions stop lying about being stopped: status and wait now see every
-background shell, async agent and Monitor a session launched, wait
-requires a timeout, and the lines csift used to skip become five new
-searchable leaves.
+Sessions stop lying about being stopped. `status` and `wait` now see every background
+shell, async agent and Monitor a session launched, `wait` requires a timeout, and the lines
+csift used to skip become five new searchable leaves.
 
-- status + wait: BACKGROUND TASKS. A Bash launched with run_in_background
-  gets its tool_result within milliseconds, so the tail state machine
-  paired it at once and a session idle with a dev server still running
-  read as a clean stop; the harness itself writes nothing about a running
-  shell at end of turn (measured on 100 turn_duration records emitted
-  with an open shell: no shell field at all; the REPL's "N shell still
-  running" is process memory). status now scans the whole main transcript
-  for backgrounded shells, async agents and Monitor arms and joins their
-  task-notification completions by the launching tool_use id across all
-  three carriers (a user record, a queue-operation line, a queued_command
-  attachment), reading launches from every lane and completions from the
-  main file only, where they always land. Every open task renders a bg
-  row with kind, id, launch instant and age, description or command, and
-  the output file's size and last write; closed ones fold to counts. Not
-  returned is not proof of running: Claude Code's own orphan summary says
-  a UI stop, a Monitor timeout or agent teardown leaves no transcript
-  marker, and the section repeats that. Measured: 24 of 3133 corpus
-  launches never returned, 22 of them launched more than a day before
-  their session ended.
-- status + wait: THE SEVENTH VERDICT and THE LENS. idle-background-open
-  means the turn ended but background task(s) the lens counts have not
-  returned, neither running nor stopped, and it never satisfies
-  --until stop. --background-since WHEN (the shared time grammar, now
-  with 2mo and 1y units, a tolerated leading minus, and the token now
-  for the command's own start instant) counts only tasks launched at or
-  after WHEN; --ignore-background RE (repeatable) excludes tasks whose
-  command or description matches. Every task is still listed with the
-  rule that excluded it.
-- wait: BREAKING. --timeout is required, because a background task can
-  be designed never to return, so an unbounded wait on stop was a bug
-  in every 0.9.x. A call without it is rejected with that reason. On
-  every exit the report carries the tail state in words, a census of
-  what landed while waiting (tool calls by name, thinking, messages,
-  prompts, notifications), the bg rows, and the last prompt and reply as
-  excerpts. Both commands print those excerpts under a warning written
-  for a model reader: an excerpt is a partial view of the final state,
-  useful only for judging whether a background task is still meaningful,
-  never a review of the work.
-- search: two classification fixes. The harness's agents-stopped notice
-  ("N background agents were stopped by the user: ..." and its singular
-  form) was counted as a human turn; it is harness.notification.subagent,
-  never genuine, never a turn opener, rendered "[subagent stopped] ...".
-  A Background command pulse is always background-command: the quoted
-  name heuristic that routed re-arm and monitor-named commands to the
-  monitor leaf predated the real Monitor tool and produced 40 false
-  monitor records on one project against zero genuine pulses. Historical
-  counts for those two leaves move by design.
-- search: FIVE PROMOTED LEAVES (taxonomy 28 -> 33). The non-record jsonl
-  line types become searchable, classifiable leaves. user.queued is a
-  queue-operation line carrying the human's text, with the queue event
-  in the label zone (enqueue, popAll, or remove with its reason) and as
-  JSON queue_operation / queue_reason. harness.meta.turn-duration renders
-  the turn_duration record as "[turn duration: 1m 5s . durationMs=64911
-  messageCount=908 pendingBackgroundAgentCount=2]", the structured body
-  behind the REPL's "Done in Ns" line, which never lands on disk itself.
-  harness.meta.away-summary is the model-generated recap shown on return
-  after five minutes away. harness.meta.stop-hooks is the Stop-hook
-  execution ledger. harness.meta.snapshot covers file-history snapshot
-  and delta lines. Every one of the five is LLM-invisible by the same
-  instrument as the compaction boundary: none carries a message field.
-- search: THE GATED-LEAF LAW. A promoted leaf is parsed only when an
-  explicit -t reaches it (the full path, a glob, or the harness.meta
-  prefix) or a show address names the line; a bare scan never parses
-  those lines (measured 1.03x, noise). The three fabricated renders
-  register their type value as a synth marker so the whole-file gate
-  stays sound; a zero-match run without such a selector says so.
-- search: QUEUE FACTS, measured. Content rides enqueue, popAll and most
-  removes, never dequeue; the remove reason is absorbed_mid_turn or
-  delivered_to_agent; the queue line has no join key, so csift never
-  asserts dispatched. Correction to the 0.9.2 entry: the "about 61% never
-  become user records" figure counted every queue operation over three
-  sessions; counting enqueue lines only over six sessions, the human's
-  prose reaches a user record 72 to 81 percent of the time.
-- show: an explicit --line or --uuid address renders every promoted line
-  with no flag; the miss error names what stays --raw only.
-- help and docs: 33 leaves, the GATED LEAVES rule, the seven verdicts,
-  the background and lens paragraphs, the how-to-wait procedure, and the
-  last-messages warning.
+- `status` and `wait` now report background tasks. A Bash launched with
+  `run_in_background` gets its tool_result within milliseconds. The tail state machine
+  paired it at once, and a session idle with a dev server still running read as a clean
+  stop. The harness itself writes nothing about a running shell at end of turn. Measured on
+  100 turn_duration records emitted with an open shell, there was no shell field at all, and
+  the REPL's "N shell still running" lives in process memory. `status` now scans the whole
+  main transcript for backgrounded shells, async agents and Monitor arms. It joins their
+  task-notification completions by the launching tool_use id across all three carriers (a
+  user record, a queue-operation line, a queued_command attachment). It reads launches from
+  every lane and completions from the main file only, where they always land. Every open
+  task renders a bg row with kind, id, launch instant and age, description or command, and
+  the output file's size and last write. Closed ones fold to counts. Not returned is not
+  proof of running. Claude Code's own orphan summary says a UI stop, a Monitor timeout or
+  agent teardown leaves no transcript marker, and the section repeats that. Measured over
+  the corpus, 24 of 3133 launches never returned, 22 of them launched more than a day
+  before their session ended.
+- `status` and `wait` gain the seventh verdict and the lens. `idle-background-open` means
+  the turn ended but background task(s) the lens counts have not returned. It reads as
+  neither running nor stopped, and it never satisfies `--until stop`.
+  `--background-since WHEN` counts only tasks launched at or after WHEN. It uses the shared
+  time grammar, which now has `2mo` and `1y` units, a tolerated leading minus, and the token
+  `now` for the command's own start instant. `--ignore-background RE` (repeatable) excludes
+  tasks whose command or description matches. Every task is still listed with the rule that
+  excluded it.
+- `wait` is BREAKING. `--timeout` is required, because a background task can be designed
+  never to return, so an unbounded wait on stop was a bug in every 0.9.x. A call without it
+  is rejected with that reason. On every exit the report carries the tail state in words,
+  and a census of what landed while waiting (tool calls by name, thinking, messages,
+  prompts, notifications). It also carries the bg rows and the last prompt and reply as
+  excerpts. Both commands print those excerpts under a warning written for a model reader.
+  An excerpt is a partial view of the final state, useful only for judging whether a
+  background task is still meaningful, and never a review of the work.
+- `search` gets two classification fixes. The harness's agents-stopped notice ("N
+  background agents were stopped by the user: ..." and its singular form) was counted as a
+  human turn. It is `harness.notification.subagent`, never genuine and never a turn opener,
+  rendered "[subagent stopped] ...". A Background command pulse is always
+  `background-command`. The quoted-name heuristic that routed re-arm and monitor-named
+  commands to the monitor leaf predated the real Monitor tool. It produced 40 false monitor
+  records on one project against zero genuine pulses. Historical counts for those two
+  leaves move by design.
+- `search` gains five promoted leaves, taking the taxonomy from 28 to 33. The non-record
+  jsonl line types become searchable, classifiable leaves. `user.queued` is a
+  queue-operation line carrying the human's text. The queue event (enqueue, popAll, or
+  remove with its reason) rides the label zone and JSON `queue_operation` /
+  `queue_reason`. `harness.meta.turn-duration` renders the turn_duration record as
+  "[turn duration: 1m 5s . durationMs=64911 messageCount=908
+  pendingBackgroundAgentCount=2]". That is the structured body behind the REPL's "Done in
+  Ns" line, which never lands on disk itself. `harness.meta.away-summary` is the
+  model-generated recap shown on return after five minutes away.
+  `harness.meta.stop-hooks` is the Stop-hook execution ledger. `harness.meta.snapshot`
+  covers file-history snapshot and delta lines. All five are LLM-invisible by the same
+  instrument as the compaction boundary, because none carries a message field.
+- `search` follows the gated-leaf law. A promoted leaf is parsed only when an explicit
+  `-t` reaches it (the full path, a glob, or the `harness.meta` prefix) or a show address
+  names the line. A bare scan never parses those lines, measured at 1.03x, which is noise.
+  The three fabricated renders register their type value as a synth marker, so the
+  whole-file gate stays sound. A zero-match run without such a selector says so.
+- `search` measures the queue facts. Content rides enqueue, popAll and most removes, and
+  never dequeue. The remove reason is `absorbed_mid_turn` or `delivered_to_agent`. The
+  queue line has no join key, so csift never asserts dispatched. This corrects the 0.9.2
+  entry. Its "about 61% never become user records" figure counted every queue operation
+  over three sessions. Counting enqueue lines only, over six sessions, the human's prose
+  reaches a user record 72 to 81 percent of the time.
+- `show` renders every promoted line under an explicit `--line` or `--uuid` address, with
+  no flag. The miss error names what stays `--raw` only.
+- The help and docs cover 33 leaves, the GATED LEAVES rule, the seven verdicts, the
+  background and lens paragraphs, the how-to-wait procedure, and the last-messages
+  warning.
 
 ## [0.9.4] - 2026-09-02
 
-Bash reads become reads and bash writes become writes in recover, plan
-binding matches Claude Code's own rule, list names a forked clone's
-origin, status shows what is actually moving, and metachar regex
-searches stop paying full price.
+In this release Bash reads become reads and Bash writes become writes in `recover`. Plan
+binding matches Claude Code's own rule, `list` names a forked clone's origin, `status`
+shows what is actually moving, and metachar regex searches stop paying full price.
 
-- recover: BASH CONTENT ANCHORS. The deterministic shell subset now
-  replays as first-class content instead of boundaries. Writes anchor
-  per segment - a quoted-delimiter heredoc via cat/tee (the body is
-  byte-verbatim in the transcript; an unquoted delimiter is admitted
-  only with an expansion-free body), literal echo/printf, and
-  truncate -s 0 - so the dominant real shape, write-the-file-then-run-it
-  in one compound command, anchors; a compound command additionally
-  demands a clean result echo (empty stderr, not interrupted: only the
-  last segment owns the exit code, and a failing write always says so
-  on stderr), and a second touch of the same resolved path anywhere in
-  the command refuses the anchor. Reads anchor as single simple
-  commands only (cat, head -n N, sed -n 'A,Bp') under the completeness
-  gate; a window from line 1 that hits EOF is the whole file. A
-  byte-known >> append is placed only onto a complete
-  newline-terminated buffer, else it is disclosed as
-  bash_append_unplaced. Deliberate non-anchors, measured or
-  unplaceable: tail, sed -i, variable targets, interpreter and ssh
-  heredocs. Coverage counts bash-read-anchor / bash-write-anchor;
-  segment provenance names bash-heredoc / bash-cat / bash-write. A
-  real heredoc-then-run python tool went from "no recoverable history"
-  to 33/33 lines recovered verbatim.
-- plan: a correctness fix. csift bound only via the plan_mode
-  attachment, while Claude Code itself binds by the FIRST record
-  carrying a valid slug - so on a forked clone (attachments stripped,
-  slug records kept) csift answered "no plan" for a session whose plan
-  CC will re-inject. Two binding laws now apply in precedence order;
-  rows carry binding_source ("plan_mode" | "slug-only") and
-  minted_at_compaction (the slug's first carrier is a compaction
-  boundary - the fork mint site). plansDirectory from settings.json is
-  honored.
-- list: clone lineage. A transcript whose first timestamped record is
-  a compact_boundary was minted by copying another session at that
-  compaction (a background-job fork: uuids preserved, timestamps
-  predating the file, slug stripped; zero false positives on a
-  61-file real dir - file-birthtime rules were refuted). The row
-  annotates the fork and names the ORIGIN session (a prose quote of
-  the boundary uuid or a co-clone can never win the join); JSON gains
-  is_clone / clone_of / clone_boundary_uuid. Documented corollary: a
-  clone double-counts its inherited records on every spanning surface
-  until scoped away.
-- status: child lanes gain a `generating` state - a tail record
-  younger than 300s whose last assistant stop_reason is not end_turn
-  is mid-generation (measured: intra-lane record gaps reach p99.9 =
-  295s while dead lanes sit 31h+ out; the old 15s mtime window
-  misread one lane in 17, and stop_reason alone would mark 73% of
-  dead lanes live). The mtime `active` state is retired; settled lanes
-  fold to a count (JSON children[] carries live lanes only, beside
-  settled_children); and a tasks section reads the harness task list
-  (open tasks in_progress-first with blockers, completed folded to a
-  count). The status help schema line also drops since_utc/since_local,
-  which the verdict row never emitted.
-- search: required-needle prefilter extraction. A pattern with
-  metacharacters now derives a necessity-only literal set from its
-  parsed structure (an alternation gates only when every branch
-  demands a safe needle), so `TodoWrite.*legacy|legacy.*TodoWrite`
-  runs 1.70x faster wall / 1.9x less CPU unscoped with byte-identical
-  output; a space-carrying plain pattern now anchors its longest
-  whitespace-free run.
-- files + recover: the file-history snapshot instrument. Claude Code
-  rewrites its settings files in-process (/model, /config, plugin
-  toggles) with no tool record - measured, half of all settings.json
-  mutations are invisible to the tool stream, and one such write
-  silently deleted a freshly-edited key while recover replayed the
-  file WITH it, calling a never-existed state 100% complete. CC's own
-  per-prompt snapshot version sequence is now read as an instrument:
-  recover compares the replayed buffer to mtime-verified snapshot
-  content at every version change and REBASES on divergence (an
-  authoritative external_write boundary; content-less jumps disclose
-  the same boundary without rebasing), and files emits
-  "external write" timeline rows - scope hard-limited to the settings
-  family (.claude/settings*.json): the tracked set spans 1701 corpus
-  paths against 11 settings-family ones. The version counter resets
-  mid-session (148 real cases) and the @vN store name collides across
-  a reset, so generations are segmented and unverified blobs refused.
-- search: bare role selectors now speak LLM-visibility - a
-  correctness fix. user.unsent under -t user broke a 0.7-era consumer
-  (a superseded draft 12 seconds before the real submit poisoned a
-  last-human-touch hook). A bare role (-t user) selects the role's
-  LLM-visible leaves only; a new glob form (-t 'user.*') selects
-  every leaf under the prefix; intermediate prefixes and full paths
-  keep their full sets, so -t harness.compaction still reaches the
-  boundary. Exactly two leaves are invisible, instrument-verified:
-  user.unsent (CC's own preservedMessages accounting excludes every
-  draft uuid - a draft is not in the surviving conversation) and
-  harness.compaction.boundary (a metrics-only system record).
-  -t user restores the 0.7 contract; 0.9.2 through 0.9.3 briefly
-  included drafts under it.
-- SKILL: the staleness guard is mechanical (run csift --version at
-  first use after any compaction; a mismatch means the in-context copy
-  is a stale echo), the description gains the corpus-first trigger
-  (live sessions need /reload-skills), and two stale claims are fixed
-  (the turns rename is v0.4; the retired @trap retry ritual is gone
-  from the whoami section).
+- `recover` gains Bash content anchors. The deterministic shell subset now replays as
+  first-class content where it used to replay as boundaries. Writes anchor per segment. The
+  anchoring writes are a quoted-delimiter heredoc via cat/tee, literal echo/printf, and
+  `truncate -s 0`. A quoted-delimiter heredoc body is byte-verbatim in the transcript, and
+  an unquoted delimiter is admitted only with an expansion-free body. The dominant real
+  shape, write-the-file-then-run-it in one compound command, therefore anchors. A compound
+  command additionally demands a clean result echo, with empty stderr and no interrupt. Only
+  the last segment owns the exit code, and a failing write always says so on stderr. A
+  second touch of the same resolved path anywhere in the command refuses the anchor. Reads
+  anchor as single simple commands only (cat, `head -n N`, `sed -n 'A,Bp'`) under the
+  completeness gate. A window from line 1 that hits EOF is the whole file. A byte-known
+  `>>` append is placed only onto a complete newline-terminated buffer, and otherwise it is
+  disclosed as `bash_append_unplaced`. Some shapes are deliberately not anchors, because
+  they were measured or cannot be placed. They are tail, `sed -i`, variable targets, and
+  interpreter and ssh heredocs. Coverage counts `bash-read-anchor` / `bash-write-anchor`,
+  and segment provenance names `bash-heredoc` / `bash-cat` / `bash-write`. A real
+  heredoc-then-run python tool went from "no recoverable history" to 33/33 lines recovered
+  verbatim.
+- `plan` gets a correctness fix. csift bound only via the `plan_mode` attachment, while
+  Claude Code itself binds by the first record carrying a valid slug. On a forked clone,
+  with attachments stripped and slug records kept, csift answered "no plan" for a session
+  whose plan Claude Code will re-inject. Two binding laws now apply in precedence order.
+  Rows carry `binding_source` ("plan_mode" | "slug-only") and `minted_at_compaction`, which
+  marks a slug whose first carrier is a compaction boundary, the fork mint site.
+  `plansDirectory` from settings.json is honored.
+- `list` reports clone lineage. A transcript whose first timestamped record is a
+  `compact_boundary` was minted by copying another session at that compaction. That is a
+  background-job fork, with uuids preserved, timestamps predating the file and the slug
+  stripped. The rule showed zero false positives on a 61-file real dir, and file-birthtime
+  rules were refuted. The row annotates the fork and names the origin session. A prose quote
+  of the boundary uuid or a co-clone can never win the join. JSON gains `is_clone` /
+  `clone_of` / `clone_boundary_uuid`. A documented corollary follows. A clone double-counts
+  its inherited records on every spanning surface until it is scoped away.
+- `status` child lanes gain a `generating` state. A tail record younger than 300s whose
+  last assistant `stop_reason` is not `end_turn` is mid-generation. Measured, intra-lane
+  record gaps reach p99.9 = 295s, while dead lanes sit 31h+ out. The old 15s mtime window
+  misread one lane in 17, and `stop_reason` alone would mark 73% of dead lanes live. The
+  mtime `active` state is retired. Settled lanes fold to a count, so JSON `children[]`
+  carries live lanes only, beside `settled_children`. A tasks section reads the harness task
+  list, with open tasks in_progress-first with their blockers and completed tasks folded to
+  a count. The status help schema line also drops `since_utc`/`since_local`, which the
+  verdict row never emitted.
+- `search` extracts required needles for its prefilter. A pattern with metacharacters now
+  derives a necessity-only literal set from its parsed structure, and an alternation gates
+  only when every branch demands a safe needle. `TodoWrite.*legacy|legacy.*TodoWrite` runs
+  1.70x faster wall and uses 1.9x less CPU unscoped, with byte-identical output. A
+  space-carrying plain pattern now anchors its longest whitespace-free run.
+- `files` and `recover` gain the file-history snapshot instrument. Claude Code rewrites
+  its settings files in-process (`/model`, `/config`, plugin toggles) with no tool record.
+  Measured, half of all settings.json mutations are invisible to the tool stream. One such
+  write silently deleted a freshly-edited key while `recover` replayed the file with it, and
+  called a state that never existed 100% complete. Claude Code's own per-prompt snapshot
+  version sequence is now read as an instrument. `recover` compares the replayed buffer to
+  mtime-verified snapshot content at every version change and rebases on divergence, which
+  is an authoritative `external_write` boundary. Content-less jumps disclose the same
+  boundary without rebasing. `files` emits "external write" timeline rows, with the scope
+  hard-limited to the settings family (`.claude/settings*.json`). The tracked set spans 1701
+  corpus paths against 11 settings-family ones. The version counter resets mid-session (148
+  real cases), and the `@vN` store name collides across a reset, so generations are
+  segmented and unverified blobs refused.
+- `search`'s bare role selectors now speak LLM-visibility, which is a correctness fix.
+  `user.unsent` under `-t user` broke a 0.7-era consumer, when a superseded draft 12 seconds
+  before the real submit poisoned a last-human-touch hook. A bare role (`-t user`) selects
+  the role's LLM-visible leaves only. A new glob form (`-t 'user.*'`) selects every leaf
+  under the prefix. Intermediate prefixes and full paths keep their full sets, so
+  `-t harness.compaction` still reaches the boundary. Exactly two leaves are invisible,
+  verified by instrument. `user.unsent` is invisible because Claude Code's own
+  `preservedMessages` accounting excludes every draft uuid, and a draft is not in the
+  surviving conversation. `harness.compaction.boundary` is a metrics-only system record.
+  `-t user` restores the 0.7 contract, after 0.9.2 through 0.9.3 briefly included drafts
+  under it.
+- SKILL's staleness guard is mechanical. The skill runs `csift --version` at first use
+  after any compaction, and a mismatch means the in-context copy is a stale echo. The
+  description gains the corpus-first trigger (live sessions need `/reload-skills`). Two
+  stale claims are fixed. The turns rename is v0.4, and the retired `@trap` retry ritual is
+  gone from the whoami section.
 
 ## [0.9.3] - 2026-09-01
 
-Help corrections and a documentation catch-up; no behavior changes.
+This release corrects help text and catches the documentation up. No behavior changes.
 
-- The root help's hand-written SUBCOMMANDS block still listed eleven
-  commands, contradicting the generated list one screen below: status
-  and wait join it and the span-default enumeration.
-- The status/wait help described owner-process liveness as a signal-0
-  probe - a mechanism that never shipped. Corrected to the ps-based
-  probe with the /proc fallback (the 0.9.1 mechanism).
-- The --siblings policy text gains the narration cap of 1 shipped in
-  0.9.2, in the help and in every reference document.
-- README catches up two releases: thirteen subcommands with status and
-  wait rows, a live-status highlight, Quickstart rows for status /
-  wait / user.unsent / the label census, and the 0.8.1+ flags in their
-  rows. SPEC gains per-command sections for status (6.13) and wait
-  (6.14) and rewrites the stats section to the deduped token
-  accounting; SKILL's superseded-draft bullet and JSON reference catch
-  up to 0.9.2.
+- The root help's hand-written SUBCOMMANDS block still listed eleven commands, which
+  contradicted the generated list one screen below. `status` and `wait` join it and the
+  span-default enumeration.
+- The `status`/`wait` help described owner-process liveness as a signal-0 probe, a
+  mechanism that never shipped. It now describes the ps-based probe with the `/proc`
+  fallback, the 0.9.1 mechanism.
+- The `--siblings` policy text gains the narration cap of 1 shipped in 0.9.2, in the help
+  and in every reference document.
+- The README catches up two releases. It lists thirteen subcommands with `status` and
+  `wait` rows, adds a live-status highlight, adds Quickstart rows for status / wait /
+  `user.unsent` / the label census, and puts the 0.8.1+ flags in their rows. SPEC gains
+  per-command sections for `status` (6.13) and `wait` (6.14) and rewrites the `stats`
+  section to the deduped token accounting. SKILL's superseded-draft bullet and JSON
+  reference catch up to 0.9.2.
 
 ## [0.9.2] - 2026-08-31
 
-Narration-aware classification plus a token-accounting correction. Saved
-numbers move in two places, both on purpose: label censuses split, and
-stats token totals drop.
+This release makes classification narration-aware and corrects the token accounting.
+Saved numbers move in two places, both on purpose. Label censuses split, and `stats` token
+totals drop.
 
-- New label `agent.thinking.narration` (taxonomy 26 -> 27). Since at
-  least Claude Code 2.1.170 the API can return a SECOND thinking block
-  in an assistant message: a one-sentence, user-language summary of the
-  reasoning beside it, distinguished only by a tag encoded inside the
-  base64 `signature` (protobuf field path 2 -> 1 -> 8, LAST field at
-  each level; clients 2.1.241+ render it dim under the hint word
-  `summarized`). csift counted these as reasoning. Classification is by
-  signature alone (about 4 percent of narration blocks have no
-  reasoning sibling, so adjacency is never consulted); the whole
-  signature is decoded (they reach 200K+ base64 chars); every failure
-  path degrades to plain `agent.thinking`; the tag set is open. Hits
-  carry a `[narration summary]` marker in the label zone; narration
-  gets a sibling cap of 1; `verbatim` never replays narration (already
-  true by construction, now pinned). `-t agent.thinking` still selects
-  both leaves; pure reasoning is `-t agent.thinking -T
-  agent.thinking.narration`. Historical records re-classify BY DESIGN:
-  narration blocks exist on disk from 2026-06-10, so saved
-  `--count-by label` figures change, conserving the sum.
-- New label `user.unsent` (taxonomy -> 28). A message that was sent,
-  esc-recalled into the input box, edited and re-sent leaves the
-  ORIGINAL on disk, sharing the resend's parentUuid - and since 0.8.2
-  csift collapsed it to a bare count. Drafts are now searchable and
-  censusable under their own leaf: a matching draft renders as its own
-  annotated unit (`<tok>·draft`, JSON `superseded_draft:true`, null
-  `turn_index`, hits labeled `user.unsent`), turn numbering is
-  untouched, `--turn` windows suppress draft units, and `user.message`
-  counts are unchanged (drafts were never censused before). Documented
-  limits, both measured: a recalled-then-abandoned message has no
-  resend sibling and is structurally undetectable; a QUEUED text edited
-  before dispatch never becomes a user record at all - the bytes
-  survive only in `queue-operation` lines, which csift treats as
-  non-records (raw-reachable; a future release may gate them).
-- `stats` token sums are corrected: Claude Code repeats the identical
-  `message.usage` object on every per-block record of one API message,
-  and stats summed per record - an over-report measured at 2.2x to 3.5x
-  per field and model. Sums now dedupe per transcript by `message.id`
-  (per-field MAX, immune to the compaction-replay shape that rewrites
-  an id with zeroed usage); id-less records count individually as
-  before; the scope TOTAL still sums transcripts (the same id recurs
-  across a session's transcripts with genuinely different per-file
-  usage). Printed totals drop accordingly.
-- `stats` gains a narration census: `narration_blocks` per model (block
-  counts only - the token split is not derivable from the jsonl, so
-  none is invented) and `unknown_thinking_tags` (a signature tag that
-  is neither `thinking` nor `narration` surfaces without a csift
-  release).
-- The narration decode is byte-gated on the hot path (a signature
-  containing none of the tag's three base64 alignments skips the
-  decode), keeping large-corpus search at its previous speed.
-- Help staleness swept: the `-t` reference said "25 leaves" and omitted
+- A new label, `agent.thinking.narration`, takes the taxonomy from 26 to 27. Since at
+  least Claude Code 2.1.170 the API can return a second thinking block in an assistant
+  message. It is a one-sentence, user-language summary of the reasoning beside it,
+  distinguished only by a tag encoded inside the base64 `signature` (protobuf field path
+  2 -> 1 -> 8, the last field at each level). Clients 2.1.241+ render it dim under the hint
+  word `summarized`. csift counted these as reasoning. Classification is by signature
+  alone. About 4 percent of narration blocks have no reasoning sibling, so adjacency is
+  never consulted. The whole signature is decoded, and signatures reach 200K+ base64 chars.
+  Every failure path degrades to plain `agent.thinking`, and the tag set is open. Hits
+  carry a `[narration summary]` marker in the label zone. Narration gets a sibling cap of
+  1. `verbatim` never replays narration, which was already true by construction and is now
+  pinned. `-t agent.thinking` still selects both leaves, and pure reasoning is
+  `-t agent.thinking -T agent.thinking.narration`. Historical records re-classify by
+  design. Narration blocks exist on disk from 2026-06-10, so saved `--count-by label`
+  figures change while the sum is conserved.
+- A new label, `user.unsent`, takes the taxonomy to 28. A message that was sent,
+  esc-recalled into the input box, edited and re-sent leaves the original on disk, sharing
+  the resend's `parentUuid`. Since 0.8.2 csift collapsed it to a bare count. Drafts are now
+  searchable and censusable under their own leaf. A matching draft renders as its own
+  annotated unit (`<tok>·draft`, JSON `superseded_draft:true`, null `turn_index`, hits
+  labeled `user.unsent`). Turn numbering is untouched, `--turn` windows suppress draft
+  units, and `user.message` counts are unchanged, since drafts were never censused before.
+  Two limits are documented, and both were measured. A recalled-then-abandoned message has
+  no resend sibling and is structurally undetectable. A queued text edited before dispatch
+  never becomes a user record at all. Its bytes survive only in `queue-operation` lines,
+  which csift treats as non-records, reachable with `--raw`, and a future release may gate
+  them.
+- `stats` token sums are corrected. Claude Code repeats the identical `message.usage`
+  object on every per-block record of one API message, and `stats` summed per record. That
+  over-reported by 2.2x to 3.5x per field and model. Sums now dedupe per transcript by
+  `message.id`, taking the per-field MAX, which is immune to the compaction-replay shape that
+  rewrites an id with zeroed usage. Id-less records count individually as before. The scope
+  TOTAL still sums transcripts, because the same id recurs across a session's transcripts
+  with genuinely different per-file usage. Printed totals drop accordingly.
+- `stats` gains a narration census. `narration_blocks` per model gives block counts only,
+  because the token split is not derivable from the jsonl and none is invented.
+  `unknown_thinking_tags` surfaces a signature tag that is neither `thinking` nor
+  `narration` without a csift release.
+- The narration decode is byte-gated on the hot path. A signature containing none of the
+  tag's three base64 alignments skips the decode, which keeps large-corpus search at its
+  previous speed.
+- Stale help is swept. The `-t` reference said "25 leaves" and had omitted
   `harness.meta.attachment` since v0.8.1.
 
 ## [0.9.1] - 2026-08-30
 
-- Fixed: pid liveness on busybox-ps hosts (Alpine and friends). busybox
-  `ps` rejects `-p` and the `lstart` field outright, so the probe's ps
-  form failed for a LIVE pid exactly as for a dead one, and `status`
-  read a live session as `stale-dead`. When the ps form fails the probe
-  now consults `/proc/<pid>` on Linux: present means alive with the
-  start time unknown (the reuse-guard skip stays disclosed); absent
-  keeps the no-such-process verdict. Found by the release matrix's musl
-  test lanes.
+- Fixed pid liveness on busybox-ps hosts (Alpine and friends). busybox `ps` rejects `-p`
+  and the `lstart` field outright. The probe's ps form therefore failed for a live pid
+  exactly as for a dead one, and `status` read a live session as `stale-dead`. When the ps
+  form fails, the probe now consults `/proc/<pid>` on Linux. Present means alive, with the
+  start time unknown, and the reuse-guard skip stays disclosed. Absent keeps the
+  no-such-process verdict. The release matrix's musl test lanes found it.
 
 ## [0.9.0] - 2026-08-30
 
-A new command class: `status` and `wait`, the live-truth pair. Every other
-command answers "what happened" reproducibly; these two answer "what is
-happening NOW", are point-in-time, and are explicitly non-reproducible - a
-deliberate, documented departure from the forensic contract.
+This release adds a new command class, `status` and `wait`, the live-truth pair. Every
+other command answers "what happened" reproducibly. These two answer "what is happening
+NOW". They are point-in-time and explicitly non-reproducible, a deliberate, documented
+departure from the forensic contract.
 
-- `csift status <target>`: one-shot liveness verdict for a session -
-  `running` | `waiting-children` | `waiting-hitl` | `idle-eot` |
-  `stale-dead` | `unknown` - from a three-way join, never a single-surface
-  inference: the harness session registry (`<claude-home>/sessions/
-  <pid>.json`, transition-writes only, never a heartbeat), the transcript
-  tail state machine (an unreturned tool call at the tail = a tool in
-  flight), and a `ps`-based owner-pid probe guarded against pid reuse by
-  the process start time (the registry renders it UTC, `ps lstart` renders
-  it local; both parse as instants). Child liveness joins each subagent
-  transcript's own tail with the incremental workflow journal (`started`
-  minus `result` = agents in flight). The elicitation sidecar covers
-  human-in-the-loop blocks. Every verdict ships its evidence rows, and
-  every degradation is stated in the output: a skipped reuse guard, a
-  missing registry row, the invisible pending permission prompt.
-- `csift wait <target> --until COND[,...]`: block until a condition fires,
-  first hit wins. The closed condition set: `stop`, `hitl`, `auq`,
-  `notification[:REGEX]`, `tool:NAME[:REGEX]`, `write:PATH_RE[:LINE_RE]`,
-  `verdict:V`. STRICT post-start baseline semantics: only bytes appended
-  after the watch starts count as events; history is `search`'s job. A
-  readiness line on stderr makes scripted waits race-free against their
-  own trigger. Polling is incremental (byte offsets, torn tails held) and
-  adaptive (200ms floor to 2s ceiling; `--interval` overrides); child lanes
-  and the elicitation sidecar born after the watch starts join it
-  automatically with a zero baseline.
-- Exit codes: `wait` exits 124 on `--timeout` expiry (the GNU `timeout`
-  convention) - the ONE documented exception to the crate's 0-vs-non-zero
-  exit law; it applies to no other command.
+- `csift status <target>` gives a one-shot liveness verdict for a session, one of
+  `running` | `waiting-children` | `waiting-hitl` | `idle-eot` | `stale-dead` | `unknown`.
+  It comes from a three-way join and never from a single-surface inference. The first
+  source is the harness session registry (`<claude-home>/sessions/<pid>.json`), written on
+  transitions only and never as a heartbeat. The second is the transcript tail state
+  machine, where an unreturned tool call at the tail means a tool in flight. The third is a
+  `ps`-based owner-pid probe, guarded against pid reuse by the process start time. The
+  registry renders that time in UTC and `ps lstart` renders it local, and both parse as
+  instants. Child liveness joins each subagent transcript's own tail with the incremental
+  workflow journal, where `started` minus `result` gives the agents in flight. The
+  elicitation sidecar covers human-in-the-loop blocks. Every verdict ships its evidence
+  rows, and every degradation is stated in the output. That covers a skipped reuse guard, a
+  missing registry row, and the invisible pending permission prompt.
+- `csift wait <target> --until COND[,...]` blocks until a condition fires, and the first
+  hit wins. The closed condition set is `stop`, `hitl`, `auq`, `notification[:REGEX]`,
+  `tool:NAME[:REGEX]`, `write:PATH_RE[:LINE_RE]` and `verdict:V`. It has strict post-start
+  baseline semantics. Only bytes appended after the watch starts count as events, and
+  history is `search`'s job. A readiness line on stderr makes scripted waits race-free
+  against their own trigger. Polling is incremental, with byte offsets and torn tails held.
+  It is also adaptive, from a 200ms floor to a 2s ceiling, and `--interval` overrides it.
+  Child lanes and the elicitation sidecar born after the watch starts join it automatically
+  with a zero baseline.
+- `wait` exits 124 on `--timeout` expiry, the GNU `timeout` convention. That is the one
+  documented exception to the crate's 0-vs-non-zero exit law, and it applies to no other
+  command.
 - `Message.stop_reason` joins the tolerant record model.
 
 ## [0.8.2] - 2026-08-30
 
-Field-incident fixes plus one soundness correction. Every item traces to a
-measured incident or a live re-measurement; two items correct csift's own
-documentation and output where they stated a wrong mechanism or a
-fabricated certainty.
+This release fixes field incidents and makes one soundness correction. Every item traces to
+a measured incident or a live re-measurement. Two items correct csift's own documentation
+and output where they stated a wrong mechanism or a fabricated certainty.
 
-- Targeting: a bare-basename `*.jsonl` token (no path separator) now
-  resolves and classifies correctly on every command; it used to fail with
-  a wrong error, and a bare `agent-<hex>.jsonl` was misread as a top-level
-  session.
-- The @trap timing mechanism was documented wrong and is corrected
-  everywhere, including the runtime error text: a subagent transcript
-  flushes per content block (on disk at dispatch, first try resolves); the
-  main conversation's record is an async flush of the completed assistant
-  message landing about 1-3.4 seconds after dispatch - a race, not a wait.
-  The no-match error now routes `@main` first, and a @trap that resolves
-  to the main transcript prints a stderr lane note instead of succeeding
-  silently.
-- Lane honesty: bare `whoami` reported `is_subagent:false`, `depth:0`, and
-  an echoed parent id from inside a subagent - three confidently wrong
-  fields on exactly the command an agent runs to check its identity. The
-  env form now reports those fields as null (the env names the top-level
-  session in every lane, so the answer is unknowable), prints a lane line
-  in text, and notes the resolution path on stderr; every `@main`
-  resolution prints the same unconditional stderr note.
-- Image discoverability: the first image-bearing row per run (search and
-  show) carries a paste-ready extraction hint in input id forms (a `#N`
-  handle as the bare number); the search footer gains a capability note;
-  `search --help` and `verbatim --help` gain SEE ALSO sections naming
-  `csift image`. Driven by a fleet incident that published "images are
-  unreadable" without ever testing extraction.
-- Errored tool results are visible: hit JSON carries `is_error`, the text
-  render decorates an errored result `[error]`, and a new `--count-by
-  result` axis buckets `ok` | `error` (the closed `pairing` enum is
-  untouched: pairing answers "did a result come back", result answers
-  "was it good").
-- Superseded-draft honesty: the esc-edit draft collapse in turn
-  reconstruction is now disclosed (search footer + JSON
-  `superseded_drafts`), an explicitly addressed draft fetches via
-  `show --line`/`--uuid` as an annotated unit outside turn numbering, and
-  the address-miss error states the real render domain. Previously a
-  multi-megabyte genuine user record could vanish from every scan with no
-  count and fail an addressed fetch with a wrong reason.
-- SKILL: a new "Why not hand-roll this format" section (nine measured
-  traps, each returning a plausible wrong answer with no error, each
-  mapped to a csift move) placed before the routing table; the frontmatter
-  description now carries the cost of skipping csift and names the image
-  capability.
+- Targeting resolves a bare-basename `*.jsonl` token (no path separator) and classifies it
+  correctly on every command. It used to fail with a wrong error, and a bare
+  `agent-<hex>.jsonl` was misread as a top-level session.
+- The `@trap` timing mechanism was documented wrong, and it is corrected everywhere,
+  including the runtime error text. A subagent transcript flushes per content block, so the
+  record is on disk at dispatch and a first try resolves. The main conversation's record is
+  an async flush of the completed assistant message, landing about 1-3.4 seconds after
+  dispatch. That is a race and not a wait. The no-match error now routes `@main` first. A
+  `@trap` that resolves to the main transcript prints a stderr lane note and no longer
+  succeeds silently.
+- Lane honesty is restored. Bare `whoami` reported `is_subagent:false`, `depth:0` and an
+  echoed parent id from inside a subagent. Those were three confidently wrong fields on
+  exactly the command an agent runs to check its identity. The env form now reports those
+  fields as null, because the env names the top-level session in every lane and the answer
+  is unknowable. It prints a lane line in text and notes the resolution path on stderr.
+  Every `@main` resolution prints the same unconditional stderr note.
+- Images are easier to discover. The first image-bearing row per run (search and show)
+  carries a paste-ready extraction hint in input id forms, with a `#N` handle as the bare
+  number. The search footer gains a capability note. `search --help` and `verbatim --help`
+  gain SEE ALSO sections naming `csift image`. A fleet incident drove this one. It
+  published "images are unreadable" without ever testing extraction.
+- Errored tool results are visible. Hit JSON carries `is_error`, the text render decorates
+  an errored result with `[error]`, and a new `--count-by result` axis buckets `ok` |
+  `error`. The closed `pairing` enum is untouched. Pairing answers "did a result come
+  back", and result answers "was it good".
+- Superseded drafts are disclosed honestly. The esc-edit draft collapse in turn
+  reconstruction is now disclosed, in the search footer and in JSON `superseded_drafts`. An
+  explicitly addressed draft fetches via `show --line`/`--uuid` as an annotated unit outside
+  turn numbering. The address-miss error states the real render domain. Before this, a
+  multi-megabyte genuine user record could vanish from every scan with no count and fail an
+  addressed fetch with a wrong reason.
+- SKILL gains a "Why not hand-roll this format" section, placed before the routing table.
+  It lists nine measured traps, each returning a plausible wrong answer with no error and
+  each mapped to a csift move. The frontmatter description now carries the cost of skipping
+  csift and names the image capability.
 
 ## [0.8.1] - 2026-08-27
 
-A maintenance round: additive surfaces plus one correctness flip, each
-verified against real corpora (and the live on-disk stores) before
-implementation. Two proposed features failed that verification and shipped
-as fact-reporting surfaces instead: a live/abandoned rewind-branch
-classifier false-positived on parallel tool fan-out across most sessions
-(shipped as `show --branch-points`, facts ranked by inter-child gap, no
-verdicts), and a file-history reconstruction merge was cut down to a
-listing after the store proved pruned with reused version counters
-(shipped as `recover --list-backups`).
+This is a maintenance release of additive surfaces plus one correctness flip. Each was
+verified against real corpora, and against the live on-disk stores, before implementation.
+Two proposed features failed that verification and shipped as fact-reporting surfaces
+instead. A live/abandoned rewind-branch classifier false-positived on parallel tool fan-out
+across most sessions. It shipped as `show --branch-points`, with facts ranked by
+inter-child gap and no verdicts. A file-history reconstruction merge was cut down to a
+listing after the store proved pruned, with reused version counters. It shipped as
+`recover --list-backups`.
 
-- `list`: `version` and `git_branch` now report the LAST-seen value (what
-  the session is on now; the docs always promised the session's version,
-  and a mid-flight upgrade or branch switch previously reported stale
-  opening samples). The opening values ride new `version_first` /
-  `git_branch_first` fields, JSON mirrors `*_last`, and text shows a drift
-  arrow (`branch a->b, CC x->y`) when they moved. `cwd` stays first-seen
-  on purpose: the record cwd follows the tracked shell cwd.
-- `search --attachments` + the `harness.meta.attachment` label +
-  `--count-by attachment`: attachment records (the bulk of many
-  transcripts' bytes) become searchable behind an explicit gate, a
-  superset of `--additional-context`; the matchable text is the verbatim
-  payload JSON; the census axis implies the gate. A default scan still
-  never parses attachment lines; an explicit `show` address renders any
-  attachment record flag-free. The label taxonomy grows to 26 leaves.
-- `search --count-by version`: a per-record census of the Claude Code
-  version stamp (which versions a session ran under, where an upgrade
-  landed); stampless records are excluded and disclosed.
-- `stats`: a whole-file line-type census (`types` line, JSON `line_types`,
-  merged scope totals) counting every physical line by its top-level
-  `type`; a file fact like `lines`, never windowed. The probe fully
-  validates non-candidate lines, so a framed line with an invalid interior
-  is now counted malformed even off the candidate path.
-- `recover --list-backups`: lists Claude Code's own file-history
-  checkpoint store for an absolute `--file` (store key sha256 of the
-  path), ordered by backup instant, with the provenance bounds stated in
-  the output: tool-layer writes only, pruned, version counters reset per
-  session dir. Listing only; checkpoint content is never merged into a
-  reconstruction. Four doc sites claiming `backupFileName` is frequently
-  null were corrected (measured 83-98% present).
-- `show --branch-points`: every record with two or more conversation
-  children (a rewind, retry, or parallel lane), children with lines and
-  timestamps, ranked by the widest inter-child time gap; tool-result
-  carriers, isMeta records, and compaction summaries never count as
-  children. Facts only: csift ranks, never classifies which side is live.
-  The compaction boundary's `logicalParentUuid` (the true predecessor the
-  compaction re-links to) now rides the boundary's rendered excerpt.
-- `plan`: binding output gains the plan `slug` (read off the bind record);
-  `plan --audit` joins the scope's structured plan-file mutations against
-  the corpus's plan bindings and warns when the mutating session does not
-  bind the file (only the bound plan is re-injected after a compaction).
-- `agents`: fork provenance (`fork_parent_last_uuid`, `fork_context_length`,
-  a `forked-at` text line) from the `fork-context-ref` record a `/fork`
-  transcript opens with, and a repeatable exact-match `--agent-type`
-  filter (`--agent-type fork` lists fork children).
-- Out of scope, recorded: the live team/task coordination files stay
-  unread; the transcript is the durable record.
-- New dependency: sha2 (the checkpoint-store key).
+- `list` reports `version` and `git_branch` as the last-seen value, which is what the
+  session is on now. The docs always promised the session's version, and a mid-flight
+  upgrade or branch switch used to report stale opening samples. The opening values ride new
+  `version_first` / `git_branch_first` fields, and JSON mirrors `*_last`. Text shows a
+  drift arrow (`branch a->b, CC x->y`) when they moved. `cwd` stays first-seen on purpose,
+  because the record cwd follows the tracked shell cwd.
+- `search --attachments`, the `harness.meta.attachment` label and `--count-by attachment`
+  make attachment records searchable behind an explicit gate. Those records are the bulk of
+  many transcripts' bytes. The gate is a superset of `--additional-context`. The matchable
+  text is the verbatim payload JSON, and the census axis implies the gate. A default scan
+  still never parses attachment lines. An explicit `show` address renders any attachment
+  record flag-free. The label taxonomy grows to 26 leaves.
+- `search --count-by version` is a per-record census of the Claude Code version stamp. It
+  shows which versions a session ran under and where an upgrade landed. Stampless records
+  are excluded and disclosed.
+- `stats` gains a whole-file line-type census (`types` line, JSON `line_types`, merged
+  scope totals). It counts every physical line by its top-level `type`. It is a file fact
+  like `lines` and is never windowed. The probe fully validates non-candidate lines, so a
+  framed line with an invalid interior is now counted malformed even off the candidate
+  path.
+- `recover --list-backups` lists Claude Code's own file-history checkpoint store for an
+  absolute `--file`, where the store key is the sha256 of the path. It orders entries by
+  backup instant and states the provenance bounds in the output. Only tool-layer writes
+  land there, the store is pruned, and version counters reset per session dir. It is a
+  listing only, and checkpoint content is never merged into a reconstruction. Four doc sites
+  claimed `backupFileName` is frequently null, and they were corrected (measured 83-98%
+  present).
+- `show --branch-points` lists every record with two or more conversation children, such
+  as a rewind, a retry or a parallel lane. It shows the children with lines and timestamps,
+  ranked by the widest inter-child time gap. Tool-result carriers, isMeta records and
+  compaction summaries never count as children. It reports facts only. csift ranks and never
+  classifies which side is live. The compaction boundary's `logicalParentUuid`, the true
+  predecessor the compaction re-links to, now rides the boundary's rendered excerpt.
+- `plan` binding output gains the plan `slug`, read off the bind record. `plan --audit`
+  joins the scope's structured plan-file mutations against the corpus's plan bindings. It
+  warns when the mutating session does not bind the file, because only the bound plan is
+  re-injected after a compaction.
+- `agents` reports fork provenance (`fork_parent_last_uuid`, `fork_context_length`, a
+  `forked-at` text line) from the `fork-context-ref` record a `/fork` transcript opens
+  with. It gains a repeatable exact-match `--agent-type` filter, and `--agent-type fork`
+  lists fork children.
+- One item is recorded as out of scope. The live team/task coordination files stay unread,
+  because the transcript is the durable record.
+- sha2 is a new dependency, for the checkpoint-store key.
 
 ## [0.8.0] - 2026-08-22
 
-Bash file mutations now resolve against the shell cwd Claude Code itself
-records, and every `recover` output accounts for what the replay could not
-include. Grounded in a full-corpus investigation: 22,410 real Bash commands
-joined against csift's own output, and the cwd + freshness mechanisms
-extracted from the Claude Code 2.1.237 binary and validated on 18,185
-commands (SPEC 4.9).
+Bash file mutations now resolve against the shell cwd Claude Code itself records, and every
+`recover` output accounts for what the replay could not include. A full-corpus
+investigation grounds the work. It joined 22,410 real Bash commands against csift's own
+output, and it extracted the cwd and freshness mechanisms from the Claude Code 2.1.237
+binary and validated them on 18,185 commands (SPEC 4.9).
 
-How much improved, measured on that corpus: 19.4% of Bash calls mutate a
-persistent file; csift's full-target attribution of those mutations rises
-from 27.1% to a measured 77.0% ceiling; `recover`'s relative-operand vs
-absolute `--file` join closes from 95.84% to 99.65%.
+The improvement was measured on that corpus. 19.4% of Bash calls mutate a persistent file.
+csift's full-target attribution of those mutations rises from 27.1% to a measured 77.0%
+ceiling. `recover`'s join of a relative operand against an absolute `--file` closes from
+95.84% to 99.65%.
 
-How it stays deterministic: nothing is guessed. Every resolved path carries
-an explicit resolution class - `absolute` (typed absolute), `cwd-joined`
-(joined to the record's own `cwd` field, data Claude Code wrote, zero
-inference), `cd-tracked` (literal in-command cds, a lexical inference
-validated at 99.65% against Claude Code's own modified-file hints), or
-`unresolved` (kept verbatim and disclosed, never fabricated into a path).
-Commands whose file sets are not in the command text are counted and
-disclosed, never attributed.
+The resolution stays deterministic, and nothing is guessed. Every resolved path carries an
+explicit resolution class. `absolute` means typed absolute. `cwd-joined` means joined to the
+record's own `cwd` field, data Claude Code wrote, with zero inference. `cd-tracked` means
+literal in-command cds, a lexical inference validated at 99.65% against Claude Code's own
+modified-file hints. `unresolved` means kept verbatim and disclosed, and never fabricated
+into a path. Commands whose file sets are not in the command text are counted and
+disclosed, and never attributed.
 
-- `files`: a bash row's `path` is the resolved spelling, so relative and
-  absolute spellings of one file share every bucket; timeline JSON rows gain
-  `resolution`, `path_verbatim`, `command_errored`. Mutations from a
-  partially failed bash chain are kept and flagged instead of dropped;
-  `git apply --check` / `git clean -n` dry runs and rsync remote
-  destinations no longer emit rows.
-- Parser increments: `perl -i` (the `sed -i` twin); interpreter write idioms
-  (python/node/ruby heredoc and inline scripts) with literal and
-  one-hop-constant targets as real rows and an `interp:<lang>` marker
-  otherwise; leading-`~` operands kept verbatim as `unresolved` instead of
-  dropped; mutating-class markers `fmt:<tool>`, `pkg:<manager>`,
-  `extract:<tool>` in the `git:<sub>` style (dry runs emit nothing; a
-  formatter with named operands emits real rows).
-- `recover` joins bash events on resolved paths (verbatim kept as a belt)
-  and discloses, per window and in every mode: integrity boundaries with a
-  hard/soft split, opaque mutating-class and PowerShell command counts and
-  rows, and a ready-to-run time-bounded `csift search` command. Restore's
-  status states a clean window positively, or says "complete from the tool
-  stream; NOT verified against disk" and lists what was not replayed.
-- Claude Code's own freshness signals are adopted: `staleReadFileStateHint`
-  (Claude Code names the files a shell command modified) becomes a hard
-  `hint_modified` boundary; `staleRecovered` on a successful Edit becomes a
-  `stale_recovered` annotation; the over-budget `edited_text_file` form is
-  named; an external-edit boundary names a formatter-class command that ran
-  in its window. `String to replace not found` and `File does not exist`
-  are counted annotations; a soft bash boundary no longer disarms the
+- `files` uses the resolved spelling as a bash row's `path`, so relative and absolute
+  spellings of one file share every bucket. Timeline JSON rows gain `resolution`,
+  `path_verbatim` and `command_errored`. Mutations from a partially failed bash chain are
+  kept and flagged, where they used to be dropped. `git apply --check` / `git clean -n` dry
+  runs and rsync remote destinations no longer emit rows.
+- The parser gains several increments. It reads `perl -i`, the `sed -i` twin. It reads
+  interpreter write idioms (python/node/ruby heredoc and inline scripts), with literal and
+  one-hop-constant targets as real rows and an `interp:<lang>` marker otherwise. It keeps
+  leading-`~` operands verbatim as `unresolved`, where it used to drop them. It adds the
+  mutating-class markers `fmt:<tool>`, `pkg:<manager>` and `extract:<tool>` in the
+  `git:<sub>` style. Dry runs emit nothing, and a formatter with named operands emits real
+  rows.
+- `recover` joins bash events on resolved paths, keeping the verbatim path as a fallback.
+  Per window and in every mode it discloses integrity boundaries with a hard/soft split,
+  opaque mutating-class and PowerShell command counts and rows, and a ready-to-run
+  time-bounded `csift search` command. Restore's status states a clean window positively.
+  Otherwise it says "complete from the tool stream; NOT verified against disk" and lists
+  what was not replayed.
+- csift adopts Claude Code's own freshness signals. `staleReadFileStateHint`, where Claude
+  Code names the files a shell command modified, becomes a hard `hint_modified` boundary.
+  `staleRecovered` on a successful Edit becomes a `stale_recovered` annotation. The
+  over-budget `edited_text_file` form is named. An external-edit boundary names a
+  formatter-class command that ran in its window. `String to replace not found` and
+  `File does not exist` are counted annotations. A soft bash boundary no longer disarms the
   originalFile cross-check.
-- Breaking: the batch `recovery-report.tsv` gains `boundaries`, `bash_file`,
-  `bash_opaque` columns; restore's status lines and failure diagnostics are
-  reworded (an invalidated history no longer claims "never Read/Written/
-  Edited"; an empty salvage names "at the latest state"); restore's JSON
-  error paths emit their row and summary before the non-zero exit; boundary
-  JSON rows gain `source_session_id`/`source_line`; coverage rows gain
-  `hard_boundaries`/`soft_boundaries`/`opaque_commands`/
-  `powershell_commands`/`suggested_search`.
+- This is breaking. The batch `recovery-report.tsv` gains `boundaries`, `bash_file` and
+  `bash_opaque` columns. Restore's status lines and failure diagnostics are reworded. An
+  invalidated history no longer claims "never Read/Written/Edited", and an empty salvage
+  names "at the latest state". Restore's JSON error paths emit their row and summary before
+  the non-zero exit. Boundary JSON rows gain `source_session_id`/`source_line`. Coverage
+  rows gain `hard_boundaries`/`soft_boundaries`/`opaque_commands`/`powershell_commands`/
+  `suggested_search`.
 
 ## [0.7.8] - 2026-08-17
 
-- `recover` finds windows-shaped paths (drive letters, backslashes) again: the
-  file-level basename prefilter split on `/` only, so such targets silently
-  reported no history; the basename-suffix match also accepts a backslash
-  boundary now.
-- First release validated on all three platforms: the full test suite passes
-  on macOS (arm64/x64), Linux (glibc and musl, x64/arm64), and Windows (MSVC
-  arm64/x64).
+- `recover` finds windows-shaped paths (drive letters, backslashes) again. The file-level
+  basename prefilter split on `/` only, so such targets silently reported no history. The
+  basename-suffix match also accepts a backslash boundary now.
+- This is the first release validated on all three platforms. The full test suite passes
+  on macOS (arm64/x64), Linux (glibc and musl, x64/arm64), and Windows (MSVC arm64/x64).
 
 ## [0.7.7] - 2026-08-17
 
-- Help text reworked for plain punctuation across every `--help` page; flag
-  semantics, examples, and JSON schemas unchanged.
-- Source comments are ASCII-only (enforced by the pre-commit gate); output
-  glyphs and test fixtures in string literals are unaffected.
+- Help text is reworked for plain punctuation across every `--help` page. Flag semantics,
+  examples and JSON schemas are unchanged.
+- Source comments are ASCII-only, enforced by the pre-commit gate. Output glyphs and test
+  fixtures in string literals are unaffected.
 
 ## [0.7.6] - 2026-08-17
 
-- `search --additional-context` — opt-in scan of hook-injected
-  additionalContext (the attachment records a SessionStart /
-  UserPromptSubmit / ... hook writes into the transcript). Off by default;
-  hits surface under `harness.meta.hook`; an explicit `show --line`/`--uuid`
-  address renders such a record without the flag, so the refetch a search
-  hit prints always resolves. A default scan pays nothing for the widening.
-- README restructured scenario-first (why -> highlights -> install, the
-  pronunciation under the title, the agent-skill install beside the binary
-  install); SKILL documents the file-mtime semantics of Claude Code's
-  `cleanupPeriodDays` retention; Conventional Commits codified in AGENTS.md;
-  .gitignore gains editor/OS/local-settings rules.
+- `search --additional-context` is an opt-in scan of hook-injected additionalContext, the
+  attachment records a SessionStart / UserPromptSubmit / ... hook writes into the
+  transcript. It is off by default, and hits surface under `harness.meta.hook`. An explicit
+  `show --line`/`--uuid` address renders such a record without the flag, so the refetch a
+  search hit prints always resolves. A default scan pays nothing for the widening.
+- The README is restructured scenario-first, in the order why, highlights, install, with
+  the pronunciation under the title and the agent-skill install beside the binary install.
+  SKILL documents the file-mtime semantics of Claude Code's `cleanupPeriodDays` retention.
+  Conventional Commits are codified in AGENTS.md. .gitignore gains editor, OS and
+  local-settings rules.
 
 ## [0.7.5] - 2026-08-16
 
-- Published to crates.io — `cargo install csift` is now the primary install
-  path. Cargo.toml gained the publication metadata (repository, readme,
-  keywords, categories) and dropped the `publish = false` guard; the
-  `CLAUDE.md` symlink is excluded from the crate tarball (it would
-  dereference into a duplicate of `AGENTS.md`).
-- README documents the name — pronounced "c-sift", in the `csplit`/`ctags`
-  naming tradition: c for Claude Code, sift for what it does — and the
-  crates.io install. No CLI surface change.
+- csift is published to crates.io, and `cargo install csift` is now the primary install
+  path. Cargo.toml gained the publication metadata (repository, readme, keywords,
+  categories) and dropped the `publish = false` guard. The `CLAUDE.md` symlink is excluded
+  from the crate tarball, because it would dereference into a duplicate of `AGENTS.md`.
+- The README documents the name and the crates.io install. csift is pronounced "c-sift",
+  in the `csplit`/`ctags` naming tradition, with c for Claude Code and sift for what it
+  does. No CLI surface changes.
 
 ## [0.7.4] - 2026-08-12
 
-- The Windows shell is a SEPARATE Claude Code tool named `PowerShell` (same
-  `input.command` field; enabled by env override, forced on when
-  Git-for-Windows bash is absent, else feature-gated — extracted from the CC
-  2.1.228 binary; the Windows `Bash` tool runs the real Git-for-Windows
-  bash). `@trap` self-identification now matches BOTH shell tools — it was
-  blind exactly in the bashless Windows fallback mode. Error/retry guidance
-  says "shell (Bash / PowerShell) invocation".
-- Documented deliberate non-changes: the bash-lexical layers (dangerous-rm
-  escalation classification, shell-side mutation attribution in
-  files/recover) do not run on PowerShell records — a pending PowerShell
-  lane classifies awaiting-execution; structured Read/Write/Edit attribution
-  is unaffected. Also recorded: CC 2.1.228's dangerous-rm has evolved past
-  the ported generation (fixpoint substitution stripping, a tree-sitter bail
-  at 64+ command substitutions) — a port refresh is a tracked follow-up.
+- The Windows shell is a separate Claude Code tool named `PowerShell`, with the same
+  `input.command` field. It is enabled by env override, forced on when Git-for-Windows bash
+  is absent, and otherwise feature-gated, as extracted from the CC 2.1.228 binary. The
+  Windows `Bash` tool runs the real Git-for-Windows bash. `@trap` self-identification now
+  matches both shell tools. It was blind exactly in the bashless Windows fallback mode.
+  Error and retry guidance says "shell (Bash / PowerShell) invocation".
+- Some non-changes are deliberate and documented. The bash-lexical layers, which are
+  dangerous-rm escalation classification and shell-side mutation attribution in
+  files/recover, do not run on PowerShell records. A pending PowerShell lane classifies as
+  awaiting-execution, and structured Read/Write/Edit attribution is unaffected. One more
+  finding is recorded. CC 2.1.228's dangerous-rm has evolved past the ported generation,
+  with fixpoint substitution stripping and a tree-sitter bail at 64+ command substitutions.
+  A port refresh is a tracked follow-up.
 
 ## [0.7.3] - 2026-08-12
 
-- Path encoding is now EXACTLY Claude Code's (evidence extracted from the CC
-  2.1.228 binary): the cwd is NFC-normalized, then replaced per UTF-16 code
-  unit — an NFD-spelled accented path now encodes identically to its NFC
-  spelling (closing a formerly-documented divergence that resolved the wrong
-  dir on macOS NFD paths), and an astral char yields two dashes, matching the
-  JS regex's view.
-- Windows drive-encoded project dirs (`C:\Users\x` → `C--Users-x`,
-  letter-led) are first-class targets: both the bare positional token and
-  `@C--Users-…` resolve; a drive-shaped token matching no projects dir falls
-  through to real-path resolution. A UNC-encoded dir (`--server-…`) is
-  targeted via the `@` form (the mistyped-flag guard's error now says so).
-- Verified from the same binary, no code change needed: CC's config home is
-  `CLAUDE_CONFIG_DIR ?? os.homedir() + "/.claude"` (NFC-normalized) — Windows
-  never consults `HOME`, confirming the 0.7.1 per-platform split.
+- Path encoding is now exactly Claude Code's, with evidence extracted from the CC 2.1.228
+  binary. The cwd is NFC-normalized and then replaced per UTF-16 code unit. An NFD-spelled
+  accented path now encodes identically to its NFC spelling. That closes a formerly
+  documented divergence that resolved the wrong dir on macOS NFD paths. An astral char
+  yields two dashes, matching the JS regex's view.
+- Windows drive-encoded project dirs (`C:\Users\x` → `C--Users-x`, letter-led) are
+  first-class targets. Both the bare positional token and `@C--Users-…` resolve. A
+  drive-shaped token matching no projects dir falls through to real-path resolution. A
+  UNC-encoded dir (`--server-…`) is targeted via the `@` form, and the mistyped-flag guard's
+  error now says so.
+- The same binary verified one more fact with no code change needed. CC's config home is
+  `CLAUDE_CONFIG_DIR ?? os.homedir() + "/.claude"` (NFC-normalized). Windows never consults
+  `HOME`, which confirms the 0.7.1 per-platform split.
 
 ## [0.7.2] - 2026-08-12
 
-- Performance round (behavior-identical — a 28-command byte-exact A/B battery
-  pins stdout, stderr, and exit codes unchanged): every per-line byte
-  prefilter now uses construct-once memmem finders (the stateless form
-  rebuilt its searcher on every call); the parallel line scanner no longer
-  runs a serial whole-file newline count (skipped outright for single-chunk
-  files, computed in parallel otherwise); `search`'s per-turn match+render
-  phase fans out on rayon when the scope is small or the file is 64 MB+ (the
-  straggler class), gated so broad scans keep the serial walk. Measured warm
-  on the reference corpus: big-session census 1.21x, no-match unscoped
-  1.13x, caseless literal 1.09x, verbatim 1.08x; user CPU down 2-4 percent.
-- README gains a coverage badge (94.8 percent line coverage,
-  cargo-llvm-cov over the full suite).
+- This is a performance release, and behavior is identical. A 28-command byte-exact A/B
+  battery pins stdout, stderr and exit codes unchanged. Every per-line byte prefilter now
+  uses construct-once memmem finders, where the stateless form rebuilt its searcher on every
+  call. The parallel line scanner no longer runs a serial whole-file newline count. It skips
+  the count outright for single-chunk files and computes it in parallel otherwise.
+  `search`'s per-turn match+render phase fans out on rayon when the scope is small or the
+  file is 64 MB+, the straggler class, gated so broad scans keep the serial walk. Measured
+  warm on the reference corpus, the speedups read 1.21x for the big-session census, 1.13x
+  for no-match unscoped, 1.09x for a caseless literal and 1.08x for verbatim. User CPU fell 2-4 percent.
+- The README gains a coverage badge, 94.8 percent line coverage by cargo-llvm-cov over the
+  full suite.
 
 ## [0.7.1] - 2026-08-12
 
-- The default data root resolves per platform, the way Claude Code's own
-  `os.homedir()` does (correctness): `$HOME/.claude` on Unix,
-  `%USERPROFILE%\.claude` on Windows — `HOME` is never read on Windows, so a
-  stray Git-Bash/MSYS `HOME` (often a POSIX-style path a native process cannot
-  open) no longer points csift at a `.claude` dir Claude Code never writes.
-  Precedence is unchanged: `--claude-home` > `$CLAUDE_CONFIG_DIR` > the OS
-  home's `.claude`. The error message and `--claude-home` help name both
-  variables.
+- The default data root now resolves per platform, the way Claude Code's own
+  `os.homedir()` does, which is a correctness fix. It is `$HOME/.claude` on Unix and
+  `%USERPROFILE%\.claude` on Windows. `HOME` is never read on Windows. A stray
+  Git-Bash/MSYS `HOME`, often a POSIX-style path a native process cannot open, no longer
+  points csift at a `.claude` dir Claude Code never writes. Precedence is unchanged, as
+  `--claude-home` > `$CLAUDE_CONFIG_DIR` > the OS home's `.claude`. The error message and
+  the `--claude-home` help name both variables.
 
 ## [0.7.0] - 2026-08-12
 
-Breaking text-surface release; JSON output is unchanged.
+This release breaks the text surface. JSON output is unchanged.
 
-- **Breaking:** `search` exchange headers are self-resolving. Each header opens
-  with a STABLE id-prefix token — the first 8 chars of the owning transcript id
-  (`<tok>·t<N>`) — instead of a per-invocation `sN` ordinal, and the
-  `sN = <id>` session legend block is removed entirely. A token is a valid `@`
-  target as-is and identical across invocations; within one output, distinct
-  ids sharing their first 8 chars lengthen together (8 → 12 → full id); a
-  teammate id (name-embedded, not hex-led) renders whole. A subagent exchange
-  carries `(parent <first-8>)` on EVERY header.
-- Resolver widening so every emitted token round-trips (all fail-loud on
-  ambiguity): the `@`-prefix match domain is the UNION of top-level session
-  uuids and subagent agent ids; a literal `8-4-4-4-12`-layout prefix longer
-  than 11 chars is a valid uuid-prefix token; a 12+-hex token keeps
-  exact-agent-id semantics first, then falls back to a unique literal-prefix
-  match.
-- Output geometry: a head `matches` banner (true totals · `oldest first` · the
-  emitted window · `undated last` when present) follows the scope banner; the
-  tail footer repeats the TRUE pre-cap totals beside its drop accounting; the
-  stderr zero-match diagnosis discloses the malformed-line count (an absence
-  claim is definitive for parseable lines only). The both-ends placement law
-  joins SPEC section 0 as a crate-wide design law.
-- `--max-count` is SIGNED: `N` keeps the EARLIEST N of the chronological
-  stream, `-N` the LATEST N, `0` stays uncapped; the kept exchanges still emit
-  oldest-first among themselves. Both ends disclose the window; the footer
-  names the dropped side (`N later|earlier dropped by --max-count`).
-- Docs: an OUTPUT GEOMETRY section in `search --help` and SKILL; recipes for
-  "when did X first happen" (`--max-count 1`), "most recent occurrence"
+- This is breaking. `search` exchange headers are self-resolving. Each header opens with a stable
+  id-prefix token, the first 8 chars of the owning transcript id (`<tok>·t<N>`), in place
+  of a per-invocation `sN` ordinal. The `sN = <id>` session legend block is removed
+  entirely. A token is a valid `@` target as-is and identical across invocations. Within one
+  output, distinct ids sharing their first 8 chars lengthen together (8 → 12 → full id). A
+  teammate id is name-embedded and not hex-led, and it renders whole. A subagent exchange
+  carries `(parent <first-8>)` on every header.
+- The resolver widens so every emitted token round-trips, and every case fails loud on
+  ambiguity. The `@`-prefix match domain is the union of top-level session uuids and
+  subagent agent ids. A literal `8-4-4-4-12`-layout prefix longer than 11 chars is a valid
+  uuid-prefix token. A 12+-hex token keeps exact-agent-id semantics first, then falls back to
+  a unique literal-prefix match.
+- The output geometry changes. A head `matches` banner follows the scope banner. It shows
+  the true totals, `oldest first`, the emitted window, and `undated last` when present. The
+  tail footer repeats the true pre-cap totals beside its drop accounting. The stderr
+  zero-match diagnosis discloses the malformed-line count, because an absence claim is
+  definitive for parseable lines only. The both-ends placement law joins SPEC section 0 as a
+  crate-wide design law.
+- `--max-count` is signed. `N` keeps the earliest N of the chronological stream, `-N` keeps
+  the latest N, and `0` stays uncapped. The kept exchanges still emit oldest-first among
+  themselves. Both ends disclose the window, and the footer names the dropped side
+  (`N later|earlier dropped by --max-count`).
+- The docs gain an OUTPUT GEOMETRY section in `search --help` and SKILL. They add recipes
+  for "when did X first happen" (`--max-count 1`), "most recent occurrence"
   (`--max-count -1`), and the header-token follow-up into `show`.
 
 ## [0.6.10] - 2026-07-14
 
-- `@trap` retry guidance states the granularity: the retry must be a NEW,
-  SEPARATE Bash invocation — two attempts inside one shell script are still one
-  in-flight tool_use, so both miss (error text + SKILL + assumption table).
-- Documented: EVERY `tool_use`'s matchable text is its name + the re-serialized
-  JSON input, so an embedded real newline is the two-character `\n` by match
-  time — match the literal `\\n`; `--multiline` is correctly irrelevant there.
-- SKILL completeness: verbatim header fields `automation_triggers`,
-  `budget_is_per_session`, `sessions_rendered` named; the self-echo trap
-  recorded (a nonce used as a search pattern writes itself into your own live
-  transcript — scope absence checks away from your own session).
+- `@trap` retry guidance states the granularity. The retry must be a new, separate Bash
+  invocation. Two attempts inside one shell script are still one in-flight tool_use, so both
+  miss. The error text, SKILL and the assumption table say so.
+- The docs state that every `tool_use`'s matchable text is its name plus the re-serialized
+  JSON input. An embedded real newline is therefore the two-character `\n` by match time,
+  so a pattern has to match the literal `\\n`. `--multiline` is correctly irrelevant
+  there.
+- SKILL is completed. It names the verbatim header fields `automation_triggers`,
+  `budget_is_per_session` and `sessions_rendered`. It records the self-echo trap. A nonce
+  used as a search pattern writes itself into your own live transcript, so an absence check
+  has to be scoped away from your own session.
 
 ## [0.6.9] - 2026-07-14
 
-- Stage-1 candidate detection is serialization-tolerant (correctness): a
-  valid-JSON record whose serialization differs from the compact wire format
-  (whitespace around the colon — python `json.dumps` defaults, a jq/editor
-  round-trip) used to vanish one layer BEFORE any malformed counter: no match,
-  no count, zero disclosure. The role needles now route through shared
-  whitespace-tolerant matchers; every other prefilter needle is
-  serialization-safe by construction, and the needle law is codified in
-  AGENTS.md. Framing is unchanged: one record per line.
+- Stage-1 candidate detection is serialization-tolerant, which is a correctness fix. Some
+  valid-JSON records are serialized differently from the compact wire format, with
+  whitespace around the colon, as python `json.dumps` defaults and a jq or editor
+  round-trip produce. Such a record used to vanish one layer before any malformed counter,
+  with no match, no count and zero disclosure. The role needles now route through shared
+  whitespace-tolerant matchers. Every other prefilter needle is serialization-safe by
+  construction, and the needle law is codified in AGENTS.md. Framing is unchanged, with one
+  record per line.
 
 ## [0.6.8] - 2026-07-14
 
-- `list`/`agents` head+tail scans no longer double-book malformed lines: the
-  tail scan floors at the head scan's consumed end, so the two windows are
-  disjoint and every malformed line in them is counted exactly once (an
-  all-garbage file used to report exactly 2×).
-- `list`'s malformed count is a DISCLOSED window census, never a whole-file
-  verdict: the note reads `… skipped (among the head/tail lines read — full
-  census: csift stats)`, and `stats` is named the full-scan census authority.
-- A sidecar marker line the current schema cannot read (a pre-release fossil
-  under old field names) is counted as malformed — provably-ours yet
-  uninterpretable never buys silence.
+- `list`/`agents` head and tail scans no longer double-book malformed lines. The tail scan
+  floors at the head scan's consumed end, so the two windows are disjoint, and every
+  malformed line in them is counted exactly once. An all-garbage file used to report
+  exactly 2×.
+- `list`'s malformed count is a disclosed window census and never a whole-file verdict.
+  The note reads `… skipped (among the head/tail lines read — full census: csift stats)`,
+  and `stats` is named the full-scan census authority.
+- A sidecar marker line the current schema cannot read, a pre-release fossil under old field
+  names, is counted as malformed. A line that is provably csift's own and still cannot be
+  interpreted never buys silence.
 
 ## [0.6.7] - 2026-07-14
 
-Doc-only convergence round.
+This release converges the docs only.
 
-- SKILL names verbatim's two automation header fields: `automation_by_kind`
-  (the SELECTED triggers per class) vs `automation_in_scope_by_kind` (every
-  in-scope pulse regardless of budget).
-- `agents` `returned_message` semantics stated: it is the ORCHESTRATOR's
-  record of the child's return, not the agent's own conclusion; the child's
-  final words are always `show @<agent-id> --turn -1..`.
+- SKILL names verbatim's two automation header fields. `automation_by_kind` holds the
+  selected triggers per class. `automation_in_scope_by_kind` holds every in-scope pulse
+  regardless of budget.
+- The semantics of `agents` `returned_message` are stated. It is the orchestrator's record
+  of the child's return and not the agent's own conclusion. The child's final words are
+  always `show @<agent-id> --turn -1..`.
 
 ## [0.6.6] - 2026-07-14
 
-- Obviously-corrupt lines are COUNTED (correctness): every byte-prefilter
-  rejection path runs an O(1) shape check (non-blank but not `{…}`-framed ⇒
-  malformed), so free-text garbage and crash-truncation move `skipped_lines`
-  on every command. Documented residue: a `{…}`-framed invalid INTERIOR is
-  only counted on a parse candidate.
-- `verbatim`'s header reads `spanned K of N compaction boundaries in scope`
-  (K alone read as a transcript property); its JSON header carries the full
-  budget accounting (`round_trip_fraction`, `chars_used`, `boundaries_*`,
-  `selected_*`).
-- Docs: under `--turn`/time windows every `stats` figure windows EXCEPT
-  `lines`; an hours-old `awaiting-execution` lane is overwhelmingly an
-  abandoned parent session — weigh `pending_since_utc`; `--siblings` caps
-  apply to NON-matching context records only.
+- Obviously corrupt lines are counted, which is a correctness fix. Every byte-prefilter
+  rejection path runs an O(1) shape check, and a line that is non-blank but not
+  `{…}`-framed counts as malformed. Free-text garbage and crash-truncation therefore move
+  `skipped_lines` on every command. The documented residue is that a `{…}`-framed invalid
+  interior is only counted on a parse candidate.
+- `verbatim`'s header reads `spanned K of N compaction boundaries in scope`, because K
+  alone read as a transcript property. Its JSON header carries the full budget accounting
+  (`round_trip_fraction`, `chars_used`, `boundaries_*`, `selected_*`).
+- The docs state three rules. Under `--turn` and time windows every `stats` figure
+  windows except `lines`. An hours-old `awaiting-execution` lane is overwhelmingly an
+  abandoned parent session, so `pending_since_utc` deserves weight. `--siblings` caps apply
+  to non-matching context records only.
 
 ## [0.6.5] - 2026-07-13
 
-- Bare ISO datetimes are LOCAL wall-clock time (correctness): `--since
-  "2026-07-13T20:00:00"` used to collapse silently to local midnight (the
-  civil-Date parser kept only the date part). A civil-DateTime arm now
-  precedes the Date arm; a string carrying a malformed offset still bails.
-  One fix covers every `--since`/`--until` consumer.
-- The id trio (`session_id` / `is_subagent` / `parent_session_id`) rides EVERY
-  search hit and sibling object, so bare `.hits[]` flattening keeps real ids.
-- Advisory notes fire AFTER target resolution — never a warning about a run
-  that was never going to happen.
-- SKILL: the missing `plan` / `recover` / `image` JSON row schemas added;
-  `@trap` marker uniqueness stated as conversation-wide.
+- Bare ISO datetimes are local wall-clock time, which is a correctness fix.
+  `--since "2026-07-13T20:00:00"` used to collapse silently to local midnight, because the
+  civil-Date parser kept only the date part. A civil-DateTime arm now precedes the Date arm.
+  A string carrying a malformed offset still bails. One fix covers every
+  `--since`/`--until` consumer.
+- The id trio (`session_id` / `is_subagent` / `parent_session_id`) rides every search hit
+  and sibling object, so bare `.hits[]` flattening keeps real ids.
+- Advisory notes fire after target resolution, so csift never warns about a run that was
+  never going to happen.
+- SKILL adds the missing `plan` / `recover` / `image` JSON row schemas and states `@trap`
+  marker uniqueness as conversation-wide.
 
 ## [0.6.4] - 2026-07-13
 
-- The removed `turns` name gets a tombstone error: a hidden variant always
-  bails naming the rename (`verbatim`, same flags) and routes plain turn
-  reading to `show <target> --turn -3..`. A wall, never a shim — it never
-  runs.
+- The removed `turns` name gets a tombstone error. A hidden variant always bails, naming
+  the rename (`verbatim`, same flags), and routes plain turn reading to
+  `show <target> --turn -3..`. It is a wall and never a shim, and it never runs.
 - `agents` text brands a non-completed lane's `returned_message` inline
-  (`history — predates the still-open lane, NOT the outcome`); a completed
-  lane stays unbranded.
-- Docs: a workflow RUN row's `status` is journal-verbatim (an open set, not a
-  csift enum); the richest-view dedup rule stated mechanically (`labels[]` is
-  richest-first; the rendered view is the first label surviving `-t`/`-T`);
-  exit codes de facto (usage errors 2, csift errors 1 — the contract stays
-  0-vs-non-zero); the record-level jq pipeline idiom (select in jq, run the
-  csift-generated `refetch`).
+  (`history — predates the still-open lane, NOT the outcome`). A completed lane stays
+  unbranded.
+- The docs state four more facts. A workflow run row's `status` is journal-verbatim, an
+  open set and not a csift enum. The richest-view dedup rule is stated mechanically.
+  `labels[]` is richest-first, and the rendered view is the first label surviving
+  `-t`/`-T`. The de facto exit codes are 2 for usage errors and 1 for csift errors, and the
+  contract stays 0-vs-non-zero. The record-level jq pipeline idiom selects in jq and then
+  runs the csift-generated `refetch`.
 
 ## [0.6.3] - 2026-07-13
 
-- Elicitation-sidecar GHOST-PENDING guard (correctness): Claude Code fires no
-  PostToolUse for a REJECTED AskUserQuestion/ExitPlanMode, so the hook can
-  never write `resolved` there. A pending whose key appears on a native record
-  as an actual `tool_use` block id / `tool_result` id (structural check) is
-  dropped like a resolved pair — the native transcript outranks the sidecar.
-- `list`'s scope banner / JSON `sessions_in_scope` report the PRE-cap resolved
-  range; the flood guard caps only the rows.
-- `--count-by label` census keys pass the active `-t`/`-T` predicate — a
-  dual-labeled record no longer leaks its filtered-out twin into the keys.
-- `show` rejects the span pair with the single-transcript rule; legacy flat
-  `-t` values (`thinking`/`tool`/`tool-response`) name their successor path.
+- The elicitation sidecar gains a ghost-pending guard, which is a correctness fix. Claude
+  Code fires no PostToolUse for a rejected AskUserQuestion/ExitPlanMode, so the hook can
+  never write `resolved` there. A pending whose key appears on a native record as an actual
+  `tool_use` block id / `tool_result` id is dropped like a resolved pair. The check is
+  structural, and the native transcript outranks the sidecar.
+- `list`'s scope banner and JSON `sessions_in_scope` report the pre-cap resolved range. The
+  flood guard caps only the rows.
+- `--count-by label` census keys pass the active `-t`/`-T` predicate. A dual-labeled
+  record no longer leaks its filtered-out twin into the keys.
+- `show` rejects the span pair with the single-transcript rule. The legacy flat `-t` values
+  (`thinking`/`tool`/`tool-response`) name their successor path.
 
 ## [0.6.2] - 2026-07-12
 
-- `image --id` miss error explains itself: it names the handles PRESENT,
-  states that `#N` is inherited from paste-time numbering (holes and non-1
-  starts are source gaps, not csift drops), and routes to the plain listing.
-- The three count units are cross-referenced where the numbers collide:
-  `-c` counts EXCHANGES · `--count-by` counts RECORDS (a tool call + its
-  result carrier ⇒ ≈2× the call figure) · `stats` tools count CALLS.
-- Docs: the jq merge idiom for flattening hits with their exchange-row ids;
-  `select(.kind==…)` before projecting; `returned_message` is the NEWEST
-  message the child ever returned (on a frozen lane it predates the pending
-  call).
-- Every subcommand's `long_about` was dead text — now rendered.
+- The `image --id` miss error explains itself. It names the handles present and states
+  that `#N` is inherited from paste-time numbering. Holes and non-1 starts are source gaps
+  and not csift drops. The error routes to the plain listing.
+- The three count units are cross-referenced where the numbers collide. `-c` counts
+  exchanges, and `--count-by` counts records, so a tool call plus its result carrier gives
+  ≈2× the call figure. `stats` tools count calls.
+- The docs add the jq merge idiom for flattening hits with their exchange-row ids, and the
+  rule to `select(.kind==…)` before projecting. They state that `returned_message` is the
+  newest message the child ever returned. On a frozen lane it predates the pending call.
+- Every subcommand's `long_about` was dead text, and it is now rendered.
 
 ## [0.6.1] - 2026-07-12
 
-- An unrecognized `@`-token is a HARD error naming the @-grammar — it never
-  falls through to path resolution (a stripped `@a` used to become a
-  cwd-relative path with a misleading project-dir error); a 1-3-char hex token
-  gets the dedicated too-short-for-a-prefix message.
-- `@trap` main-thread timing documented and routed by the error: a subagent's
-  transcript records the launching tool_use eagerly, but the MAIN
-  conversation's record flushes only after the current Bash call completes —
-  a top-level first use always misses; `@main` for the main thread, re-run
-  the SAME marker otherwise.
-- Docs: `--count-by model` reports the raw `<synthetic>` key verbatim; text
-  excerpts keep literal newlines (`| head -N` can cut mid-record — the
-  line-safe machine form is `--format json`).
+- An unrecognized `@`-token is a hard error naming the @-grammar, and it never falls
+  through to path resolution. A stripped `@a` used to become a cwd-relative path with a
+  misleading project-dir error. A 1-3-char hex token gets the dedicated
+  too-short-for-a-prefix message.
+- `@trap` main-thread timing is documented, and the error routes by it. A subagent's
+  transcript records the launching tool_use eagerly. The main conversation's record flushes
+  only after the current Bash call completes, so a top-level first use always misses. The
+  main thread uses `@main`, and any other caller re-runs the same marker.
+- The docs state that `--count-by model` reports the raw `<synthetic>` key verbatim. They
+  also state that text excerpts keep literal newlines, so `| head -N` can cut mid-record,
+  and that the line-safe machine form is `--format json`.
 
 ## [0.6.0] - 2026-07-12
 
-- **Breaking (agents JSON):** `completed_utc/_local` (+ `duration`) are
-  non-null ONLY when `status == "completed"` (a frozen lane is never "done");
-  every timestamped lane gains the `last_activity_utc/_local` pair (the tail
-  newest-record instant).
-- `show`'s TARGET is a Vec so a mistyped or foreign `--flag` is rejected BY
-  NAME instead of being consumed as the target; two real targets get a
-  pointed one-transcript arity error.
-- Censuses count RECORDS, not per-section hits — a leaf tally now equals
-  exactly what `-t <leaf>` surfaces.
-- `pairing` rides the tool BLOCK through the communication views: a frozen
-  SendMessage is `pending` under ANY selector ("any pending tools?" needs no
-  `-t`).
+- This is breaking for agents JSON. `completed_utc/_local` (+ `duration`) are non-null only when
+  `status == "completed"`, because a frozen lane is never "done". Every timestamped lane
+  gains the `last_activity_utc/_local` pair, the tail's newest-record instant.
+- `show`'s TARGET is a Vec, so a mistyped or foreign `--flag` is rejected by name and is
+  no longer consumed as the target. Two real targets get a pointed one-transcript arity
+  error.
+- Censuses count records and not per-section hits. A leaf tally now equals exactly what
+  `-t <leaf>` surfaces.
+- `pairing` rides the tool block through the communication views. A frozen SendMessage is
+  `pending` under any selector, so "any pending tools?" needs no `-t`.
 
 ## [0.5.2] - 2026-07-11
 
-- `search --help`'s COUNT section says the `-c` integer is the EXCHANGE total
-  and routes session listing to `-l`.
+- `search --help`'s COUNT section says the `-c` integer is the exchange total, and it
+  routes session listing to `-l`.
 
 ## [0.5.1] - 2026-07-11
 
-Help-parity release; behavior unchanged.
+This release brings the help to parity. Behavior is unchanged.
 
-- The five-document contract: `SKILL.md` = the LLM manual · `--help` = the
-  human (CLI-proficient) manual, information-parity with SKILL · `README.md` =
-  promotion · `SPEC.md` = design intent · `AGENTS.md` = maintenance.
-- Root `--help` gains the human-toned sections (the rules every command
-  follows, JSON output, pitfalls, non-goals, retention); `search --help`
-  gains the full 3-role / 25-leaf label taxonomy; `show`/`stats`/`plan`/
-  `whoami`/`image` gain JSON SCHEMA sections; every `--sessions-from` help
-  states the span rules; `whoami`'s composition example matches the flat
-  envelopes.
+- The five-document contract is stated. `SKILL.md` is the LLM manual. `--help` is the human
+  (CLI-proficient) manual, at information parity with SKILL. `README.md` is promotion,
+  `SPEC.md` is design intent, and `AGENTS.md` is maintenance.
+- The root `--help` gains the human-toned sections, covering the rules every command
+  follows, JSON output, pitfalls, non-goals and retention. `search --help` gains the full
+  3-role / 25-leaf label taxonomy. `show`/`stats`/`plan`/`whoami`/`image` gain JSON SCHEMA
+  sections. Every `--sessions-from` help states the span rules. `whoami`'s composition
+  example matches the flat envelopes.
 
 ## [0.5.0] - 2026-07-11
 
-Breaking rework, zero backcompat.
+This is a breaking rework with zero backward compatibility.
 
-- The per-command turn-window flag is `--turn` everywhere (was `--turn-range`);
-  same range grammar, same AND-intersection with `--since`/`--until`.
-- The label census generalizes to `--count-by <AXIS>` with six closed axes:
-  `label` · `tool` · `turn` · `session` · `pairing` · `model`; JSON row kind
-  is `census`; records outside an axis's domain are excluded and reported.
-- `agents --format json` is FLAT (envelope v2, no exceptions): session → run →
-  agent rows in tree pre-order; nesting is text-only, rebuilt from
-  `parent_agent_id`/`depth`; an unreachable node is appended, never dropped.
-- `show`: an EXPLICIT `--turn` miss is a hard error naming the domain
-  (open/from-end forms clamp); a 200-record-unit flood guard with the exact
-  continuation command; `--max-count 0` = uncapped uniformly on
-  list/stats/search/show.
-- Timestamps (text) take the ONE canonical local form
-  `YYYY-MM-DD HH:MM:SS[.mmm] TZAB(UTC±offset)` — the second UTC copy is gone.
-- Slash-command wrappers detected in BOTH tag orders (`<command-message>`
-  first is current CC); a new-order wrapper no longer masquerades as human
-  prose or opens a turn.
-- `list` rows gain `sidecar_present` (tri-state elicitation evidence); `files`
-  JSON summary gains `sessions`; `verbatim` prints a per-session
-  no-compaction note routing to `show --turn`; `normalize_argv` locates the
-  subcommand by scanning past root flags — flag order is free in combination
-  with `--claude-home`.
+- The per-command turn-window flag is `--turn` everywhere, replacing `--turn-range`. The
+  range grammar is the same, and so is the AND-intersection with `--since`/`--until`.
+- The label census generalizes to `--count-by <AXIS>` with six closed axes, `label`,
+  `tool`, `turn`, `session`, `pairing` and `model`. The JSON row kind is `census`. Records
+  outside an axis's domain are excluded and reported.
+- `agents --format json` is flat, under envelope v2 with no exceptions. It emits session,
+  run and agent rows in tree pre-order. Nesting is text-only, rebuilt from
+  `parent_agent_id`/`depth`, and an unreachable node is appended and never dropped.
+- `show` makes an explicit `--turn` miss a hard error naming the domain, while open and
+  from-end forms clamp. It gains a 200-record-unit flood guard with the exact continuation
+  command. `--max-count 0` means uncapped uniformly on list/stats/search/show.
+- Text timestamps take the one canonical local form
+  `YYYY-MM-DD HH:MM:SS[.mmm] TZAB(UTC±offset)`, and the second UTC copy is gone.
+- Slash-command wrappers are detected in both tag orders, and `<command-message>` first is
+  current CC. A new-order wrapper no longer masquerades as human prose or opens a turn.
+- `list` rows gain `sidecar_present`, a tri-state elicitation evidence field. The `files`
+  JSON summary gains `sessions`. `verbatim` prints a per-session no-compaction note routing
+  to `show --turn`. `normalize_argv` locates the subcommand by scanning past root flags, so
+  flag order is free in combination with `--claude-home`.
 
 ## [0.4.1] - 2026-07-11
 
-- Version + tag discipline codified: `Cargo.toml` ≡ SKILL surface header ≡
-  `csift --version` move together in the same commit; every release gets an
-  annotated `vX.Y.Z` tag; `--help` text is release surface. This release
-  bumps for the v0.4 round's `--help` corrections.
+- Version and tag discipline is codified. `Cargo.toml` ≡ SKILL surface header ≡
+  `csift --version` move together in the same commit. Every release gets an annotated
+  `vX.Y.Z` tag, and `--help` text is release surface. This release bumps for the v0.4
+  round's `--help` corrections.
 
 ## [0.4.0] - 2026-07-11
 
-Breaking rework, zero backcompat.
+This is a breaking rework with zero backward compatibility.
 
-- `turns` is renamed `verbatim` and reframed as the compaction-fidelity
-  specialist (restore the verbatim turns a compaction summary clipped);
-  tail-peek reading moves to `show --turn` — a third addressing mode that
-  fetches EVERY record of the named turn(s) (`-3..` = the last 3).
-- ONE range grammar everywhere: `N` · `A..B` · `N..` · `..N` · `-k` from the
-  end — all inclusive, resolved per target; the dash form `A-B` hard-errors
-  teaching the `..` spelling.
-- `search --count-by-label`: a per-leaf label census terminal mode (empty
-  pattern = whole-scope census; a leaf's count = what `-t <leaf>` would
-  surface); JSON `label_count` rows.
-- Empty-result self-diagnosis: a zero-match run prints a stderr diagnosis —
-  "a DEFINITIVE absence (exit 0), NOT an error", the active filters, and an
-  active probe naming the label(s) the pattern DOES occur under; JSON summary
-  gains `definitive_absence` / `active_filters` / `excluded_by_label`.
-- Flood guards: an unscoped all-projects `list` caps at the 50
-  most-recently-active rows (drop reported; `--max-count` overrides); `stats`
-  gains an opt-in `--max-count`.
-- JSON rename (search summary): `session_ids` → `transcript_ids`
-  (+ `transcript_ids_truncated`) — named apart from `-l`'s owning-session ids.
+- `turns` is renamed `verbatim` and reframed as the compaction-fidelity specialist, which
+  restores the verbatim turns a compaction summary clipped. Tail-peek reading moves to
+  `show --turn`, a third addressing mode that fetches every record of the named turn(s)
+  (`-3..` = the last 3).
+- One range grammar applies everywhere, `N` · `A..B` · `N..` · `..N` · `-k` from the end.
+  All forms are inclusive and resolved per target. The dash form `A-B` hard-errors and
+  teaches the `..` spelling.
+- `search --count-by-label` is a per-leaf label census terminal mode. An empty pattern
+  gives a whole-scope census, and a leaf's count is what `-t <leaf>` would surface. JSON
+  emits `label_count` rows.
+- Empty results diagnose themselves. A zero-match run prints a stderr diagnosis with "a
+  DEFINITIVE absence (exit 0), NOT an error", the active filters, and an active probe naming
+  the label(s) the pattern does occur under. The JSON summary gains `definitive_absence` /
+  `active_filters` / `excluded_by_label`.
+- Flood guards arrive. An unscoped all-projects `list` caps at the 50 most-recently-active
+  rows, reports the drop, and `--max-count` overrides the cap. `stats` gains an opt-in
+  `--max-count`.
+- A search-summary JSON key is renamed, `session_ids` → `transcript_ids`
+  (+ `transcript_ids_truncated`), to keep it apart from `-l`'s owning-session ids.
 
 ## [0.3.0] - 2026-07-11
 
-- `-T`/`--label-not` (search): label EXCLUSION with the same selector grammar
-  as `-t`; richest-SURVIVING-view dedup; statically-empty combos hard-error.
-- `--sessions-from <FILE|->` on every multi-target command (union an id list
-  into the scope; an explicit empty list = an empty scope); `search -l` emits
-  the matching owning-session ids to pipe into it; `search --raw` emits
-  matched records' verbatim jsonl lines (stdout pure, notes on stderr).
-- Search JSON hits + verbatim collapsed-agent rows carry `refetch` — the
-  ready-to-run `csift show` command addressed at the line-owning transcript.
-- The turn window and `--since`/`--until` INTERSECT on every command;
-  `verbatim` REQUIRES a target (budget × every-session flood guard); `list`
-  gains `--since`/`--until`.
-- Teammate ids with dashed NAMES round-trip as `@<agent-id>` targets.
+- `-T`/`--label-not` (search) excludes labels with the same selector grammar as `-t`. Dedup
+  takes the richest surviving view, and statically empty combinations hard-error.
+- `--sessions-from <FILE|->` arrives on every multi-target command. It unions an id list
+  into the scope, and an explicit empty list means an empty scope. `search -l` emits the
+  matching owning-session ids to pipe into it. `search --raw` emits matched records'
+  verbatim jsonl lines, with stdout pure and notes on stderr.
+- Search JSON hits and verbatim collapsed-agent rows carry `refetch`, the ready-to-run
+  `csift show` command addressed at the line-owning transcript.
+- The turn window and `--since`/`--until` intersect on every command. `verbatim` requires
+  a target, as a guard against its budget flooding every session. `list` gains
+  `--since`/`--until`.
+- Teammate ids with dashed names round-trip as `@<agent-id>` targets.
 
 ## [0.2.0] - 2026-07-10
 
-Breaking ergonomics rework, zero backcompat — one way per intent.
+This is a breaking ergonomics rework with zero backward compatibility, and one way per
+intent.
 
-- New `show` (§ record FETCH by `--line`/`--uuid`, rendered full or `--raw`
-  verbatim jsonl bytes) owns fetching; `search --line/--uuid` are REMOVED.
-  New `stats`: one-scan per-session aggregates (tokens by model, tool counts,
-  turns, span, compactions).
-- Envelope v2: EVERY `--format json` stream is ONE header line + kind-tagged
-  rows + ONE summary line, no exceptions; the jsonl-line key is `line`
-  everywhere.
-- Flag surface: `-t`'s long form is `--label`; `agents --kind` → `--shape`;
-  `recover --line-range` → `--file-lines`; the uniform span pair
-  `--subagents`/`--no-subagents`; verbatim's five tuning knobs collapse into
-  `--profile heavy|light`; `--siblings` is a zero-arg fixed policy;
-  `image --id` takes bare digits or `L<line>i<n>`.
-- Guardrails: a bare id target errors "did you mean '@<id>'?"; a search
-  PATTERN starting `@` errors; a uuid-shaped pattern notes on stderr.
+- New `show` owns fetching. It is a record fetch by `--line`/`--uuid` (§), rendered full or
+  as `--raw` verbatim jsonl bytes, and `search --line/--uuid` are removed. New `stats` gives
+  one-scan per-session aggregates (tokens by model, tool counts, turns, span,
+  compactions).
+- Envelope v2 arrives. Every `--format json` stream is one header line, kind-tagged rows
+  and one summary line, with no exceptions. The jsonl-line key is `line` everywhere.
+- The flag surface changes. `-t`'s long form is `--label`. `agents --kind` becomes
+  `--shape`, and `recover --line-range` becomes `--file-lines`. The span pair is uniformly
+  `--subagents`/`--no-subagents`. verbatim's five tuning knobs collapse into
+  `--profile heavy|light`. `--siblings` is a zero-arg fixed policy. `image --id` takes bare
+  digits or `L<line>i<n>`.
+- Guardrails arrive. A bare id target errors with "did you mean '@<id>'?". A search
+  PATTERN starting with `@` errors. A uuid-shaped pattern prints a note on stderr.
 
 ## [0.1.0] - 2026-06-07
 
-- Initial scaffold of csift — "ripgrep for Claude Code session transcripts":
-  a fast Rust CLI to list and regex-search the Claude Code session `.jsonl`
-  transcripts under `~/.claude/projects/`.
+- Initial scaffold of csift, "ripgrep for Claude Code session transcripts". It is a fast
+  Rust CLI to list and regex-search the Claude Code session `.jsonl` transcripts under
+  `~/.claude/projects/`.
