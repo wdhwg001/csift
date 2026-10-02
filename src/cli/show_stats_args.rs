@@ -30,8 +30,9 @@ TARGET (exactly ONE transcript)
   One session id can sit under two project directories. The spanning commands merge such
   copies. `show` counts the unmerged set instead and refuses, naming every copy's path. No
   `@<uuid>` and no `@<agent-id>` separates the copies, because a copied project directory
-  carries the whole sidecar and a subagent then has two copies too. The way to one copy is
-  its `*.jsonl` path.
+  carries the session's whole sidecar directory (the `<session-id>/` folder beside its
+  transcript, subagent transcripts included), so a subagent then has two copies too. The
+  way to one copy is its `*.jsonl` path.
 
 ADDRESSING AND EXIT
   `--line` and `--turn` take one shared range grammar. Lines count from 1 and turns from 0,
@@ -48,16 +49,18 @@ ADDRESSING AND EXIT
 
   A line or uuid named outright that resolves to no record is a HARD ERROR (exit non-zero).
   When the address lies past the file's end, the error names the file's line count. A range
-  CLAMPS to the file and errors only when it yields nothing. It reports the lines it named
-  past the end apart from the non-record lines it covered, in JSON `lines_past_end` and in a
-  footer line naming the file's last line (a stderr note under `--raw`).
+  CLAMPS to the file and errors only when it yields nothing. The lines a range names past
+  the end are counted in JSON `lines_past_end` and named in a footer line that gives the
+  file's last line (a stderr note under `--raw`). The lines it covers that hold no record
+  are counted separately, in `non_record_lines`.
 
-  A pending-elicitation record merged from the sidecar has no physical line. A `--uuid`
-  reaches it, and it renders `(elicitation sidecar)` in place of `Lnnnn`.
+  A pending-elicitation record merged from the elicitation file has no physical line. A
+  `--uuid` reaches it, and it renders `(elicitation sidecar)` in place of `Lnnnn`.
 
 RECORDS OUTSIDE THE SURVIVING CONVERSATION
   `--turn` uses the numbering `search` prints, and that numbering follows Claude Code's own
-  conversation chain. A record the chain no longer reaches belongs to no numbered turn. Such
+  conversation chain (the global `--cross-compactions` entry says what the chain is). A
+  record the chain no longer reaches belongs to no numbered turn. Such
   records are a recalled draft, a turn the operator REWOUND past, and anything under one.
 
   An ADDRESS always fetches what it names, so it still renders such a record. The record
@@ -81,7 +84,8 @@ A SHAPE CSIFT MODELS NO LEAF FOR
   csift labels each record with leaves of its role.category.leaf taxonomy, the paths
   `search -t` selects. An address never hard-misses a PARSEABLE line, even when the line's
   shape carries no leaf. Those shapes are an isMeta pseudo-turn matching no template, a
-  text-less block record, and an attachment payload type or system subtype no table names.
+  text-less block record, and an attachment payload type or system subtype that no csift
+  label covers.
   A NON-isMeta image-only user record is one of them and reads `? unmodeled: user/image`.
   The isMeta one has a leaf, `harness.context.image`.
 
@@ -100,14 +104,18 @@ RAW MODE
   included. It cannot be combined with `--format json`, since raw output IS the file's own
   JSON. It reads the transcript file only, with no sidecar merge.
 
-  A `--uuid` under `--raw` names the same records the rendered fetch shows. A replay copy and
-  its survivor share one uuid, so both lines print, lowest first. A record merged from the
-  elicitation sidecar has no line, so it prints nothing and a stderr note says so (exit 0).
+  A `--uuid` under `--raw` names the same records the rendered fetch shows. When two lines
+  carry one uuid, Claude Code reads the later one as the record, and the earlier one is a
+  replay copy. A replay copy and that survivor share the uuid, so both lines print, lowest
+  first. A record merged from the elicitation file has no line, so it prints nothing and a
+  stderr note says so (exit 0).
 
 JSON SCHEMA (--format json)
   The envelope is {kind:\"header\", command:\"show\", session_id, is_subagent,
   parent_session_id, path}, then one {kind:\"record\", …} row per fetched record, then
-  {kind:\"summary\", …}.
+  {kind:\"summary\", …}. Under `--branch-points` the header is {kind:\"header\",
+  command:\"show\", mode:\"branch-points\", session_id, is_subagent, parent_session_id},
+  with `mode` and no `path`.
 
   Record rows carry ";
 
@@ -144,11 +152,11 @@ const SHOW_AFTER_HELP_TAIL: &str = ".
 
   Whenever `--cross-compactions` is non-zero, the summary also carries the crossing set
   {crossing_budget, boundaries_crossed, budget_exhausted, boundaries_above_floor,
-  floor_line, floor_cause}. An ADDRESS moves with that budget. The record it names can read
-  `live` under one budget and `pre-cut` under another, so the keys say which reading you
-  hold. Under `--cross-compactions 0` they are absent. `--raw` prints the same disclosure on
-  stderr, and only for a `--turn` window, because a `--line`/`--uuid` address crosses
-  nothing to find its lines.
+  floor_line, floor_cause}. The rendered reading of an addressed record moves with that
+  budget. The same record can read `live` under one budget and `pre-cut` under another, so
+  the keys say which reading you hold. Under `--cross-compactions 0` they are absent.
+  `--raw` prints bytes, which no budget changes, so it prints the same disclosure on stderr
+  only for a `--turn` window, whose turn numbering the budget does move.
 
   Under `--branch-points` the rows are {kind:\"branch-point\", uuid, line, parent_line,
   parent_type, live_child_line, children:[…], widest_gap_seconds}, and the summary is
@@ -159,8 +167,9 @@ const SHOW_AFTER_HELP_TAIL: &str = ".
   the fork parent. Both are null when the parent uuid names no line in the file.
   `live_child_line` is the line of the child on the chain, and it is null unless EXACTLY one
   child is live. Null with zero live children means the whole fork sits off the surviving
-  conversation. Null with two means the text named both. Two children can both be live
-  because the chain's membership rules keep same-message.id assistant siblings.
+  conversation. Null with two or more means the text output names every live child on the
+  fork's line (`live children: L<a> L<b>`). Two children can both be live because the chain
+  keeps assistant siblings that share one message.id.
 
   Each child is {line, uuid, record_type, survival (live | pre-cut | abandoned),
   verdict (live | rewound | draft | abandoned | pre-cut), ts_utc, ts_local}.";
@@ -180,8 +189,9 @@ pub(crate) static SHOW_AFTER_HELP: std::sync::LazyLock<String> = std::sync::Lazy
     about = "Fetch a transcript's records by line, turn or uuid (full or --raw), or \
              --branch-points",
     long_about = "\
-Fetch the record(s) at specific 1-based jsonl line numbers or record uuids, from exactly ONE
-transcript. The line numbers are the `Lnnnn` every csift surface prints.
+Fetch the record(s) at specific 1-based jsonl line numbers, 0-based turn indices or record
+uuids, from exactly ONE transcript. The line numbers are the `Lnnnn` every csift surface
+prints, and the turn indices the `tN` that `search` prints.
 
 By default each record renders FULL, with its label, its timestamp and its complete text.
 That makes `show` the permission-friendly alternative to `Read`-ing the raw jsonl. `--raw`
@@ -190,10 +200,11 @@ emits the VERBATIM jsonl lines instead, which is the way to the fields csift doe
 
 `--branch-points` reports the transcript's conversation FORK facts in place of records. A
 fork is a record with more than one conversation child. A rewind, a retry and a parallel
-lane each make one, by a later parentUuid re-attach. Forks rank by the widest time gap
-between their children. A rewind usually shows a wide gap, and a parallel lane a gap near
-zero. Each fork names the LIVE child and gives every other child the conversation chain's
-verdict. Beyond what that chain resolves, csift does not guess.",
+lane each make one, because each writes a later record whose `parentUuid` names an earlier
+one that already has a child. Forks rank by the widest time gap between their children. A
+rewind usually shows a wide gap, and a parallel lane a gap near zero. Each fork names the
+LIVE child and gives every other child the conversation chain's verdict (the global
+`--cross-compactions` entry says what the chain is).",
     after_help = SHOW_AFTER_HELP.as_str()
 
 )]
@@ -230,9 +241,11 @@ pub struct ShowArgs {
     /// `search`'s exchange headers exactly.
     ///
     /// The fetch returns every user and assistant record of the named turns, so it reads a
-    /// turn's whole back-and-forth. The gated non-record lines a turn carries
-    /// (turn-duration, stop-hooks, away-summary, queue, snapshot, system) belong to no turn
-    /// fetch. An address by `--line` or `--uuid` reaches them, and so does naming their leaf:
+    /// turn's whole back-and-forth. The lines a turn carries that only an explicit label
+    /// reaches belong to no turn fetch. They are the `harness.turn.*` lines (`duration`,
+    /// `stop-hooks`, `recap`), the `harness.system.*` records, and the
+    /// `harness.bookkeeping.*` lines, the `queue` and `file-history` ones among them. An
+    /// address by `--line` or `--uuid` reaches them, and so does naming their leaf:
     /// `search -t 'harness.bookkeeping.*' -t 'harness.turn.*' -t 'harness.system.*'`.
     ///
     /// Mutually exclusive with `--line` and `--uuid`, so a run picks ONE addressing mode.
@@ -255,10 +268,13 @@ pub struct ShowArgs {
     ///
     /// The drop is ALWAYS reported, with a continuation command that names the dropped
     /// units by their lines. The lines are sorted, and ranges that overlap or touch are
-    /// merged (`--line 3..4,9..14`). A dropped record merged from the elicitation sidecar has no
-    /// line and is named by `--uuid`. Every address form continues this way, `--turn`
-    /// included, so the footer always says which records this page left out. Following the
-    /// continuations at one cap returns every unit of the uncapped fetch exactly once.
+    /// merged (`--line 3..4,9..14`). A dropped record merged from the elicitation file has no
+    /// line and is named by `--uuid`. That file is `elicitations.jsonl` in the session's
+    /// sidecar directory (the `<session-id>/` folder beside its transcript), where a hook
+    /// records a pending prompt the transcript does not yet show. Every address form
+    /// continues this way, `--turn` included, so the footer always says which records this
+    /// page left out. Following the continuations at one cap returns every unit of the
+    /// uncapped fetch exactly once.
     #[arg(long, value_name = "N", verbatim_doc_comment)]
     pub max_count: Option<usize>,
 
@@ -269,14 +285,16 @@ pub struct ShowArgs {
 
     /// Report the transcript's conversation FORK facts in place of records. A fork is a
     /// record with MORE THAN ONE conversation child. A rewind, a retry and a parallel lane
-    /// each make one, by a later parentUuid re-attach. Each child is listed with its line,
-    /// timestamp and verdict, and forks rank by the WIDEST time gap between children (a
-    /// rewind usually shows hours, a parallel lane near zero).
+    /// each make one, because each writes a later record whose `parentUuid` names an earlier
+    /// one that already has a child. Each child is listed with its line, timestamp and
+    /// verdict, and forks rank by the WIDEST time gap between children (a rewind usually
+    /// shows hours, a parallel lane near zero).
     ///
     /// Tool-result carriers, isMeta records and compaction summaries never count as
-    /// children, so a parallel tool fan-out is no fork. The PARENT can be any record the
-    /// loader admits. A fork parented to a hook's attachment line prints that line and its
-    /// type, and `parent uuid not in this file` is kept for a uuid no line here carries.
+    /// children, so a parallel tool fan-out is no fork. The PARENT can be any user,
+    /// assistant, attachment or system record carrying a uuid. A fork parented to a hook's
+    /// attachment line prints that line and its type, and `parent uuid not in this file` is
+    /// kept for a uuid no line here carries.
     ///
     /// Each fork names its LIVE child from Claude Code's own conversation chain, and every
     /// child gets one of five verdicts:
@@ -287,8 +305,6 @@ pub struct ShowArgs {
     ///   abandoned   off the chain without being an opener (a retried assistant record)
     ///   pre-cut     above a compaction boundary, where the chain stops and csift keeps
     ///               reading
-    ///
-    /// Beyond what the chain resolves, csift reports and ranks and never guesses.
     #[arg(
         long = "branch-points",
         conflicts_with_all = ["line", "uuid", "turn", "raw"],
@@ -342,6 +358,8 @@ impl ShowArgs {
 One scan of each transcript answers the aggregation questions that otherwise need
 hand-rolled jsonl parsing. Every session row has the same fixed shape:
 
+  lines         the physical line count
+  records       the user and assistant record counts
   tokens        token burn per model, from message.usage
   narration     narration-block counts per model (agent.thinking.narration)
   tools         tool-call counts by name
@@ -359,8 +377,7 @@ Narration blocks are summaries the API issues. Their token split is not derivabl
 blocks are counted.
 
 A tool call counts once per CALL, one per invocation. `search --count-by tool` counts
-RECORDS, the use plus its result carrier, so it reads ≈2× these tallies. The two figures
-differ in unit and do not contradict each other.
+RECORDS, the use plus the record carrying its result, so it reads ≈2× these tallies.
 
 The line-type census counts every physical line by its top-level `type` (`user`,
 `assistant`, `attachment`, `file-history-snapshot`, `system`, …). It answers \"what else is
@@ -382,10 +399,14 @@ something to say:
 
   chain  abandoned turns N (M rewound) · replay copy lines K
 
-An ABANDONED turn is an opener the chain no longer reaches, such as a recalled draft or a
-turn the operator rewound past. The REWOUND ones are the subset that drew a reply before
-the rewind. A REPLAY COPY is a line whose uuid a later line also carries, which a compaction
-re-anchor appends.
+The record that opens a turn is its opener, and it is a message the person typed, an
+answered AskUserQuestion, a tool rejection carrying typed text, an inbound peer message or
+a `<task-notification>` pulse. An ABANDONED turn is one
+whose opener the conversation chain no longer reaches (the global `--cross-compactions`
+entry says what the chain is), such as a recalled draft or a turn the operator rewound
+past. The REWOUND ones are the subset that drew a reply before the rewind. A REPLAY COPY
+is a line whose uuid a later line also carries. A compaction writes such later lines when
+it appends a block of records already written, with their uuids kept.
 
 Under a `--turn` or time window every figure windows EXCEPT `lines`, the `types` census and
 the three chain totals. They stay file facts (the physical line count, the per-type line
@@ -413,11 +434,15 @@ JSON SCHEMA (--format json)
   unknown_thinking_tags, tools, turns, abandoned_turns, rewound_turns, replay_copies,
   dropped_by_cap, skipped_lines}. `tail -1 | jq .tokens` is the one-liner for total burn.
 
-  Both rows ALSO carry the crossing set {crossing_budget, boundaries_crossed,
-  budget_exhausted, boundaries_above_floor, floor_line, floor_cause} whenever
-  `--cross-compactions` is non-zero. The set says how many compaction boundaries the
-  survival walk stepped over, how many it did not, and where the chain floor sits. Under
-  `--cross-compactions 0` csift crossed nothing, and the keys are absent.
+  `unknown_thinking_tags` counts thinking blocks whose signature carries a tag that is
+  neither thinking nor narration, a tag value the API added that csift does not yet name.
+  The text output prints the count only when it is above 0.
+
+  Each session row and the summary ALSO carry the crossing set {crossing_budget,
+  boundaries_crossed, budget_exhausted, boundaries_above_floor, floor_line, floor_cause}
+  whenever `--cross-compactions` is non-zero. The set says how many compaction boundaries
+  the conversation chain crossed, how many it did not, and where the walk stopped (the
+  floor). Under `--cross-compactions 0` csift crossed nothing, and the keys are absent.
 
   `skipped_lines` here is a FULL-SCAN census, because `stats` parses every line. It is the
   corruption-census authority for \"does this transcript carry a torn or corrupt line
@@ -451,8 +476,9 @@ pub struct StatsArgs {
     #[arg(long = "sessions-from", value_name = "FILE|-", verbatim_doc_comment)]
     pub sessions_from: Option<std::path::PathBuf>,
 
-    /// Lower time bound (ISO8601, or relative `2h`/`3d`/…). Records outside it are not
-    /// counted.
+    /// Lower time bound. WHEN is ISO8601, or a relative N units AGO in seven units, `s`
+    /// seconds, `m` minutes, `h` hours, `d` days, `w` weeks, `mo` months (30 days) and `y`
+    /// years (365 days), as in `2h`, `3d` or `2mo`. Records outside it are not counted.
     #[arg(long, value_name = "WHEN", verbatim_doc_comment)]
     pub since: Option<String>,
 

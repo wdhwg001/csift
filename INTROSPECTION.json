@@ -44720,8 +44720,8 @@
         },
         {
           "path": "src/cli/show_stats_args.rs",
-          "lines": "232-236",
-          "snippet": "    /// The fetch returns every user and assistant record of the named turns, so it reads a\n    /// turn's whole back-and-forth. The gated non-record lines a turn carries\n    /// (turn-duration, stop-hooks, away-summary, queue, snapshot, system) belong to no turn\n    /// fetch. An address by `--line` or `--uuid` reaches them, and so does naming their leaf:\n    /// `search -t 'harness.bookkeeping.*' -t 'harness.turn.*' -t 'harness.system.*'`."
+          "lines": "243-249",
+          "snippet": "    /// The fetch returns every user and assistant record of the named turns, so it reads a\n    /// turn's whole back-and-forth. The lines a turn carries that only an explicit label\n    /// reaches belong to no turn fetch. They are the `harness.turn.*` lines (`duration`,\n    /// `stop-hooks`, `recap`), the `harness.system.*` records, and the\n    /// `harness.bookkeeping.*` lines, the `queue` and `file-history` ones among them. An\n    /// address by `--line` or `--uuid` reaches them, and so does naming their leaf:\n    /// `search -t 'harness.bookkeeping.*' -t 'harness.turn.*' -t 'harness.system.*'`."
         }
       ],
       "states": [
