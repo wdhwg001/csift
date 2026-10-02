@@ -40,144 +40,159 @@
   matched 1 exchange · 1 session · label=agent
 ```
 
-One regex, the **complete round-trip**, token-efficient output. No embeddings, no database, no daemon.
+That is one regex. The hit comes back as the **complete round-trip** it belongs to, in output short enough for an agent to read cheaply. No embeddings, database or daemon sit behind it.
 
 ## Why csift
 
 > Claude Code's sessions are **plain text** in JSONL, so why csift, not grep?
 
-**Yes.** It has every prompt, thought, tool call, file edit, pasted image, and subagent it spawned. But one of these may happen to you:
+They are plain text. The log holds every prompt, thought, tool call, file edit and pasted image, and every subagent the session spawned. Reading it back is where an agent goes wrong.
 
 - **"It deleted my project files, then apologized."**
 
-  _Running `--dangerously-skip-permissions`, it wiped the files it had built, said sorry, and stopped dead. Asked to dig them back out of its own session, it fumbled around (the edits spanned subagents, every restore came back partial) and then quietly started **rewriting** them from memory as it panicked and decided that was "easier"._
+  _It was running with `--dangerously-skip-permissions`. It wiped the files it had built, said sorry and stopped dead. Asked to dig them back out of its own session, it fumbled around, because the edits spanned subagents and every restore came back partial. Then it quietly started **rewriting** them from memory, having decided in its panic that this was "easier"._
 
 - **"It lost my design images after a compaction, then asked me to re-send them."**
 
-  _The images were right there in the conversation. One compaction later the agent acts like they never existed: the compaction handed it lossy text fragments instead, and it believed them._
+  _The images were right there in the conversation. One compaction later the agent acted as if they had never existed. The compaction had handed it lossy text fragments in their place, and it believed them._
 
 - **"Which session does `jazzy-twilight-sparkle.md` belong to?"**
 
-  _The plan file carries the architecture that matters. Its invented name says nothing about which session wrote it, and the binding lives in an `EnterPlanMode` tool call, a needle in the haystack._
+  _The plan file carries the architecture that matters. Its invented name says nothing about which session wrote it. The binding is a `plan_mode` attachment written when the session entered Plan Mode, a needle in the haystack._
 
 - **"The machine crashed with three sessions open. Which was which?"**
 
-  _Frontend, backend, debugging, and `claude --resume` gives you a lineup with no faces._
+  _One was frontend, one backend, one debugging, and `claude --resume` gives you a lineup with no faces._
 
 - **"I literally just said that."**
 
-  _A few compactions into a long run, the agent still knows its **task**. Everything you actually **said** and **read** is gone, and nothing keeps the last few turns mechanically the way codex or pi do._
+  _A few compactions into a long run, the agent still knows its **task**. Everything you actually **said** and **read** is gone. Nothing keeps the last few turns mechanically, the way codex or pi do._
 
 - **"I DID tell you. In the question dialog."**
 
-  _It searched its own session by user roles, found nothing, and concluded you never said it. You said it in `AskUserQuestion`._
+  _It searched its own session by user roles, found nothing, and concluded you never said it. You had said it in `AskUserQuestion`._
 
 - **"You're the orchestrator. Why can't you see which session is stuck?"**
 
-  _Because, it explains, an unanswered `AskUserQuestion` is **never** written to disk at all, "so there's nothing I can watch." Or worse: "Yes, I can interpret it from the thinking."_
+  _Because, it explains, an unanswered `AskUserQuestion` is **never** written to disk at all, "so there's nothing I can watch." Or worse, it offers to "interpret it from the thinking."_
 
-- **"You said it stopped but it's waiting for a subagent!"**
+- **"You said it stopped, but it's waiting for a subagent!"**
 
-  _It apologized, found a "root cause" by searching all other jsonl files. When you have another session to orchestration in the same project, it wouldn't even know whether it's stopped. Or worse, it found a turn duration metadata and believed it must be the true stop. It is not._
+  _It apologized and found a "root cause" by searching every other jsonl file. Asked to orchestrate another session in the same project, it could not even tell whether that session had stopped. Or it found a turn-duration record and took it for the true stop. It is not one._
 
-Each of these ends the same way: the agent says ~~_You are absolutely right._~~, then stumbles through a one-off script over raw JSON and gets it subtly wrong.
-
-csift is the missing tool it should have had.
+Each of these ends the same way. The agent says ~~_You are absolutely right._~~, then stumbles through a one-off script over raw JSON and gets it subtly wrong.
 
 ## ✨ Highlights
 
 1. ⏪ **Recover files & deleted plans.**
 
-   `csift recover` analyzes and aggregates every edit/read and restores the file's exact bytes, at any point in time, in diff patches or final files, and honors Claude Code's file-modified markers. Shell traffic counts too: a heredoc or literal echo written through Bash, and a clean `cat`/`head`/`sed -n` read, replay as real content under strict admission gates. When it can't reliably recover due to modified boundaries, it salvages what survived with gaps marked.
+   `csift recover` replays every edit and read to restore a file's exact bytes at any point in time, as diff patches or as the final file. \
+   It honors Claude Code's file-modified markers. \
+   Shell traffic counts too. A heredoc or literal `echo` written through Bash, and a clean `cat`, `head` or `sed -n` read, replay as real content under strict admission gates. \
+   Where a modified boundary rules out an exact restore, it salvages what survived and marks the gaps.
 
 2. 🖼 **Images back out.**
 
-   `csift image` lists, dedups, and extracts them, addressable by the same `[Image #N]` handle the session uses. (`#N` was never a unique id. csift copes.) \
+   `csift image` lists, dedups and extracts them by the same `[Image #N]` handle the session uses. (`#N` was never a unique id. csift copes.) \
    A PDF read page by page comes back the same way, each image labelled with the page it actually is.
 
-3. 📝 **Plan ↔ Session matched.**
+3. 📝 **Plan ↔ Session, both directions.**
 
    `csift plan` finds the plan a session wrote. \
-   `csift plan --reverse jazzy-twilight-sparkle.md` names the session that owns a file. \
-   Both directions.
+   `csift plan --reverse ~/.claude/plans/jazzy-twilight-sparkle.md` names the session that owns it.
 
 4. 📇 **Sessions you can tell apart.**
 
-   `csift list` identifies every session by its first and last messages. \
-   It is the completion `claude --resume` never had. \
-   One id on disk in two project directories is merged by the bytes, never by a timestamp, and copies that genuinely differ are both kept and both named.
+   `csift list` names every session by its first and last messages, the completion `claude --resume` never had. \
+   One id sitting in two project directories is merged by its bytes, never by a timestamp. \
+   Copies that genuinely differ are both kept and both named.
 
 5. 🧵 **Un-clip a compaction.**
 
-   A summary keeps task state and context. \
-   The conversation is a different axis, and `csift verbatim` reconstructs the clipped back-and-forth within a `--budget`. \
-   Wire it into a hook and every compaction arrives with the recent dialogue attached. \
-   Claude Code's own loader stops dead at a compaction boundary. \
-   `--cross-compactions` steps over a bounded number of them, and every command says how many it crossed and where it stopped.
+   A summary keeps task state and context. The conversation is a different axis. \
+   `csift verbatim` rebuilds the clipped back-and-forth within a `--budget`. \
+   Wired into a hook, it attaches the recent dialogue to every compaction. \
+   Claude Code's own loader stops dead at a compaction boundary. `--cross-compactions` steps over a bounded number of them, and every command says how many it crossed and where it stopped.
 
 6. 🏷 **Typed search.**
 
    A background task's completion notice is a `"user"` role. \
-   A subagent's return: also `"user"`. \
-   Your `AskUserQuestion` answer: a _tool result_. \
-   csift stepped in every one of these traps already, so `csift search -t user.answer` (one of 73 `{role}.{category}.{leaf}` labels) finds exactly what a naive grep swears was never said. \
-   Some labels exist because the format hides things: `user.unsent` finds the message you esc-recalled and never actually sent, `user.queued` finds what you typed into the queue while a turn was running, `harness.turn.duration` is the record behind the "Done in 1m 5s" line, and `agent.thinking.narration` separates the API's one-line summaries from the reasoning they summarize.
+   A subagent's return is also `"user"`. \
+   Your `AskUserQuestion` answer is a _tool result_. \
+   csift has stepped in each of these traps already. `csift search -t user.answer` finds exactly what a naive grep swears was never said, and it is one of 73 `{role}.{category}.{leaf}` labels.
+
+   Some labels name what the format hides.
+
+   | label | finds |
+   | --- | --- |
+   | `user.unsent` | the message you esc-recalled and never actually sent |
+   | `user.queued` | what you typed into the queue while a turn was running |
+   | `harness.turn.duration` | the record behind the "Done in 1m 5s" line |
+   | `agent.thinking.narration` | the API's one-line summaries, kept apart from the reasoning they summarize |
 
 7. 🛎 **Pending questions, on the record.**
 
-   csift ships a hook that records `AskUserQuestion` / `ExitPlanMode` / MCP elicitations to a sidecar file, and every csift surface **merges** the unresolved ones in transparently. An orchestrator can finally see which session is stuck waiting on a human, and on what.
+   A hook csift ships records each `AskUserQuestion`, `ExitPlanMode` and MCP elicitation to a sidecar file. \
+   Every csift surface **merges** the unresolved ones in, transparently. \
+   An orchestrator can finally see which session is stuck waiting on a human, and on what.
 
 8. 🩺 **Is it actually stopped?**
 
-   An end-of-turn record is not a stop.
+   A session can end its turn and still be running.
 
-   - `csift status` gives one verdict with the evidence named: the session registry, the transcript tail, every child lane, the task list, a live process probe.
-   - Every background shell, async agent and Monitor, listed with its age and whether it ever came back. Long sessions carry dozens of zombies.
+   - `csift status` gives one verdict and names its evidence (the session registry, the transcript tail, every child lane, the task list, a live process probe).
+   - Every background shell, async agent and Monitor is listed with its age and whether it ever came back. Long sessions carry dozens of zombies.
    - `csift wait --until stop --timeout 300` blocks until it really stops.
-   - A lens for the ones that never return by design: `--ignore-background 'npm run dev'`.
-   - Exit 124 on timeout, with a report of what happened while you waited.
+   - `--ignore-background 'npm run dev'` is the lens for the ones that never return by design.
+   - On timeout it exits 124 and reports what happened while you waited.
 
-   The timeout is required, on purpose. Point-in-time by design, on macOS, Linux and Windows.
+   The timeout is required on purpose. Every answer is point-in-time, on macOS, Linux and Windows.
 
 9. 📣 **Reach a lane the tool can't.**
 
-   Some receivers have no official channel at all: a running workflow lane, your own parent subagent, an idle session that published no socket, anything at all if you are outside Claude Code.
+   A running workflow lane has no official channel. Neither does your own parent subagent, an idle session that published no socket, or anything at all when you are outside Claude Code.
 
    - `csift send @<lane> "stop after the current file"` queues one message and says what will carry it.
-   - One verdict per send: OK, FULL, MAY-FAIL, UNPREDICTABLE, REFUSED. Never a silent hope.
-   - Delivery is a hook line you paste; `csift deliver --recipe` prints the block. csift writes no settings file.
-   - `csift msg <id>` joins what csift intended against what the receiver's own transcript proves.
+   - Each send gets one verdict out of OK, FULL, MAY-FAIL, UNPREDICTABLE and REFUSED. Never a silent hope.
+   - Delivery is a hook line you paste. `csift deliver --recipe` prints the block, and csift writes no settings file.
+   - `csift msg <id>` holds what csift intended against what the receiver's own transcript proves.
    - `csift whoami --to @<lane>` predicts reach and sends nothing.
 
-   Where an official transport does exist, csift prints the exact call for you to make, and still queues its own copy so a forgotten delegation is not a lost message.
+   Where an official transport does exist, csift prints the exact call for you to make. It still queues its own copy, so a forgotten delegation is not a lost message.
 
 10. 🔎 **Round-trips, not lines.**
 
-    A hit returns the whole exchange, rebuilt from the `uuid`/`parentUuid` graph: the matched tool call with its result, the user turn with the agent's reply. This is the context that `grep` or Claude's ad-hoc scripts can **never** reliably provide.
+    A hit returns the whole exchange, rebuilt from the `uuid` / `parentUuid` graph. \
+    A matched tool call comes back with its result, and a user turn with the agent's reply. \
+    Neither `grep` nor Claude's ad-hoc scripts can reliably give you that context.
 
 11. 🧭 **What is this record even about?**
 
     Every hit names the message it belongs to, and how many hops away that message sits. \
     Where a record states a relation, the hit carries it as a typed edge from a closed list of 27 words. \
-    `csift search "" @<uuid> --for L42` runs the arrows backward: everything that message drew, transitively.
+    `csift search "" @<uuid> --for L42` runs the arrows backward and returns everything that message drew, transitively.
 
 12. 🌳 **Subagent topology.**
 
-    Kind, lifecycle, and the parent→child tree of every spawned agent, plus detection of lanes frozen on a pending permission approval.
+    The parent→child tree of every spawned agent, with each one's kind and lifecycle. \
+    Lanes frozen on a pending permission approval are detected.
 
 13. 🤖 **Designed for humans and LLMs.**
 
-    Output is terse, re-feedable, and even structural. Simply install the skill and your Claude will gain the power.
+    Output is terse, re-feedable and structured. \
+    With the skill installed, your Claude knows when and how to reach for csift.
 
-14. 🔒 **Local, no magic, and one place it writes.**
+14. 🔒 **Local, plain, and it writes in two places only.**
 
     Pure regex. No embeddings, no index, no database, no daemon, no network, no telemetry, no hidden detections. \
     It reads files already on your disk and never touches your session histories. \
-    The message channel is the single exception, and a narrow one: `send`, `deliver` and `ack` write into a `csift-channel` directory csift creates beside the session. Nothing else, anywhere, ever.
+    `send`, `deliver` and `ack` write into a `csift-channel` directory csift creates beside the session. \
+    `recover`, `verbatim` and `image` write only the path you name with an output flag. Nothing else is written.
 
 15. ⚡ **Rust + mmap + SIMD newline scan + byte prefilters + rayon.**
 
-    200 MB transcripts and multi-GB corpora in **about a second**, quick enough to call from inside a hook without noticing.
+    200 MB transcripts and multi-GB corpora in **about a second**. \
+    Quick enough to call from inside a hook without noticing.
 
 ## Install
 
@@ -185,7 +200,7 @@ csift is the missing tool it should have had.
 cargo install csift
 ```
 
-Requires **Rust 1.89+**. Or from source:
+csift needs **Rust 1.89+**. To build from source instead:
 
 ```bash
 git clone https://github.com/wdhwg001/csift.git
@@ -194,21 +209,25 @@ cargo install --path .        # builds the optimized binary and puts `csift` on 
 # …or just `cargo build --release` → ./target/release/csift
 ```
 
-`csift` reads `~/.claude` by default; point it elsewhere with `--claude-home <DIR>` or Claude Code's own `$CLAUDE_CONFIG_DIR`. `csift <command> --help` is the full manual.
+By default `csift` reads `~/.claude`. It reads another directory when given `--claude-home <DIR>` or Claude Code's own `$CLAUDE_CONFIG_DIR`. `csift <command> --help` is the full manual.
 
 ### Teach it to your agent
 
-`csift`'s primary user is **the agent itself**: output is terse, parseable, and every record carries a re-feedable handle. The skill teaches Claude Code when and how to reach for it:
+The primary user of `csift` is **the agent itself**. Its output is terse and parseable, and every record carries a handle the agent can feed straight back in. The skill teaches Claude Code when and how to reach for it.
 
 ```bash
 npx skills add wdhwg001/csift
 ```
 
-From a clone, link the skill directory instead: `ln -s "$PWD/skills/csift" ~/.claude/skills/csift`.
+From a clone, link the skill directory instead.
+
+```bash
+ln -s "$PWD/skills/csift" ~/.claude/skills/csift
+```
 
 ## Quickstart
 
-`csift <command> [TARGET] [flags]`. A **target** is a positional `@<uuid>` (a session), an `@<agent-hex>` (a subagent), a project path, or `.` (this cwd); omit it to scan every project.
+Every command takes the shape `csift <command> [TARGET] [flags]`. A **target** is positional. It is `@<uuid>` for a session, `@<agent-hex>` for a subagent, a project path, or `.` for the current directory. With no target, csift scans every project.
 
 | You want to…                                          | Run                                                      |
 | ----------------------------------------------------- | -------------------------------------------------------- |
@@ -234,47 +253,49 @@ From a clone, link the skill directory instead: `ln -s "$PWD/skills/csift" ~/.cl
 | check whether that message actually arrived           | `csift msg <id>`                                         |
 | ask whether a lane is reachable, sending nothing      | `csift whoami --to @<lane>`                              |
 
-Run `csift <command> --help` for the full flag set and examples.
+`csift <command> --help` lists the full flag set, with examples.
 
 ## The seventeen subcommands
 
 |                |                                                                                                                                                                                         |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`list`**     | fast "which session is this?" index: first/last user + last agent, per session; flags a background-job clone and names the session it forked from                                        |
-| **`search`**   | regex over transcripts → the complete round-trip per hit (`-t`/`-T` label filters, `--count-by` censuses, `--for` the reverse provenance closure, `--attachments`, `-l` matching sessions, `--raw` verbatim lines)                                                      |
-| **`show`**     | fetch the exact record(s) you name: `--line N\|A..B` / `--uuid U` / `--turn N\|A..B\|-k` (the `·tN` turn index from search's headers) of one transcript, rendered full or `--raw` bytes; `--branch-points` maps where the conversation forked |
-| **`stats`**    | one-scan aggregates per session: tokens by model (counted once per API message), tool calls, turns, span, compactions, narration blocks, a whole-file line-type census                                                                                                  |
-| **`agents`**   | a session's subagents: kind, lifecycle, status, and the parent→child topology                                                                                                           |
-| **`whoami`**   | identify the calling session from `$CLAUDE_CODE_SESSION_ID`, false-positive-safe; then the lane it sits in: itself, its parent, the live lanes under it, and `--to <lane>` for whether a message would reach one (`--peers` lists every live lane, id and state only) |
-| **`files`**    | which files/dirs a session changed, when, plus edits made outside the tool stream                                                                                                       |
-| **`recover`**  | reconstruct a file (or a deleted plan) from the Read/Write/Edit stream: byte-exact or honest gaps; `--list-backups` reads Claude Code's own file-history checkpoints                                                                                       |
-| **`plan`**     | locate the Plan-Mode plan file bound to a session (reverse: which session owns a plan; `--audit` flags edits to plans the session does not own)                                                                                              |
-| **`verbatim`** | restore the verbatim turns a compaction summary clipped, within a budget (the live-tail peek is `show --turn`)                                                                          |
-| **`image`**    | list + extract images pasted into a transcript (handle/locator addressing, format transcode)                                                                                            |
-| **`status`**   | one-shot LIVE verdict on a session: running / waiting-children / waiting-hitl / idle-background-open / idle-eot / stale-dead / unknown, from the registry + tail + process probe + every background task it ever launched |
-| **`wait`**     | block until a session condition fires (`stop` / `hitl` / `auq` / `notification[:RE]` / `tool:NAME` / `write:PATH` / `verdict:V`); `--timeout` required, exit 124 with a report of what happened meanwhile |
-| **`send`**     | queue a message for one lane (a session, a subagent, a teammate, a workflow lane), from another lane or from any process outside Claude Code; one verdict per send, and an official transport is printed for you to call, never performed |
-| **`msg`**      | did that message arrive? the channel ledger's intent joined to the receiver transcript's proof, as one verdict; with no id, the lane's whole ledger                                      |
-| **`ack`**      | the receiver's own word: this lane read that message (which is also what stops a re-offer after a compaction)                                                                            |
-| **`deliver`**  | the hook entry that carries the channel into a lane. You never run it: `csift deliver --recipe` prints the settings block, you paste it, csift writes no settings file                    |
+| **`list`**     | indexes every session by its first and last user message and its last agent message, to answer "which session is this?". It flags a background-job clone and names the session it forked from |
+| **`search`**   | runs a regex over transcripts and returns the complete round-trip per hit (`-t`/`-T` label filters, `--count-by` censuses, `--for` for the reverse provenance closure, `--attachments`, `-l` for matching sessions, `--raw` for verbatim lines) |
+| **`show`**     | fetches the exact record(s) you name by `--line N\|A..B`, `--uuid U` or `--turn N\|A..B\|-k` (the `·tN` turn index in search's headers) from one transcript, rendered in full or as `--raw` bytes. `--branch-points` maps where the conversation forked |
+| **`stats`**    | computes one-scan aggregates per session (tokens by model counted once per API message, tool calls, turns, span, compactions, narration blocks, a whole-file line-type census) |
+| **`agents`**   | lists a session's subagents with their kind, lifecycle, status and parent→child topology |
+| **`whoami`**   | identifies the calling session from `$CLAUDE_CODE_SESSION_ID` with no false positives, then the lane it sits in (itself, its parent, the live lanes under it). `--to <lane>` says whether a message would reach one, and `--peers` lists every live lane by id and state only |
+| **`files`**    | shows which files and directories a session changed, and when, including edits made outside the tool stream |
+| **`recover`**  | reconstructs a file, or a deleted plan, from the Read/Write/Edit stream, byte-exact or with honest gaps. `--list-backups` reads Claude Code's own file-history checkpoints |
+| **`plan`**     | locates the Plan-Mode plan file bound to a session. `--reverse` finds the session that owns a plan, and `--audit` flags edits to plans the session does not own |
+| **`verbatim`** | restores the verbatim turns a compaction summary clipped, within a budget (the live-tail peek is `show --turn`) |
+| **`image`**    | lists and extracts images pasted into a transcript, with handle or locator addressing and format transcode |
+| **`status`**   | gives a one-shot LIVE verdict on a session (running / waiting-children / waiting-hitl / idle-background-open / idle-eot / stale-dead / unknown) from the registry, the tail, a process probe and every background task it ever launched |
+| **`wait`**     | blocks until a session condition fires (`stop` / `hitl` / `auq` / `notification[:RE]` / `tool:NAME` / `write:PATH` / `verdict:V`). `--timeout` is required, and a timeout exits 124 with a report of what happened meanwhile |
+| **`send`**     | queues a message for one lane (a session, a subagent, a teammate, a workflow lane) from another lane or from any process outside Claude Code. Each send gets one verdict, and an official transport is printed for you to call, never performed |
+| **`msg`**      | answers whether that message arrived, with one verdict joining the channel ledger's intent to the receiver transcript's proof. With no id, it lists the lane's whole ledger |
+| **`ack`**      | records the receiver's own word that this lane read that message, which is also what stops a re-offer after a compaction |
+| **`deliver`**  | is the hook entry that carries the channel into a lane. Claude Code runs it, and you never do. `csift deliver --recipe` prints the settings block for you to paste, and csift writes no settings file |
 
 ## The summary is a selection. csift keeps the conversation.
 
-When Claude Code compacts, it regenerates a dense summary: kilobytes standing in for dozens of compactions of history. It's a _good_ selection. It keeps the key findings (what changed, with file:line) and often your standing directives verbatim. But it is a selection, re-abstracted every time, and the axis it optimizes is **task continuation**, not the conversation.
+When Claude Code compacts, it regenerates a dense summary, kilobytes standing in for the whole history before it. It is a _good_ selection. It keeps the key findings (what changed, with file:line) and often your standing directives verbatim. It is still a selection, re-abstracted at every compaction, and the axis it optimizes is **task continuation**.
 
-`csift verbatim` keeps the other axis: the verbatim **User↔Agent exchange**, what you actually said and what the agent actually reported back when it finished, with the hundreds of tool calls in between collapsed to a count. For the recent window that's tens of KB of full-fidelity dialogue where the summary kept a line or two. Not just your directive, but the agent's _"validated against HEAD, the premise holds, here's the evidence"_ report-back, which a task-findings selection simply doesn't carry.
+`csift verbatim` keeps the other axis, the verbatim **User↔Agent exchange**. That is what you actually said and what the agent actually reported back when it finished, with the hundreds of tool calls in between collapsed to a count. For the recent window it comes to tens of KB of full-fidelity dialogue where the summary kept a line or two. Your directive is in it, and so is the agent's _"validated against HEAD, the premise holds, here's the evidence"_ report-back, which a selection of task findings does not carry.
 
-It doesn't replace the summary. It extends the post-compaction context with the recent conversation at full fidelity, budget-bounded and newest-first: it won't reach the oldest turns, and your never-compacted Plan file still owns the plan. Wire it into a `SessionStart(compact)` hook (the skill ships one, [`compact-slice.sh`](skills/csift/scripts/compact-slice.sh), with its settings fragment in [hooks.md](skills/csift/references/hooks.md)) and every compaction arrives with the recent verbatim conversation attached.
+The summary stays where it is. `verbatim` extends the post-compaction context with the recent conversation at full fidelity, budget-bounded and newest-first. It does not reach the oldest turns, and your never-compacted Plan file still owns the plan. The skill ships a `SessionStart(compact)` hook for this, [`compact-slice.sh`](skills/csift/scripts/compact-slice.sh), with its settings fragment in [hooks.md](skills/csift/references/hooks.md). With the hook wired in, every compaction arrives with the recent verbatim conversation attached.
 
 ## How it works
 
-csift never loads a whole transcript when it doesn't have to: it **mmaps** each `.jsonl`, scans newlines with SIMD (`memchr`), runs a cheap byte/regex **prefilter**, and only `serde_json`-parses candidate lines; `list` reads just the head and tail; `rayon` fans out across files. The hard part isn't speed. It's the _semantics_ of Claude Code's log: a `role:"user"` record is usually a tool result, not a human turn; a pending question is never written to disk; compaction has a specific shape; subagents sit flat on disk and their topology is reconstructed from the spawning tool call. All of it is documented, with the empirical grounding, in **[SPEC.md](SPEC.md)**.
+csift avoids loading a whole transcript wherever it can. It **mmaps** each `.jsonl`, scans newlines with SIMD (`memchr`), runs a cheap byte or regex **prefilter**, and parses only the candidate lines with `serde_json`. `list` reads just the head and tail of each file, and `rayon` fans the work out across files.
+
+Speed is the easy part. The hard part is the _semantics_ of Claude Code's log. Most `role:"user"` records carry tool results, and only some are human turns. A pending question can stay off disk until it is answered. Compaction writes a specific shape. Subagents sit flat on disk, and their topology is rebuilt from the tool call that spawned each one. **[SPEC.md](SPEC.md)** documents all of it, with the empirical grounding.
 
 ## How much of this is verified
 
-csift rests on hundreds of small facts about what Claude Code writes. Each one is a claim in [`INTROSPECTION.json`](./INTROSPECTION.json), carrying the Claude Code version range it holds over and how completely it is attributed: whether the code that writes the fact was traced in the shipped Claude Code binary, and whether a specimen of the fact was observed. A claim keeps its current reading and at most one superseded one, so the table below counts the current reading of each.
+csift rests on hundreds of small facts about what Claude Code writes. Each one is a claim in [`INTROSPECTION.json`](./INTROSPECTION.json). A claim carries the Claude Code version range it holds over and how completely it is attributed. Attribution asks whether the code that writes the fact was traced in the shipped Claude Code binary, and whether a specimen of the fact was observed. A claim keeps its current reading and at most one superseded one, and the table below counts the current reading of each.
 
-Every range carries one receipt, and a receipt has to have measured something outside csift's own tree: a build, a byte offset in one, a corpus of transcripts, a live trial. Re-reading csift's source and re-wording the claim is not a receipt, however carefully it was done. The table is regenerated from the ledger and checked by the pre-commit gate; the numbers are what they are.
+Every range carries one receipt, and a receipt has to have measured something outside csift's own tree, such as a build, a byte offset in one, a corpus of transcripts or a live trial. Re-reading csift's source and re-wording the claim does not count as a receipt, however carefully it was done. The table is regenerated from the ledger, and the pre-commit gate checks it.
 
 <!-- ledger-tally:begin -->
 | attribution | claims | share | meaning |
@@ -295,27 +316,27 @@ A traced claim pins each hop at a byte offset in that build, and the gate re-rea
 The five counts partition the total, and the gate asserts that they do. BYTE-EXACT is read over two encodings: a few excerpts were captured from regions that are not valid UTF-8 and stored one code point per byte, and 14 of these anchors match only under that second reading. An ELIDED excerpt carries an ellipsis somewhere, which is not the same as having no byte-exact form: 1,481 such excerpts ARE byte-exact at their own offsets and are counted with the rest, because minified JavaScript's spread operator wears the same three dots. What is left in the elided count really did elide something, and the gate holds each of those to the run BEFORE its first ellipsis at its own offset. An absent or prefix-only anchor is marked as such in the ledger, with the residue line that says how to find its producer again; those are the first thing the next pass re-locates. A hop read in an artifact the badge does not name carries that build and is compared against THAT one, which is why it is disclosed as a count and never as a verdict: whether a given machine holds those artifacts is a property of the machine. A closed state's anchors were exact at the build its own range ended on, so the gate counts them and does not re-read them against a later one.
 <!-- ledger-tally:end -->
 
-A claim that is not end-to-end lists the exact instrument that would close it, and a claim attributed by elimination can never be marked as holding.
+A claim that is not end-to-end names the exact instrument that would close it. A claim attributed by elimination can never be marked as holding.
 
-Three things this project will never publish, so that nobody has to ask. The method by which Claude Code was taken apart stays private, by agreement. There will be no mechanical comparison of the ledger against anything, for the same reason. And there will be no corpus of transcripts: no level of redaction is meaningful for this format, because a redacted real transcript cannot be told apart from a hand-made one, so a released corpus would prove nothing and could still leak.
+The method by which Claude Code was taken apart stays private, by agreement. For the same reason, this project will never publish a mechanical comparison of the ledger against anything. It will not publish a corpus of transcripts either. No level of redaction means anything for this format, because a redacted real transcript cannot be told apart from a hand-made one. A released corpus would prove nothing and could still leak.
 
-On cadence: Claude Code is conservative with its own jsonl, and a break of the format across versions is rare. The ledger is therefore re-verified periodically, not in full for every Claude Code release. The repository's own dogfood loop keeps that honest, since the sessions csift is developed in are always running the current version.
+Claude Code is conservative with its own jsonl, and the format rarely breaks across versions. So the ledger is re-verified periodically, and not in full for every Claude Code release. The sessions csift is developed in always run the current Claude Code, and that dogfood loop keeps the cadence honest.
 
 ## Documentation
 
-There is none, in the human sense. This repository is written and maintained entirely by Claude Code, and the three reference files are the corpus the maintaining agent works from:
+There is no documentation written for people. This repository is written and maintained entirely by Claude Code, and three references are the corpus the maintaining agent works from.
 
-- **[skills/csift/](skills/csift/SKILL.md)**: the skill an agent loads to operate csift: a short `SKILL.md` that routes, one reference file per topic, and three hook scripts.
-- **[SPEC.md](SPEC.md)**: design intent, record-model semantics, and the measurements behind the deep features.
-- **[AGENTS.md](AGENTS.md)**: the repo operating manual. Architecture, jsonl domain knowledge, the quality gate.
+- [skills/csift/](skills/csift/SKILL.md) is the skill an agent loads to operate csift. A short `SKILL.md` routes, one reference file covers each topic, and three hook scripts sit beside them.
+- [SPEC.md](SPEC.md) holds the design intent, the record-model semantics and the measurements behind the deep features.
+- [AGENTS.md](AGENTS.md) is the repository's operating manual, covering the architecture, the jsonl domain knowledge and the quality gate.
 
-They are dense, cross-referenced, and written for a model's attention, not yours. The practical way to understand this codebase as a human is to hand the repo to your own agent and ask for the tour: it reads these files well.
+They are dense and cross-referenced, and they are written for a model's attention. A person who wants to understand the codebase does best to hand the repository to their own agent and ask for the tour. It reads these files well.
 
 ## Contributing
 
-An honest note first: csift's potholes are Claude's own, and I don't think fixing them should be a human's job. The intended path is to have Claude clone the repo and clean up after itself, then open the PR. From the PR onward, though, I expect a human who has read the code; if reviewing your PR would mean chatting with an AI, it should have been an Issue instead. Issues are genuinely welcome: describe the problem clearly and I'm happy to point my Claude at it.
+csift's potholes are Claude's own, and I don't think fixing them should be a human's job. The intended path is to have Claude clone the repo, clean up after itself and open the PR. From the PR onward, though, I expect a human who has read the code. If reviewing your PR would mean chatting with an AI, it should have been an Issue instead. Issues are genuinely welcome, and a clearly described problem is all I need to point my Claude at it.
 
-The entire quality gate is one pre-commit hook (installed on your first `cargo test`): the structure gate (file/folder limits) → `cargo fmt --check` → `cargo clippy --all-targets -D warnings` → `cargo test`. Keep those green and you're set.
+The whole quality gate is one pre-commit hook, installed on your first `cargo test`. It runs the structure gate (file and folder limits), then `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, the introspection ledger gate and `cargo test`. A failure at any stage blocks the commit.
 
 ## License
 
