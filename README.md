@@ -58,7 +58,7 @@ They are plain text. The log holds every prompt, thought, tool call, file edit a
 
 - **"Which session does `jazzy-twilight-sparkle.md` belong to?"**
 
-  _The plan file carries the architecture that matters. Its invented name says nothing about which session wrote it. The binding is a `plan_mode` attachment written when the session entered Plan Mode, a needle in the haystack._
+  _The plan file carries the architecture that matters. Its invented name says nothing about which session wrote it. The only record of that is a `plan_mode` attachment the session wrote when it entered Plan Mode, one line among many in its transcript._
 
 - **"The machine crashed with three sessions open. Which was which?"**
 
@@ -66,7 +66,7 @@ They are plain text. The log holds every prompt, thought, tool call, file edit a
 
 - **"I literally just said that."**
 
-  _A few compactions into a long run, the agent still knows its **task**. Everything you actually **said** and **read** is gone. Nothing keeps the last few turns mechanically, the way codex or pi do._
+  _A few compactions into a long run, the agent still knows its **task**. Everything you actually **said** and **read** is gone. Claude Code does not carry the last few turns across a compaction word for word, the way the coding agents Codex and pi do._
 
 - **"I DID tell you. In the question dialog."**
 
@@ -78,7 +78,7 @@ They are plain text. The log holds every prompt, thought, tool call, file edit a
 
 - **"You said it stopped, but it's waiting for a subagent!"**
 
-  _It apologized and found a "root cause" by searching every other jsonl file. Asked to orchestrate another session in the same project, it could not even tell whether that session had stopped. Or it found a turn-duration record and took it for the true stop. It is not one._
+  _It apologized, searched every other jsonl file and came back with a "root cause". Asked to orchestrate another session in the same project, it could not even tell whether that session had stopped. Another time it took a turn-duration record for the stop, though that record only times a single turn._
 
 Each of these ends the same way. The agent says ~~_You are absolutely right._~~, then stumbles through a one-off script over raw JSON and gets it subtly wrong.
 
@@ -87,9 +87,9 @@ Each of these ends the same way. The agent says ~~_You are absolutely right._~~,
 1. ⏪ **Recover files & deleted plans.**
 
    `csift recover` replays every edit and read to restore a file's exact bytes at any point in time, as diff patches or as the final file. \
-   It honors Claude Code's file-modified markers. \
-   Shell traffic counts too. A heredoc or literal `echo` written through Bash, and a clean `cat`, `head` or `sed -n` read, replay as real content under strict admission gates. \
-   Where a modified boundary rules out an exact restore, it salvages what survived and marks the gaps.
+   Shell traffic counts too. A heredoc or literal `echo` written through Bash, and a clean `cat`, `head` or `sed -n` read, replay as real content when the command's shape leaves no doubt about the bytes. \
+   Claude Code notes when a file changed outside its own edits, and csift stops at that point instead of guessing across it. \
+   Where such a change rules out an exact restore, it salvages what survived and marks the gaps.
 
 2. 🖼 **Images back out.**
 
@@ -103,16 +103,20 @@ Each of these ends the same way. The agent says ~~_You are absolutely right._~~,
 
 4. 📇 **Sessions you can tell apart.**
 
-   `csift list` names every session by its first and last messages, the completion `claude --resume` never had. \
-   One id sitting in two project directories is merged by its bytes, never by a timestamp. \
-   Copies that genuinely differ are both kept and both named.
+   `csift list` names every session by its first and last messages, which the `claude --resume` picker never shows. \
+   A renamed or copied project directory can leave one session in two places. \
+   csift decides by comparing the two files' bytes, never their timestamps. \
+   A copy that matches the other or stops short of it merges into one, and copies that genuinely differ are both kept and both named.
 
 5. 🧵 **Un-clip a compaction.**
 
-   A summary keeps task state and context. The conversation is a different axis. \
+   A compaction summary keeps the task state and drops most of the conversation. \
    `csift verbatim` rebuilds the clipped back-and-forth within a `--budget`. \
-   Wired into a hook, it attaches the recent dialogue to every compaction. \
-   Claude Code's own loader stops dead at a compaction boundary. `--cross-compactions` steps over a bounded number of them, and every command says how many it crossed and where it stopped.
+   Wired into a hook, it attaches the recent dialogue to every compaction.
+
+   When Claude Code resumes a session, it reads back only as far as the latest compaction. \
+   `--cross-compactions` lets csift step back over a bounded number of them, so it can still tell which earlier turns the conversation kept and which it abandoned. \
+   Every command says how many it crossed and where it stopped.
 
 6. 🏷 **Typed search.**
 
@@ -140,25 +144,28 @@ Each of these ends the same way. The agent says ~~_You are absolutely right._~~,
 
    A session can end its turn and still be running.
 
-   - `csift status` gives one verdict and names its evidence (the session registry, the transcript tail, every child lane, the task list, a live process probe).
+   - `csift status` gives one verdict and names its evidence (the session registry, the transcript tail, every child lane, the task list, a live process probe). A lane is one agent's thread of work, the main session or one of its subagents.
    - Every background shell, async agent and Monitor is listed with its age and whether it ever came back. Long sessions carry dozens of zombies.
    - `csift wait --until stop --timeout 300` blocks until it really stops.
-   - `--ignore-background 'npm run dev'` is the lens for the ones that never return by design.
+   - `--ignore-background 'npm run dev'` leaves out the tasks that never return by design.
    - On timeout it exits 124 and reports what happened while you waited.
 
-   The timeout is required on purpose. Every answer is point-in-time, on macOS, Linux and Windows.
+   The timeout is required because some background tasks, a dev server for one, never return. \
+   Both commands read the live state at the moment they run, on macOS, Linux and Windows.
 
-9. 📣 **Reach a lane the tool can't.**
+9. 📣 **Message an agent Claude Code gives you no way to reach.**
 
-   A running workflow lane has no official channel. Neither does your own parent subagent, an idle session that published no socket, or anything at all when you are outside Claude Code.
+   Claude Code's own messaging tools reach some lanes and not others. \
+   An agent running inside a workflow script has no official channel. \
+   Neither does your own parent subagent, an idle session with no messaging socket open, or anything at all when you are outside Claude Code.
 
    - `csift send @<lane> "stop after the current file"` queues one message and says what will carry it.
-   - Each send gets one verdict out of OK, FULL, MAY-FAIL, UNPREDICTABLE and REFUSED. Never a silent hope.
+   - Each send gets one verdict out of OK, FULL, MAY-FAIL, UNPREDICTABLE and REFUSED.
    - Delivery is a hook line you paste. `csift deliver --recipe` prints the block, and csift writes no settings file.
-   - `csift msg <id>` holds what csift intended against what the receiver's own transcript proves.
+   - `csift msg <id>` compares what csift meant to deliver with what the receiver's own transcript shows arrived.
    - `csift whoami --to @<lane>` predicts reach and sends nothing.
 
-   Where an official transport does exist, csift prints the exact call for you to make. It still queues its own copy, so a forgotten delegation is not a lost message.
+   Where an official transport does exist, csift prints the exact call for you to make. It still queues its own copy, so the message survives even if that call is never made.
 
 10. 🔎 **Round-trips, not lines.**
 
@@ -169,8 +176,8 @@ Each of these ends the same way. The agent says ~~_You are absolutely right._~~,
 11. 🧭 **What is this record even about?**
 
     Every hit names the message it belongs to, and how many hops away that message sits. \
-    Where a record states a relation, the hit carries it as a typed edge from a closed list of 27 words. \
-    `csift search "" @<uuid> --for L42` runs the arrows backward and returns everything that message drew, transitively.
+    Where a record states its link to another one (a tool result to its call, a summary to the compaction it closes), the hit names that link with one of 27 fixed relation words. \
+    `csift search "" @<uuid> --for L42` follows those links backward and returns every record that message led to, transitively.
 
 12. 🌳 **Subagent topology.**
 
@@ -180,18 +187,21 @@ Each of these ends the same way. The agent says ~~_You are absolutely right._~~,
 13. 🤖 **Designed for humans and LLMs.**
 
     Output is terse, re-feedable and structured. \
+    csift ships a Claude Code skill, a set of instructions the agent loads when a task calls for it. \
     With the skill installed, your Claude knows when and how to reach for csift.
 
 14. 🔒 **Local, plain, and it writes in two places only.**
 
-    Pure regex. No embeddings, no index, no database, no daemon, no network, no telemetry, no hidden detections. \
+    Pure regex. No embeddings, no index, no database, no daemon, no network, no telemetry. \
+    Nothing is inferred without the output saying so. \
     It reads files already on your disk and never touches your session histories. \
     `send`, `deliver` and `ack` write into a `csift-channel` directory csift creates beside the session. \
     `recover`, `verbatim` and `image` write only the path you name with an output flag. Nothing else is written.
 
 15. ⚡ **Rust + mmap + SIMD newline scan + byte prefilters + rayon.**
 
-    200 MB transcripts and multi-GB corpora in **about a second**. \
+    A search that matches nothing in a 397 MiB transcript runs in **0.63 to 0.73 s**. \
+    Those are medians of 21 runs on an idle host, recorded in [SPEC.md](SPEC.md) section 7h. \
     Quick enough to call from inside a hook without noticing.
 
 ## Install
@@ -247,7 +257,7 @@ Every command takes the shape `csift <command> [TARGET] [flags]`. A **target** i
 | block until a session stops or asks                   | `csift wait @<uuid> --until stop --timeout 300`          |
 | find the message you esc-recalled and never sent      | `csift search "" @<uuid> -t user.unsent`                 |
 | see what record-types fill a session                  | `csift search "" @<uuid> --count-by label`               |
-| see everything one message drew, transitively         | `csift search "" @<uuid> --for L42`                      |
+| see every record one message led to, transitively     | `csift search "" @<uuid> --for L42`                      |
 | run the NEXT command over exactly what matched        | `csift search "X" -l \| csift stats --sessions-from -`   |
 | message a lane the official tool cannot reach         | `csift send @<lane> "TEXT"`                              |
 | check whether that message actually arrived           | `csift msg <id>`                                         |
@@ -274,14 +284,14 @@ Every command takes the shape `csift <command> [TARGET] [flags]`. A **target** i
 | **`wait`**     | blocks until a session condition fires (`stop` / `hitl` / `auq` / `notification[:RE]` / `tool:NAME` / `write:PATH` / `verdict:V`). `--timeout` is required, and a timeout exits 124 with a report of what happened meanwhile |
 | **`send`**     | queues a message for one lane (a session, a subagent, a teammate, a workflow lane) from another lane or from any process outside Claude Code. Each send gets one verdict, and an official transport is printed for you to call, never performed |
 | **`msg`**      | answers whether that message arrived, with one verdict joining the channel ledger's intent to the receiver transcript's proof. With no id, it lists the lane's whole ledger |
-| **`ack`**      | records the receiver's own word that this lane read that message, which is also what stops a re-offer after a compaction |
+| **`ack`**      | records the receiver's own word that this lane read that message. Once a message is acked, csift stops delivering it again after a compaction |
 | **`deliver`**  | is the hook entry that carries the channel into a lane. Claude Code runs it, and you never do. `csift deliver --recipe` prints the settings block for you to paste, and csift writes no settings file |
 
-## The summary is a selection. csift keeps the conversation.
+## What a compaction summary leaves out
 
-When Claude Code compacts, it regenerates a dense summary, kilobytes standing in for the whole history before it. It is a _good_ selection. It keeps the key findings (what changed, with file:line) and often your standing directives verbatim. It is still a selection, re-abstracted at every compaction, and the axis it optimizes is **task continuation**.
+When Claude Code compacts, it regenerates a dense summary, kilobytes standing in for the whole history before it. The summary is a good one. It keeps the key findings (what changed, with file:line) and often your standing directives verbatim. It is rewritten at every compaction, and what it is built to carry forward is **the task**.
 
-`csift verbatim` keeps the other axis, the verbatim **User↔Agent exchange**. That is what you actually said and what the agent actually reported back when it finished, with the hundreds of tool calls in between collapsed to a count. For the recent window it comes to tens of KB of full-fidelity dialogue where the summary kept a line or two. Your directive is in it, and so is the agent's _"validated against HEAD, the premise holds, here's the evidence"_ report-back, which a selection of task findings does not carry.
+`csift verbatim` carries the conversation instead, the verbatim **User↔Agent exchange**. That is what you actually said and what the agent actually reported back when it finished, with the hundreds of tool calls in between collapsed to a count. For the recent window it comes to tens of KB of full-fidelity dialogue where the summary kept a line or two. Your directive is in it, and so is the agent's _"validated against HEAD, the premise holds, here's the evidence"_ report-back, which a selection of task findings does not carry.
 
 The summary stays where it is. `verbatim` extends the post-compaction context with the recent conversation at full fidelity, budget-bounded and newest-first. It does not reach the oldest turns, and your never-compacted Plan file still owns the plan. The skill ships a `SessionStart(compact)` hook for this, [`compact-slice.sh`](skills/csift/scripts/compact-slice.sh), with its settings fragment in [hooks.md](skills/csift/references/hooks.md). With the hook wired in, every compaction arrives with the recent verbatim conversation attached.
 
@@ -289,13 +299,13 @@ The summary stays where it is. `verbatim` extends the post-compaction context wi
 
 csift avoids loading a whole transcript wherever it can. It **mmaps** each `.jsonl`, scans newlines with SIMD (`memchr`), runs a cheap byte or regex **prefilter**, and parses only the candidate lines with `serde_json`. `list` reads just the head and tail of each file, and `rayon` fans the work out across files.
 
-Speed is the easy part. The hard part is the _semantics_ of Claude Code's log. Most `role:"user"` records carry tool results, and only some are human turns. A pending question can stay off disk until it is answered. Compaction writes a specific shape. Subagents sit flat on disk, and their topology is rebuilt from the tool call that spawned each one. **[SPEC.md](SPEC.md)** documents all of it, with the empirical grounding.
+Most of the work is in reading Claude Code's log correctly. Most `role:"user"` records carry tool results, and only some are human turns. A pending question can stay off disk until it is answered. Compaction writes a specific shape. Subagents sit flat on disk, and their topology is rebuilt from the tool call that spawned each one. **[SPEC.md](SPEC.md)** documents all of it, with the empirical grounding.
 
 ## How much of this is verified
 
 csift rests on hundreds of small facts about what Claude Code writes. Each one is a claim in [`INTROSPECTION.json`](./INTROSPECTION.json). A claim carries the Claude Code version range it holds over and how completely it is attributed. Attribution asks whether the code that writes the fact was traced in the shipped Claude Code binary, and whether a specimen of the fact was observed. A claim keeps its current reading and at most one superseded one, and the table below counts the current reading of each.
 
-Every range carries one receipt, and a receipt has to have measured something outside csift's own tree, such as a build, a byte offset in one, a corpus of transcripts or a live trial. Re-reading csift's source and re-wording the claim does not count as a receipt, however carefully it was done. The table is regenerated from the ledger, and the pre-commit gate checks it.
+Every range carries one receipt, and a receipt has to have measured something outside csift's own tree, such as a build, a byte offset in one, a corpus of transcripts or a live trial. The table is regenerated from the ledger, and the pre-commit gate checks it.
 
 <!-- ledger-tally:begin -->
 | attribution | claims | share | meaning |
@@ -316,15 +326,15 @@ A traced claim pins each hop at a byte offset in that build, and the gate re-rea
 The five counts partition the total, and the gate asserts that they do. BYTE-EXACT is read over two encodings: a few excerpts were captured from regions that are not valid UTF-8 and stored one code point per byte, and 14 of these anchors match only under that second reading. An ELIDED excerpt carries an ellipsis somewhere, which is not the same as having no byte-exact form: 1,481 such excerpts ARE byte-exact at their own offsets and are counted with the rest, because minified JavaScript's spread operator wears the same three dots. What is left in the elided count really did elide something, and the gate holds each of those to the run BEFORE its first ellipsis at its own offset. An absent or prefix-only anchor is marked as such in the ledger, with the residue line that says how to find its producer again; those are the first thing the next pass re-locates. A hop read in an artifact the badge does not name carries that build and is compared against THAT one, which is why it is disclosed as a count and never as a verdict: whether a given machine holds those artifacts is a property of the machine. A closed state's anchors were exact at the build its own range ended on, so the gate counts them and does not re-read them against a later one.
 <!-- ledger-tally:end -->
 
-A claim that is not end-to-end names the exact instrument that would close it. A claim attributed by elimination can never be marked as holding.
+A claim that is not end-to-end names the exact instrument that would close it. A claim attributed by elimination can never carry `holds`, the ledger's verdict for a claim re-observed exactly as written.
 
-The method by which Claude Code was taken apart stays private, by agreement. For the same reason, this project will never publish a mechanical comparison of the ledger against anything. It will not publish a corpus of transcripts either. No level of redaction means anything for this format, because a redacted real transcript cannot be told apart from a hand-made one. A released corpus would prove nothing and could still leak.
+The project keeps private the method it used to take Claude Code apart. It does not publish a mechanical diff of the ledger either, since such a diff would expose the same method. It will not publish a corpus of transcripts. No level of redaction means anything for this format, because a redacted real transcript cannot be told apart from a hand-made one. A released corpus would prove nothing and could still leak.
 
-Claude Code is conservative with its own jsonl, and the format rarely breaks across versions. So the ledger is re-verified periodically, and not in full for every Claude Code release. The sessions csift is developed in always run the current Claude Code, and that dogfood loop keeps the cadence honest.
+Claude Code is conservative with its own jsonl, and the format rarely breaks across versions. So the ledger is re-verified periodically, and not in full for every Claude Code release. The sessions csift is developed in always run the current Claude Code, so a format change shows up in daily use between re-verifications.
 
 ## Documentation
 
-There is no documentation written for people. This repository is written and maintained entirely by Claude Code, and three references are the corpus the maintaining agent works from.
+`csift <command> --help` is the manual written for people, and it carries the same information as the skill. Claude Code writes and maintains this whole repository, and its other documents are written for the agent that does that work.
 
 - [skills/csift/](skills/csift/SKILL.md) is the skill an agent loads to operate csift. A short `SKILL.md` routes, one reference file covers each topic, and three hook scripts sit beside them.
 - [SPEC.md](SPEC.md) holds the design intent, the record-model semantics and the measurements behind the deep features.
@@ -334,7 +344,7 @@ They are dense and cross-referenced, and they are written for a model's attentio
 
 ## Contributing
 
-csift's potholes are Claude's own, and I don't think fixing them should be a human's job. The intended path is to have Claude clone the repo, clean up after itself and open the PR. From the PR onward, though, I expect a human who has read the code. If reviewing your PR would mean chatting with an AI, it should have been an Issue instead. Issues are genuinely welcome, and a clearly described problem is all I need to point my Claude at it.
+Claude wrote csift, so its bugs are Claude's own, and I don't think fixing them should be a human's job. The intended path is to have Claude clone the repo, clean up after itself and open the PR. From the PR onward, though, I expect a human who has read the code. If reviewing your PR would mean chatting with an AI, it should have been an Issue instead. Issues are genuinely welcome, and a clearly described problem is all I need to point my Claude at it.
 
 The whole quality gate is one pre-commit hook, installed on your first `cargo test`. It runs the structure gate (file and folder limits), then `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, the introspection ledger gate and `cargo test`. A failure at any stage blocks the commit.
 
