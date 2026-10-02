@@ -1,8 +1,8 @@
-//! role.class.sub selector machinery: label_selectors / label_selected / LabelFilter.
+//! role.category.leaf selector machinery: label_selectors / label_selected / LabelFilter.
 
 use super::*;
 
-/// True iff `selector` (a dotted `role.class.sub` path) is a dot-SEGMENT prefix of `path` -
+/// True iff `selector` (a dotted `role.category.leaf` path) is a dot-SEGMENT prefix of `path` -
 /// the `-t` match rule (SPEC section 5). `agent` matches `agent.tool.use`; `agent.tool` matches
 /// `agent.tool.use`/`agent.tool.result` but NOT a hypothetical `agent.toolbar` (segment-wise,
 /// so a partial trailing segment never leaks). Shared by the `-t` gate and the `--siblings` caps.
@@ -15,9 +15,10 @@ pub fn selector_is_segment_prefix(selector: &str, path: &str) -> bool {
 }
 
 /// Every VALID `-t` selector: each dot-segment prefix of every [`Class::path`] in [`Class::ALL`]
-/// (role / role.class / role.class.sub), in taxonomy order, de-duplicated. The single source of
-/// truth for the `-t` value space - the clap value_parser validates against it and the `--help`
-/// / error text lists it (so a new [`Class`] leaf automatically widens the selector space).
+/// (role / role.category / role.category.leaf), in taxonomy order, de-duplicated. The single
+/// source of truth for the `-t` value space - the clap value_parser validates against it and the
+/// `--help` / error text lists it (so a new [`Class`] leaf automatically widens the selector
+/// space).
 #[must_use]
 pub fn label_selectors() -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
@@ -267,7 +268,7 @@ impl<'a> LabelFilter<'a> {
     }
 }
 
-/// clap value_parser for one `-t`/`--label` selector: accept a dotted `role.class.sub` path
+/// clap value_parser for one `-t`/`--label` selector: accept a dotted `role.category.leaf` path
 /// that is a segment-prefix of some [`Class`] path; reject anything else with a HARD error that
 /// LISTS the valid selectors (no back-compat - the flat `thinking`/`tool`/`tool-response`
 /// spellings therefore error; a bare `user`/`agent`/`harness` is a valid ROLE selector -

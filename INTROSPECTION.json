@@ -45378,7 +45378,7 @@
         },
         {
           "path": "src/cli/selectors.rs",
-          "lines": "80-99",
+          "lines": "81-100",
           "snippet": "    if let Some(prefix) = selector.strip_suffix(\".*\") {\n        return selector_is_segment_prefix(prefix, path);\n    }\n    if !selector_is_segment_prefix(selector, path) {\n        return false;\n    }\n    if !is_bare_face(selector) {\n        return true; // an exact leaf: any visibility.\n    }\n    // A bare role or category: what the model received - the leaf default unless this\n    // record's own delivery verdict overrides it.\n    if let Some(d) = delivered {\n        if !keeps_face_against_delivery(path) {\n            return d;\n        }\n    }\n    Class::ALL\n        .iter()\n        .find(|c| c.path() == path)\n        .is_none_or(|c| c.llm_visible())"
         },
         {
@@ -80116,7 +80116,7 @@
         },
         {
           "path": "src/cli/selectors.rs",
-          "lines": "89-95",
+          "lines": "90-96",
           "snippet": "    // A bare role or category: what the model received - the leaf default unless this\n    // record's own delivery verdict overrides it.\n    if let Some(d) = delivered {\n        if !keeps_face_against_delivery(path) {\n            return d;\n        }\n    }"
         },
         {
@@ -81807,7 +81807,7 @@
       "code": [
         {
           "path": "src/cli/selectors.rs",
-          "lines": "209-211",
+          "lines": "210-212",
           "snippet": "    pub fn with_survival(self, live: bool) -> Self {\n        Self { live, ..self }\n    }"
         },
         {
