@@ -110,28 +110,26 @@ pub(crate) const DEDUP_PREFIX: usize = 80;
 /// How a turn's agent-message run is reduced to a survivor set. The MASTER switch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Default)]
 pub enum AgentMsgMode {
-    /// DEFAULT. Keep the LONGEST agent message by `full_chars`. That is the
-    /// substantive Rich Response, which often sits in the MIDDLE while the last
-    /// message is a throwaway wrap-up. Also keep the FIRST message when it is substantive
-    /// (`full_chars >= rich_min_chars`) and each RICH middle, and collapse
-    /// everything else into a placeholder. It applies to every multi-message
-    /// turn, with no short-run escape. On a tie the LAST maximum wins, so an
-    /// all-equal run gives the same pick as last-only.
+    /// DEFAULT. Keep the LONGEST agent message, counted in chars. It often
+    /// sits in the MIDDLE of the run while the last message is a short wrap-up.
+    /// Also keep the FIRST message when it reaches the rich-min length, and each
+    /// RICH middle message, and collapse everything else into a placeholder. It
+    /// applies to every turn with more than one agent message, however short the
+    /// run. On a tie the LAST of the longest wins, so a run of equal lengths
+    /// gives the same pick as `eot-only`.
     #[default]
     #[value(verbatim_doc_comment)]
     Longest,
-    /// Keep ONLY the last agent message of each turn. This is the "force
-    /// last-only" escape. It takes the wrap-up whenever the substance of the
-    /// run sits earlier.
+    /// Keep ONLY the last agent message of each turn. It takes the wrap-up
+    /// whenever the substance of the run sits earlier.
     #[value(name = "eot-only", verbatim_doc_comment)]
     EotOnly,
-    /// Keep the last message always, the first by position privilege and each
-    /// rich middle, and collapse the proven pure declarations. The run
-    /// threshold gates it, so a short run keeps every message.
+    /// Keep the last message, the first message and every middle message
+    /// except a pure declaration, which collapses. Only a run longer than the
+    /// run threshold is filtered, so a shorter run keeps every message.
     #[value(verbatim_doc_comment)]
     Rich,
-    /// Keep EVERY agent message, with no filtering and no collapse. This is
-    /// the maximal-fidelity escape.
+    /// Keep EVERY agent message, with no filtering and no collapse.
     #[value(verbatim_doc_comment)]
     All,
 }

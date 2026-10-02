@@ -19824,8 +19824,8 @@
         },
         {
           "path": "src/cli/verbatim_args.rs",
-          "lines": "376-379",
-          "snippet": "    /// hooks. Claude Code caps EACH hook's `additionalContext` at 10,000 UTF-16 code units, and\n    /// an over-cap string is replaced by a file path and a short preview, so the body is\n    /// effectively LOST to the model. One hook per slice keeps every injected chunk under the\n    /// wall. Slicing is DETERMINISTIC (same session and budget, identical chunk boundaries), so"
+          "lines": "390-393",
+          "snippet": "    /// is built for fanning a >10K reconstruction across several SessionStart hooks. Claude Code\n    /// caps EACH hook's `additionalContext` at 10,000 UTF-16 code units, and an over-cap string\n    /// is replaced by a file path and a short preview, so the body is effectively LOST to the\n    /// model. One hook per slice keeps every injected chunk under that cap. Slicing is"
         },
         {
           "path": "src/commands/turns/render.rs",
@@ -33647,8 +33647,8 @@
       "code": [
         {
           "path": "src/cli/verbatim_args.rs",
-          "lines": "376-379",
-          "snippet": "    /// hooks. Claude Code caps EACH hook's `additionalContext` at 10,000 UTF-16 code units, and\n    /// an over-cap string is replaced by a file path and a short preview, so the body is\n    /// effectively LOST to the model. One hook per slice keeps every injected chunk under the\n    /// wall. Slicing is DETERMINISTIC (same session and budget, identical chunk boundaries), so"
+          "lines": "390-393",
+          "snippet": "    /// is built for fanning a >10K reconstruction across several SessionStart hooks. Claude Code\n    /// caps EACH hook's `additionalContext` at 10,000 UTF-16 code units, and an over-cap string\n    /// is replaced by a file path and a short preview, so the body is effectively LOST to the\n    /// model. One hook per slice keeps every injected chunk under that cap. Slicing is"
         },
         {
           "path": "src/commands/turns/render.rs",

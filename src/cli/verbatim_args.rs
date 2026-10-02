@@ -8,9 +8,9 @@ use super::*;
              budget",
     long_about = "Restore the verbatim user and assistant back-and-forth that a Claude Code\n\
 COMPACTION SUMMARY clipped.\n\n\
-A summary preserves TASK STATE in high fidelity (the 9-section synthesis: intent, file\n\
-ledger, errors and fixes, plan, next step), and it provably loses turn fidelity. Its \"All\n\
-user messages\" section clips about 22 real prose turns to about 17 `...`-truncated bullets,\n\
+A summary preserves TASK STATE in high fidelity (the 9-section synthesis: intent, files\n\
+and code, errors and fixes, plan, next step), and it provably loses turn fidelity. Its \"All\n\
+user messages\" section clips the person's prose turns to fewer, `...`-truncated bullets,\n\
 and the assistant side collapses to a SINGLE verbatim quote. `verbatim` supplements the\n\
 summary and never replaces it. It re-emits the clipped user phrasings and the discarded\n\
 assistant end-of-turn replies IN ORIGINAL ORDER. Each line carries its jsonl LINE NUMBER,\n\
@@ -23,8 +23,10 @@ SELECTION is recency-first. The most recent turns win the budget, because they a
 resumed agent most needs. The EMITTED document is sorted ascending, so it reads as a\n\
 forward transcript. The backward walk passes through compaction boundaries. A summary\n\
 record is a turn MEMBER and never a delimiter, so a 40K-char budget reaches back across\n\
-several boundaries by default (3 and 2 on two real transcripts). `--max-compactions` only\n\
-caps how far.\n\n\
+several boundaries by default. `--max-compactions N` caps that walk at N boundaries. It is\n\
+the one flag that stops the selection. The global `--cross-compactions` decides only whether\n\
+a selected unit above a cut reads `live` or `pre-cut`, as the paragraph on crossing a cut\n\
+below says.\n\n\
 BUDGET (`--budget`, default 40000) bounds EACH session's reconstruction in CHARS, and it\n\
 applies PER session in scope. As a sizing rule of thumb, 4 chars make about one token. The\n\
 header's `spanned K of N compaction boundaries in scope` is budget-relative on the K side.\n\
@@ -34,7 +36,8 @@ selection never reached them. N is the session's true total, the same unwindowed
 `stats` reports as `compactions`. BUDGET FAN-OUT below covers what `--subagents` does to\n\
 the total.\n\n\
 ROUND TRIPS. `--round-trip-fraction` (default 0.5) is a HARD FLOOR. That fraction of the\n\
-budget can be spent ONLY on COMPLETE round-trips (user → [N tool calls] → assistant EOT),\n\
+budget can be spent ONLY on COMPLETE round-trips (user → [N tool calls] → the assistant's\n\
+end-of-turn reply, EOT),\n\
 never on user-only or assistant-only fragments. Without it, an assistant-heavy tail\n\
 recovers ZERO human turns. Over-cap units are MIDDLE-truncated, head and tail kept, with an\n\
 explicit `… [+K chars, L lines elided] …` marker. The assistant head is larger than the\n\
@@ -42,12 +45,13 @@ user head, because assistant prose front-loads context and back-loads the decisi
 Nothing is ever fabricated or silently dropped.\n\n\
 PER-ROLE CAPS. The 600-char user and 900-char assistant body caps belong to the DIRECT\n\
 path, which is a plain run (with or without `--out`) and the legacy budget-driven\n\
-`--slice i` on its own. `--slices N`, the fixed-fleet hook-injection path, DROPS them for a\n\
-WINDOW cap. A body renders whole up to one window less a small headroom, so a turn is\n\
-ellipsized only when it ALONE exceeds a window. The oldest turns that do not fit the N\n\
+`--slice i` on its own. `--slices N` splits the output across a fixed set of hooks, one\n\
+slice each (the `--slices` entry below), and DROPS them for a WINDOW cap. A body renders\n\
+whole up to one window less a small headroom, so a turn is ellipsized only when it ALONE\n\
+exceeds a window. The oldest turns that do not fit the N\n\
 slices are discarded, so no turn is shortened to make room. The same session read two\n\
 ways therefore differs on purpose. The direct path keeps MORE turns, each cut to 600/900,\n\
-and the fleet path keeps FEWER turns whole.\n\n\
+and the `--slices` path keeps FEWER turns whole.\n\n\
 THE `L lines elided` FIGURE counts only the newlines the CUT removed. The rendered body is\n\
 whitespace-collapsed into one line, so a unit carries the offsets at which its original\n\
 newlines landed in that line. The note counts the ones strictly inside the removed span.\n\
@@ -57,18 +61,17 @@ of the same message prints a larger figure. A body csift COMPOSED instead of rea
 AskUserQuestion question-and-answer scaffold, an automation attribution label, a\n\
 peer-message preview) prints no line note at all, because the record's own newlines sit\n\
 nowhere inside it.\n\n\
-AGENT MESSAGES (`--agent-msgs`, default `longest`). A single genuine-user turn can own a\n\
-LONG run of agent messages, such as a debugging or build chain the model narrates, which\n\
-the summary clips to one §9 quote. `longest` keeps the longest message of the run, plus the\n\
-first when it is substantive, plus each rich middle. `eot-only` keeps just the last, which\n\
-is the wrap-up when the substance sits earlier. `rich` ALSO restores the first and middle\n\
-messages that carry important info (a count, a commit hash, a `file.rs:NNN` ref, backtick\n\
-code, a finding or decision lexeme) or that are clearly long. It collapses pure \"let me\n\
-look into this\" declarations into a placeholder,\n\
+AGENT MESSAGES (`--agent-msgs`, default `longest`). A single turn can own a LONG run of\n\
+agent messages, such as a debugging or build chain the model narrates, which the summary\n\
+clips to the single assistant quote it keeps. `longest` keeps the longest message of the\n\
+run, plus the first when it is substantive, plus each rich middle. `eot-only` keeps just\n\
+the last, which is the wrap-up when the substance sits earlier. `rich` ALSO restores the\n\
+first and middle messages that carry important info (a count, a commit hash, a\n\
+`file.rs:NNN` ref, backtick code, a finding or decision lexeme) or that are clearly long.\n\
+It collapses pure \"let me look into this\" declarations into a placeholder,\n\
 `△ L… [X agent messages collapsed, N chars, Y tool calls, Z failed]`, only on runs longer\n\
 than the mode's threshold (default 6, `--profile heavy` 4, `light` 8). `all` keeps every\n\
-agent message. `--profile heavy|light` is the WHOLE tuning surface, and the per-knob flags\n\
-are gone.\n\n\
+agent message. `--profile heavy|light` is the only way to change those thresholds.\n\n\
 A SAME-PREFIX RE-SEND happens when one turn carries two assistant messages and the LATER\n\
 one's body CONTAINS the earlier one's whole body, because the model re-sent its message with\n\
 an addendum. The earlier one then renders as\n\
@@ -83,12 +86,14 @@ WHAT A FOLD DISCLOSES. The placeholder's `N chars` is the summed length of the b
 stands for, so the line says how much prose was folded as well as how many messages. Each\n\
 folded message of 210 chars or more is then shown under the marker as an indented\n\
 `L<n>  <its first 60 chars>… (+K chars)` line. That is enough to tell a folded finding from\n\
-a folded declaration without fetching the range. The previews are bounded by construction.\n\
-210 sits above the pure-declaration band, and a message at or above the rich threshold is\n\
-KEPT instead of folded, so only the band between them can ever carry a preview. The\n\
+a folded declaration without fetching the range. A message at or above the rich-min\n\
+length (280 chars by default, the `--profile` entry gives the others) is KEPT instead of\n\
+folded, and a pure declaration is under the declaration-max length (200 chars by default).\n\
+So at the defaults a preview appears only for a folded message of 210 to 279 chars. The\n\
 fetchable range is still the marker's own `L{first}–L{last}`, and JSON carries `refetch`.\n\n\
 THE SURVIVAL AXIS. Only LIVE turns are replayed, meaning the turns Claude Code's own\n\
-conversation chain still reaches. A turn the operator rewound past, or a prompt recalled\n\
+conversation chain still reaches (the global `--cross-compactions` entry says what the chain\n\
+is). A turn the operator rewound past, or a prompt recalled\n\
 and re-typed, is COUNTED in a per-session note,\n\
 `abandoned  N turn(s) off the surviving conversation, not replayed: L…`, with the exact\n\
 `csift show @<id> --line <n>` that fetches one. JSON carries `abandoned_turns` in the\n\
@@ -96,22 +101,24 @@ trailing summary. The reason is the compaction summariser's input, the IN-MEMORY
 array, which by then no longer held that turn. Replaying it would put text into a \"what the\n\
 compaction clipped\" reconstruction that no model ever read. Turn numbers are the live\n\
 ones, the same numbers `search` and `show` print and the ones `--turn` and `--slice` index.\n\n\
-ACROSS A COMPACTION CUT, csift keeps going where Claude Code stops. The harness's loader\n\
-stops its walk at a `compact_boundary`, whose parentUuid is null, so on a resume the\n\
-history above the cut is gone from the conversation. csift's survival walk CROSSES a\n\
-boundary through the record its `logicalParentUuid` names, up to `--cross-compactions`\n\
-boundaries (default 3, `all` for no limit, `0` for Claude Code's own stop). The turns it\n\
-reaches that way read `live`. The walk stops when the budget runs out, or when the boundary\n\
-names a record the file no longer carries or one the walk already reached. Above that floor\n\
-csift still reads the transcript in FILE ORDER and replays the turns, because \"what the\n\
-model saw at the time\" is the question this command answers. Such units are flagged and\n\
-never hidden. JSON `survival` reads `pre-cut` for them and `live` otherwise, and the\n\
-closing lines say how many boundaries were crossed and where the floor sits.\n\n\
+ACROSS A COMPACTION CUT, csift keeps going where Claude Code stops. When Claude Code\n\
+rebuilds a conversation, its walk stops at a `compact_boundary`, whose parentUuid is null,\n\
+so on a resume the history above the cut is gone from the conversation. csift's survival\n\
+walk CROSSES a boundary through the record its `logicalParentUuid` names, up to\n\
+`--cross-compactions` boundaries (default 3, `all` for no limit, `0` for Claude Code's own\n\
+stop). The turns it reaches that way read `live`. The walk stops when the budget runs out,\n\
+or when the boundary names a record the file no longer carries or one the walk already\n\
+reached. Above that floor csift still reads the transcript in FILE ORDER and replays the\n\
+turns, because \"what the model saw at the time\" is the question this command answers.\n\
+Such units are flagged and never hidden. JSON `survival` reads `pre-cut` for them and\n\
+`live` otherwise, and the closing lines say how many boundaries were crossed and where the\n\
+floor sits.\n\n\
 DEDUP. A turn the NEWEST summary already quotes verbatim is flagged `(also in summary)` and\n\
 DEMOTED, which means it is selected only after the non-duplicate turns. It is never\n\
 silently dropped, because a false positive must not lose a real turn.\n\n\
-WINDOWING. `--turn (N|A..B|N..|-k)` (inclusive, 0-based genuine-user order) intersects\n\
-(AND) with `--since`/`--until` (ISO8601, or relative `2h`, `3d`, …). `verbatim` TEXT prints\n\
+WINDOWING. `--turn (N|A..B|N..|-k)` (inclusive and 0-based, counted by the turn rule the\n\
+`--turn` entry below states) intersects (AND) with `--since`/`--until` (ISO8601, or a\n\
+relative `N<unit>` whose seven units the `--since` entry lists). `verbatim` TEXT prints\n\
 `L<line>` per unit and no turn marker. To pick a value for `--turn`, read the index from\n\
 `csift search` text (the `<tok>·t<N>` header) or from this command's own `--format json`\n\
 (`turn_index`).\n\n\
@@ -127,7 +134,7 @@ then Read, run csift image <target> --id <ID> --out DIR, passing a `#N` handle a
 number.\n\n\
 EXAMPLES\n  \
 csift verbatim .                                  # default 40K-char rebuild, top-level thread\n  \
-csift verbatim @<uuid> --budget 12000             # recover JUST my thread (~10-15K, no fan-out)\n  \
+csift verbatim @<uuid> --budget 12000             # one thread, at most 12000 chars of turns\n  \
 csift verbatim @<uuid> --round-trip-fraction 0.6  # weight harder toward complete round-trips\n  \
 csift verbatim @<uuid> --agent-msgs eot-only      # last-message-only per turn\n  \
 csift verbatim @<uuid> --profile heavy            # lower thresholds (max fidelity)\n  \
@@ -150,16 +157,16 @@ background-command | workflow | agent | monitor | task, read from the summary. T
 automation split, for example\n  \
 `selected 16 user (3 automation triggers) + 58 assistant units`. These pulses are\n  \
 EXCLUDED from the `--round-trip-fraction` HARD FLOOR, which is reserved for human\n  \
-exchanges, and they can still be selected as Phase-2 fill.\n  \
+exchanges, and they can still fill the budget left after that floor.\n  \
 LIMITATION. Only `<task-notification>` COMPLETION pulses are segmented and attributed. The\n  \
 isMeta ScheduleWakeup WAKEUP-TICK prompts (a monitor or cron tick FIRING, e.g.\n  \
 `MONITOR TICK`) bypass this. They are isMeta records that do NOT open a turn, so the agent\n  \
-run a tick triggers currently groups under the PRECEDING genuine-user turn and is not yet\n  \
-split into per-tick segments. In an automation-heavy monitor session this lumps the\n  \
+run a tick triggers groups under the PRECEDING turn, with no per-tick segment of its own.\n  \
+In an automation-heavy monitor session this lumps the\n  \
 dominant tick-driven work onto one human turn.\n\n\
 BUDGET FAN-OUT\n  \
 `--budget` applies PER session in scope. `verbatim` defaults to the TOP-LEVEL thread only,\n  \
-so a bare-uuid run is one session at `budget` chars. `--subagents` also spans that\n  \
+so an `@<uuid>` run is one session at `budget` chars. `--subagents` also spans that\n  \
 session's subagents, and the realized output is then budget × (sessions in scope). A\n  \
 target that spans S subagents realizes up to `budget × (1 + S)` chars in total. A\n  \
 top-of-output `scope` line names the TRUE scope (all top-level and subagent sessions\n  \
@@ -173,7 +180,7 @@ top_level_sessions, subagent_sessions, budget_chars, budget_is_per_session,\n  \
 max_total_chars, round_trip_fraction, chars_used, boundaries_spanned,\n  \
 boundaries_total, selected_user, selected_assistant, automation_triggers,\n  \
 automation_by_kind, automation_in_scope_by_kind, with_elicitation_sidecar}`\n  \
-plus the four duplicate-copy keys every command's header carries\n  \
+plus the four duplicate-copy keys the headers of the commands that span sessions carry\n  \
 (`duplicate_transcripts`, `duplicate_records_dropped`, `divergent_transcripts`,\n  \
 `unreadable_transcripts`).\n  \
 `sessions_in_scope` is the TRUE scope (every discovered session), and `sessions_rendered`\n  \
@@ -193,13 +200,15 @@ elided_chars, elided_lines, also_in_summary, compactions_before, survival,\n  \
 superseded_by_line, text, is_automation}\n  \
 `is_subagent` flags a bare-hex subagent unit. Re-feed `parent_session_id`, never the bare\n  \
 `session_id`. `line` is the unit's jsonl line, the key every command's rows use for it.\n  \
-It is null exactly when `source` reads `elicitation-sidecar`, a pending unit merged from\n  \
-the sidecar, which has no physical line. `source` is null on every other unit. Such a\n  \
-unit's `role` is `assistant` and its text header reads `ASSISTANT`, because the pending\n  \
-line stands for the assistant's AskUserQuestion / ExitPlanMode call. It is a question\n  \
-still waiting for the person's answer and never words the person said. `survival` is\n  \
-`live`, or `pre-cut` for a unit ABOVE a compaction cut Claude Code's own loader stops at.\n  \
-It is never `abandoned`, since those turns are counted and not replayed.\n  \
+It is null exactly when `source` reads `elicitation-sidecar`, which marks a pending unit\n  \
+merged from the session's elicitation file (`elicitations.jsonl` in its sidecar directory,\n  \
+the `<session-id>/` folder beside the transcript), which has no physical line. `source` is\n  \
+null on every other unit. Such a unit's `role` is `assistant` and its text header reads\n  \
+`ASSISTANT`, because the pending line stands for the assistant's AskUserQuestion /\n  \
+ExitPlanMode call. It is a question still waiting for the person's answer and never words\n  \
+the person said. `survival` is `live`, or `pre-cut` for a unit ABOVE a compaction cut\n  \
+where Claude Code's own rebuild of the conversation stops. It is never `abandoned`, since\n  \
+those turns are counted and not replayed.\n  \
 An automation USER unit also carries {trigger_kind, task_id, status, event}, where\n  \
 `event` is the Monitor/ScheduleWakeup outcome tag and null on non-monitor pulses. An\n  \
 inbound peer-message USER unit carries {is_inbound_comm, comm_label, comm_from, comm_to}:\n  \
@@ -218,9 +227,8 @@ carries the crossing set {crossing_budget, boundaries_crossed, budget_exhausted,
 boundaries_above_floor, floor_line, floor_cause} whenever `--cross-compactions` is\n  \
 non-zero. It says what the survival walk stepped over to decide each unit's `survival`,\n  \
 and where it stopped. At `--cross-compactions 0` the keys are absent.\n  \
-The envelope is UNIFORM tool-wide (envelope v2). EVERY command's stream is\n  \
-`{kind:\"header\",…}` → kind-tagged rows → `{kind:\"summary\",…}`, so\n  \
-`tail -1 | jq 'select(.kind==\"summary\")'` reads the footer of ANY command identically."
+The stream is therefore `{kind:\"header\",…}` → unit and boundary rows →\n  \
+`{kind:\"summary\",…}`, so `tail -1 | jq 'select(.kind==\"summary\")'` reads its summary."
 )]
 pub struct VerbatimArgs {
     /// Project target(s) (an actual cwd or an encoded dir) whose sessions to reconstruct turns
@@ -256,7 +264,7 @@ pub struct VerbatimArgs {
 
     /// Character budget applied PER session in scope, always in chars (as a sizing rule, about
     /// 4 chars make one token). It bounds each session's reconstruction. `verbatim` defaults to
-    /// the top-level thread only, so a bare-uuid run realizes just `budget` chars. With
+    /// the top-level thread only, so an `@<uuid>` run realizes just `budget` chars. With
     /// `--subagents` the realized total is `budget × (sessions in scope)`, and a scope banner
     /// surfaces the multiplier. Default 40000.
     #[arg(long, value_name = "N", default_value_t = 40000, verbatim_doc_comment)]
@@ -273,8 +281,9 @@ pub struct VerbatimArgs {
     )]
     pub round_trip_fraction: f64,
 
-    /// Also span each in-scope session's SUBAGENT transcripts (built-in Task/Agent-tool, OMC
-    /// and Workflow agents) under `subagents/**`. OFF by default for `verbatim`, unlike files
+    /// Also span each in-scope session's SUBAGENT transcripts under `subagents/**`: built-in
+    /// Task/Agent-tool subagents, and workflow agents, whose transcripts sit under
+    /// `subagents/workflows/<run>/`. OFF by default for `verbatim`, unlike files
     /// and search. `verbatim` is a SINGLE-THREAD recovery tool and `--budget` MULTIPLIES per
     /// session in scope, so spanning hundreds of unrelated fan-out subagents by default would
     /// bury the thread you asked to restore under megabytes of noise. Opt in with `--subagents`
@@ -294,8 +303,9 @@ pub struct VerbatimArgs {
     #[arg(long = "no-subagents", verbatim_doc_comment)]
     pub no_subagents: bool,
 
-    /// Stop walking back after crossing N compaction boundaries (0 = unlimited, the default). A
-    /// guard, never a target.
+    /// Stop the selection's backward walk after crossing N compaction boundaries (0 = unlimited,
+    /// the default). A guard, never a target. It decides which turns are selected. The global
+    /// `--cross-compactions` decides only whether a selected unit reads `live` or `pre-cut`.
     #[arg(
         long = "max-compactions",
         value_name = "N",
@@ -304,24 +314,29 @@ pub struct VerbatimArgs {
     )]
     pub max_compactions: usize,
 
-    /// Per-turn agent-message policy, the MASTER switch for the multi-agent-message model.
-    /// `longest` (DEFAULT) keeps the LONGEST agent message, the substantive Rich Response. That
-    /// is frequently a MIDDLE message, where a last-only pick would take the last ~50-char
-    /// throwaway wrap-up. It also keeps the first message when it is substantive (at or above
-    /// the mode's rich-min threshold) and each rich middle (a number, commit hash, file:line,
-    /// backtick code, finding or decision lexeme, or a clearly long message), and it collapses
-    /// the rest into a placeholder. `eot-only` keeps only each turn's LAST agent message, which
-    /// takes that wrap-up whenever the substance of the run sits earlier. `rich` keeps the last
-    /// always, the first by position privilege and each non-droppable middle, and only on a
-    /// long run (over the mode's run threshold). `all` keeps every agent message.
+    /// Which agent messages of a turn are kept when the turn holds several. `longest` (DEFAULT)
+    /// keeps the LONGEST agent message. That is often a MIDDLE message, while the last is often a
+    /// wrap-up of about 50 chars. It also keeps the first message when it reaches the rich-min
+    /// length (the `--profile` entry gives the values), and each RICH middle message, meaning one
+    /// carrying a number, commit hash, file:line reference, backtick code or finding or decision
+    /// word, or one at least the rich-min length. The rest collapse into a placeholder.
+    /// `eot-only` keeps only each turn's LAST agent message, which takes the wrap-up whenever the
+    /// substance of the run sits earlier. `rich` keeps the last message, the first message and
+    /// every middle message except a pure declaration, which is a message under the
+    /// declaration-max length that opens with an intent verb ("let me look into this") and
+    /// carries none of those signals. `rich` filters only a run longer than the run threshold.
+    /// `all` keeps every agent message.
     #[arg(long = "agent-msgs", value_enum, default_value_t = crate::commands::turns::AgentMsgMode::Longest, verbatim_doc_comment)]
     pub agent_msgs: crate::commands::turns::AgentMsgMode,
 
-    /// Threshold bundle for the agent-message model. `heavy` is maximal fidelity (threshold 4,
-    /// rich-min 200, declaration-max 140). `light` is lean (threshold 8, rich-min 360,
-    /// declaration-max 240). A profile never changes the master `--agent-msgs` mode. With no
-    /// `--agent-msgs` the mode stays the default `longest`, run with the profile's thresholds,
-    /// and `--agent-msgs rich` also switches the keep-set.
+    /// Threshold bundle for `--agent-msgs`. Three thresholds: the run threshold (how many agent
+    /// messages a turn needs before `rich` filters it, default 6), rich-min (the length in chars
+    /// at which a message counts as rich on length alone, default 280) and declaration-max (the
+    /// length under which a signal-free message can be a pure declaration, default 200). `heavy`
+    /// is maximal fidelity (threshold 4, rich-min 200, declaration-max 140). `light` is lean
+    /// (threshold 8, rich-min 360, declaration-max 240). A profile never changes the master
+    /// `--agent-msgs` mode. With no `--agent-msgs` the mode stays the default `longest`, run with
+    /// the profile's thresholds, and `--agent-msgs rich` also switches the keep-set.
     #[arg(long = "profile", value_enum, verbatim_doc_comment)]
     pub profile: Option<crate::commands::turns::Profile>,
 
@@ -342,13 +357,13 @@ pub struct VerbatimArgs {
     )]
     pub turn_range: Option<String>,
 
-    /// Lower time bound, in the WHEN grammar (system-local tz). A relative
-    /// `Ns`/`Nm`/`Nh`/`Nd`/`Nw` is that many seconds/minutes/hours/days/weeks/months/years AGO
-    /// (`45s`, `90m`, `2h`, `3d`, `1w`, `2mo`, `1y`, where `mo` = 30 days and `y` = 365, and a
-    /// leading `-` is tolerated). An ISO8601 instant (`2026-06-01T05:00:00Z` / `…+10:00`) is
-    /// that instant. A BARE datetime (`2026-06-01T05:00:00`) is that LOCAL wall-clock time, and
-    /// a bare date (`2026-06-01`) is LOCAL MIDNIGHT that day. Intersects (AND) with --turn, so
-    /// both filters apply.
+    /// Lower time bound, in the WHEN grammar (system-local tz). A relative `N<unit>` is N units
+    /// AGO, with seven units: `s` seconds, `m` minutes, `h` hours, `d` days, `w` weeks, `mo`
+    /// months (30 days) and `y` years (365 days), as in `45s`, `90m`, `2h`, `3d`, `1w`, `2mo`,
+    /// `1y`. A leading `-` is tolerated. An ISO8601 instant (`2026-06-01T05:00:00Z` / `…+10:00`)
+    /// is that instant. A BARE datetime (`2026-06-01T05:00:00`) is that LOCAL wall-clock time,
+    /// and a bare date (`2026-06-01`) is LOCAL MIDNIGHT that day. Intersects (AND) with --turn,
+    /// so both filters apply.
     #[arg(long, value_name = "WHEN", verbatim_doc_comment)]
     pub since: Option<String>,
 
@@ -370,16 +385,17 @@ pub struct VerbatimArgs {
     pub format: OutputFormat,
 
     /// CHUNKED OUTPUT. Paginate the recovered DOCUMENT (the verbatim turns, the same content
-    /// `--out` writes) into chunks of at most `--window` CHARACTERS, and print ONLY the Nth
-    /// chunk (1-based) to stdout, with NO operational chrome (scope banner, SESSION header,
-    /// footer). It is built for fanning a >10K reconstruction across several SessionStart
-    /// hooks. Claude Code caps EACH hook's `additionalContext` at 10,000 UTF-16 code units, and
-    /// an over-cap string is replaced by a file path and a short preview, so the body is
-    /// effectively LOST to the model. One hook per slice keeps every injected chunk under the
-    /// wall. Slicing is DETERMINISTIC (same session and budget, identical chunk boundaries), so
-    /// N independent hooks can each request their own slice, and the lock and ordering live in
-    /// the hook shell. An out-of-range N prints nothing (exit 0), so surplus hooks inject
-    /// nothing. Text format only, and not combinable with `--out`.
+    /// `--out` writes) into chunks of at most `--window` CHARACTERS, and print ONLY the Nth chunk
+    /// (1-based) to stdout, with NO operational chrome (scope banner, SESSION header, footer). It
+    /// is built for fanning a >10K reconstruction across several SessionStart hooks. Claude Code
+    /// caps EACH hook's `additionalContext` at 10,000 UTF-16 code units, and an over-cap string
+    /// is replaced by a file path and a short preview, so the body is effectively LOST to the
+    /// model. One hook per slice keeps every injected chunk under that cap. Slicing is
+    /// DETERMINISTIC (same session and budget, identical chunk boundaries), so N independent
+    /// hooks can each request their own slice. csift takes no lock and does not order the hooks,
+    /// so a hook script that needs its chunks in order arranges that itself. An out-of-range N
+    /// prints nothing (exit 0), so surplus hooks inject nothing. Text format only, and not
+    /// combinable with `--out`.
     #[arg(long, value_name = "N", verbatim_doc_comment)]
     pub slice: Option<usize>,
 
