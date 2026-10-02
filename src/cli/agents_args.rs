@@ -412,33 +412,47 @@ pub enum AgentTimeAxis {
 /// Doubles as the clap `ValueEnum`, so the value spellings ARE the variant names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum CountAxis {
-    /// Per role.class.sub leaf (multi-label: a record counts under EVERY leaf it carries).
+    /// Per role.category.leaf leaf. The census is multi-label, so a record counts
+    ///             under EVERY leaf it carries.
+    #[value(verbatim_doc_comment)]
     Label,
-    /// Per tool name (tool_use / tool_result hits; non-tool records excluded + counted).
+    /// Per tool name, over tool_use and tool_result hits. Non-tool records are
+    ///             excluded and counted.
+    #[value(verbatim_doc_comment)]
     Tool,
-    /// Per turn, ASCENDING turn order (a histogram; keys `t<N>`, `<transcript>·t<N>` when
-    /// more than one transcript is in scope).
+    /// Per turn, in ASCENDING turn order (a histogram). The keys are `t<N>`, or
+    ///             `<transcript>·t<N>` when more than one transcript is in scope.
+    #[value(verbatim_doc_comment)]
     Turn,
     /// Per transcript (`session_id`: a top-level uuid or a subagent agent-id).
     Session,
-    /// Per tool pairing state: `paired` | `pending` | `orphan` (non-tool records excluded).
+    /// Per tool pairing state, `paired` | `pending` | `orphan`. Non-tool records
+    ///             are excluded.
+    #[value(verbatim_doc_comment)]
     Pairing,
     /// Per assistant model (records without a model excluded + counted).
     Model,
-    /// Per attachment payload type (implies the `--attachments` gate; non-attachment
-    /// records excluded + counted).
+    /// Per attachment payload type. It implies the `--attachments` gate.
+    ///             Non-attachment records are excluded and counted.
+    #[value(verbatim_doc_comment)]
     Attachment,
-    /// Per Claude Code version stamp (the record's top-level `version`; records without
-    /// one excluded + counted).
+    /// Per Claude Code version stamp, the record's top-level `version`. Records
+    ///             without one are excluded and counted.
+    #[value(verbatim_doc_comment)]
     Version,
-    /// Per tool-result error state (`ok` | `error`; non-result records excluded +
-    /// counted). Pairing answers "did a result come back"; this answers "was it good".
+    /// Per tool-result error state, `ok` | `error`. Non-result records are
+    ///             excluded and counted. Pairing answers "did a result come
+    ///             back", and this axis answers "was it good".
+    #[value(verbatim_doc_comment)]
     Result,
-    /// Per PROVENANCE relation: which `for` edges the scope carries. A record counts once
-    /// under every distinct relation word its edges name, the way the `label` axis counts
-    /// it under every leaf, and whether or not csift could resolve the target - the census
-    /// answers which relations exist, and a hit's own `for[]` says what each resolved to.
-    /// A record carrying no edge at all is excluded and counted.
+    /// Per PROVENANCE relation, the `for` edges the scope carries. A record
+    ///             counts once under every distinct relation word its edges name,
+    ///             the way the `label` axis counts it under every leaf. It counts
+    ///             whether or not csift could resolve the target, because the
+    ///             census answers which relations exist and a hit's own `for[]`
+    ///             says what each resolved to. A record carrying no edge at all
+    ///             is excluded and counted.
+    #[value(verbatim_doc_comment)]
     ForKind,
 }
 
