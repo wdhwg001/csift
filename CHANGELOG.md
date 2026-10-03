@@ -5,7 +5,7 @@ gets one entry, written in the commit that releases it. csift is pre-1.0 and fol
 SemVer in its pre-1.0 form. A breaking surface change bumps the MINOR version, and a
 non-breaking surface change bumps the PATCH.
 
-## [0.13.0] - 2026-09-26
+## [0.13.0] - 2026-10-04
 
 Some terms recur through this entry. A label is the `role.category.leaf` path csift puts
 on a record, and `-t` selects on it. The leaf is the last segment and the category the
