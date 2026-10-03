@@ -158,9 +158,13 @@ fn a_jsonl_path_reads_the_file_it_names_and_names_the_other() {
         );
         // The note lists the OTHER half, never the file the path names. The listed path is
         // compared from the projects root down, because the note prints the path the walk built
-        // and a temp root can reach it through a symlinked prefix.
+        // and a temp root can reach it through a symlinked prefix. Both sides are compared with
+        // every separator spelled `/`: on Windows the fixture joins its own tail with `/` onto a
+        // root that carries `\`, and the note prints the canonical form with `\` throughout.
         let other_lines = if other == "lines 3" { 3 } else { 2 };
-        let rel = other_path
+        let fwd = |s: &str| s.replace('\\', "/");
+        let other_fwd = fwd(other_path);
+        let rel = other_fwd
             .rsplit_once(".claude/projects/")
             .map(|(_, r)| r)
             .expect("under the projects root");
@@ -168,7 +172,7 @@ fn a_jsonl_path_reads_the_file_it_names_and_names_the_other() {
             .stderr
             .split_once("in scope (")
             .and_then(|(_, rest)| rest.split_once(");"))
-            .map(|(l, _)| l)
+            .map(|(l, _)| fwd(l))
             .expect("the note lists what else is in scope");
         assert!(
             listed.starts_with(&format!("{other_lines} lines at ")) && listed.ends_with(rel),
